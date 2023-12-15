@@ -1,0 +1,33 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"genesis.h": "c",
+			"terminal.h": "c",
+			"array": "c",
+			"hash_map": "c",
+			"deque": "c",
+			"list": "c",
+			"string": "c",
+			"unordered_map": "c",
+			"vector": "c",
+			"string_view": "c",
+			"initializer_list": "c",
+			"*.ipp": "c",
+			"random": "c",
+			"hexview.h": "c",
+			"optional": "c",
+			"ratio": "c",
+			"system_error": "c",
+			"functional": "c",
+			"tuple": "c",
+			"type_traits": "c",
+			"utility": "c",
+			"keyboard_ps2.h": "c"
+		}
+	}
+}

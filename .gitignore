@@ -1,0 +1,5 @@
+out/
+tmp/
+.directory
+.vscode
+build.sh
