@@ -13,7 +13,7 @@ static u8 kbdata;
 static u8 bOnce = FALSE;
 
 #ifdef EMU_BUILD
-asm(".global ircdump\nircdump:\n.incbin \"tmp/streams/ircping.log\"");
+asm(".global ircdump\nircdump:\n.incbin \"tmp/streams/rx_irc_cmd.log\"");
 extern const unsigned char ircdump[];
 #endif
 
@@ -26,9 +26,12 @@ void Enter_IRC(u8 argc, const char *argv[])
 
     // putty_irc.log 405
     // freenode_nodate.log 4479
+    // rx_irc.log 423
+    // irc_linetest.log 64
+    // rx_irc_cmd.log 5682
     u8 data; 
     u32 p = 0;
-    u32 s = 50;
+    u32 s = 5682;
     while (p < s)
     {
         while(Buffer_Push(&RxBuffer, ircdump[p]) != 0xFF)

@@ -29,14 +29,15 @@
 #define STATUS_NET_SEND_POS 38
 #define STATUS_KB_POS 36
 
-#define EMU_BUILD
+//#define EMU_BUILD
 #define NO_LOGGING
-#define IAC_LOGGING
+//#define IAC_LOGGING
 //#define KB_DEBUG
 
 extern u8 PrintDelay;
 extern bool bPALSystem;
 
+// Legacy character printing functions
 void print_charXY_W(const char c, u16 x);
 void print_charXY_WP(const char c, u16 x, u8 palette);
 

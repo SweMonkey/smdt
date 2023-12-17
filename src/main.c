@@ -1,11 +1,9 @@
 
 #include "main.h"
 #include "StateCtrl.h"
-#include "IRQ.h"
 #include "Input.h"
 #include "Terminal.h"
 #include "Keyboard_PS2.h"
-#include "QMenu.h"
 #include "../res/system.h"
 
 u8 PrintDelay = 0;

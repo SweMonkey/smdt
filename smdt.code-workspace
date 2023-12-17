@@ -27,7 +27,8 @@
 			"tuple": "c",
 			"type_traits": "c",
 			"utility": "c",
-			"keyboard_ps2.h": "c"
+			"keyboard_ps2.h": "c",
+			"system.h": "c"
 		}
 	}
 }

@@ -1,6 +1,6 @@
 
 #include "IRQ.h"
-#include "main.h"
+#include "main.h"   // Port definitions
 
 static u8 CursorBlink = 0; // Cursor blink counter
 

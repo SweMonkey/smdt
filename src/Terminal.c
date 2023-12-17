@@ -12,7 +12,7 @@ u8 vLineMode = 0;
 char *vSpeed = "4800";
 
 // Font
-u8 FontSize = 0;    // 0=8x8 - 1=4x8 - 2=4x8 AA
+u8 FontSize = 2;    // 0=8x8 - 1=4x8 - 2=4x8 AA
 u8 EvenOdd = 0;
 static u8 LastPlane = 0;
 
@@ -255,7 +255,9 @@ void TTY_TransmitBuffer()
 
 inline void TTY_SendString(const char *str)
 {
-    for (u8 c = 0; c < strlen(str); c++)
+    u16 len = strlen(str);
+
+    for (u16 c = 0; c < len; c++)
     {
         if (str[c] == '\0') return;
 

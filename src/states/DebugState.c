@@ -36,10 +36,32 @@ void Run_Debug()
     UI_Begin(&Test);
     UI_ClearRect(0, 0, 38, 24);
 
-    UI_BeginMenu(&MenuTest);
+    /*UI_BeginMenu(&MenuTest);
     UI_MenuItem("Item1", 0, 0);
     UI_MenuItem("Item2", 0, 1);
     UI_MenuItem("Item3", 0, 2);
+    UI_MenuItem("Item4", 0, 3);
+    UI_EndMenu();*/
+
+    UI_BeginMenu(&MenuTest);
+    if (UI_MenuItem("Item1", 0, 0)) // c=0
+    {
+        if (UI_MenuItem("SubItem1", 0, 0))// c=0
+        {
+            UI_MenuItem("SubSubItem1", 0, 0);// c=0
+        }
+    }
+
+    UI_MenuItem("Item2", 0, 1);// c=1
+    
+    if (UI_MenuItem("Item3", 0, 2))
+    {
+        if (UI_MenuItem("SubItem3", 0, 2))
+        {
+            UI_MenuItem("SubSubItem3", 0, 2);
+        }
+    }
+    
     UI_MenuItem("Item4", 0, 3);
     UI_EndMenu();
 
@@ -95,7 +117,7 @@ void Run_Debug()
 s8 sidx = 0;
 void Input_Debug()
 {
-    if (is_KeyDown(KEY_UP))
+    /*if (is_KeyDown(KEY_UP))
     {
         if (sidx > 0) sidx--;
         else sidx = MenuTest.EntryCnt-1;
@@ -114,7 +136,7 @@ void Input_Debug()
     if (is_KeyDown(KEY_RETURN))
     {
 
-    }
+    }*/
 }
 
 const PRG_State DebugState = 

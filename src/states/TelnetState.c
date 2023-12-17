@@ -13,7 +13,7 @@ static u8 kbdata;
 static u8 bOnce = FALSE;
 
 #ifdef EMU_BUILD
-asm(".global telnetdump\ntelnetdump:\n.incbin \"tmp/streams/rx_sw.log\"");
+asm(".global telnetdump\ntelnetdump:\n.incbin \"tmp/streams/rx_arcadia.log\"");
 extern const unsigned char telnetdump[];
 #endif
 
@@ -41,9 +41,10 @@ void Enter_Telnet(u8 argc, const char *argv[])
     // rx.log 32440
     // rx_enigma.log 8029
     // rx_sw.log 3122726
+    // rx_arcadia.log 11156
     u8 data; 
     u32 p = 0;
-    u32 s = 3122726;
+    u32 s = 11156;
     while (p < s)
     {
         while(Buffer_Push(&RxBuffer, telnetdump[p]) != 0xFF)

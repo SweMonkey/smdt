@@ -1,6 +1,6 @@
 
 #include "UI.h"
-#include "main.h"
+#include "main.h" // TRM_drawChar()
 
 // -- Window --
 static const u8 Frame[28][40] = 
@@ -436,15 +436,42 @@ void UI_DrawVScrollbar(u8 x, u8 y, u8 height, u16 min, u16 max, u16 pos)
 
 
 // -- Menu test 1/2394932 --
+#include "Input.h"
+
 void UI_BeginMenu(SM_Menu *m)
 {
     TargetMenu = m;
-    //TargetMenu->SelectedIdx = 0;
     TargetMenu->EntryCnt = 0;
+    //TargetMenu->SubParent = 255;
+    
+    if (is_KeyDown(KEY_RETURN))
+    {
+        //TargetMenu->SubLevel++;
+        //TargetMenu->SubParent = TargetMenu->SelectedIdx;
+        TargetMenu->Level[TargetMenu->CurLevel] = TargetMenu->SelectedIdx;
+    }
+    
+    if (is_KeyDown(KEY_ESCAPE))
+    {
+        //if (TargetMenu->SubLevel > 0) TargetMenu->SubLevel--;
+        //TargetMenu->Action = TargetMenu->SelectedIdx * -1;
+    }
 }
 
 void UI_EndMenu()
 {
+    if (is_KeyDown(KEY_UP))
+    {
+        if (TargetMenu->SelectedIdx > 0) TargetMenu->SelectedIdx--;
+        else TargetMenu->SelectedIdx = TargetMenu->EntryCnt-1;
+    }
+
+    if (is_KeyDown(KEY_DOWN))
+    {
+        if (TargetMenu->SelectedIdx < TargetMenu->EntryCnt-1) TargetMenu->SelectedIdx++;
+        else TargetMenu->SelectedIdx = 0;
+    }
+
     TargetMenu = NULL;       
 }
 
@@ -452,13 +479,22 @@ void UI_AddMenuEntry(const char *text, VoidCallback *cb)
 {
 }
 
-bool UI_MenuItem(const char *text, u8 x, u8 y)
+bool UI_MenuItem(const char *text, u8 x, u8 y/*, u8 level*/)
 {
-    if (Target == NULL) return FALSE;
+    if ((Target == NULL)/* || (level != TargetMenu->SubLevel) || ((y != TargetMenu->SubParent) && (TargetMenu->SubParent != 255))*/) return FALSE;
 
-    bool r = FALSE;
+    //TargetMenu->SubParent = y;
+
+    //bool r = FALSE;
     const char *c = text;
     u8 _x = x+1;
+
+
+    if (TargetMenu->Level[TargetMenu->EntryCnt] != TargetMenu->CurLevel)
+    {
+        //TargetMenu->Action = 0;
+        return 0;   
+    }
 
     if (TargetMenu->SelectedIdx == TargetMenu->EntryCnt)
     {
@@ -468,17 +504,18 @@ bool UI_MenuItem(const char *text, u8 x, u8 y)
             Target->WinAttr[y+3][_x++] = PAL3;
         }
 
-        r = TRUE;
+        //r = TRUE;
     }
     else
     {
         while (*c) Target->WinBuffer[y+3][_x++] = *c++;
 
-        r = FALSE;
+        //r = FALSE;
     }
 
     TargetMenu->EntryCnt++;
-    return r;
+
+    return 1;//r;
 }
 
 void UI_MenuSelect(SM_Menu *m, s8 idx)
@@ -495,4 +532,8 @@ void UI_MenuSelect(SM_Menu *m, s8 idx)
     m->SelectedIdx = idx;
 
     kprintf("SelectedIdx: %u - Cnt: %u", m->SelectedIdx, m->EntryCnt);
+}
+
+void UI_MenuEnter()
+{
 }

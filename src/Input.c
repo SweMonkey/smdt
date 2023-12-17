@@ -1,11 +1,12 @@
 
 #include "Input.h"
-#include "QMenu.h"
-#include "HexView.h"
 #include "Keyboard_PS2.h"
-#include "main.h"
+#include "main.h"   // Debug definitions
 
 static u8 KeyMap[0xFF];
+
+void QMenu_Input();
+void HexView_Input();
 
 void Input_JP(u16 joy, u16 changed, u16 state)
 {

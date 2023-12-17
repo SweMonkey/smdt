@@ -2,6 +2,7 @@
 #include "StateCtrl.h"
 #include "Input.h"
 #include "Terminal.h"
+#include "Keyboard_PS2.h"
 #include "main.h"
 
 void MN_FUNC_TELNET();
@@ -481,7 +482,7 @@ void Reset_Entry()
 void Run_Entry()
 {
     #ifndef EMU_BUILD
-    while (KB_Poll2(&kbdata))
+    while (KB_Poll(&kbdata))
     {
         KB_Handle_Scancode(kbdata);
     }

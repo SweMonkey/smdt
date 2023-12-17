@@ -1,11 +1,11 @@
 
 #include "Keyboard_PS2.h"
-#include "StateCtrl.h"
-#include "QMenu.h"
+#include "StateCtrl.h"  // bWindowActivev
+#include "QMenu.h"      // ChangeText() when KB is detected
 #include "Terminal.h"
 #include "Telnet.h"
 #include "Input.h"
-#include "IRQ.h"
+#include "IRQ.h"    // Buffer functions
 
 #define KB_CL 0
 #define KB_DT 1

@@ -16,6 +16,10 @@ typedef struct s_menu
     u8 MenuBuffer[28][20];
     bool bVisible;
     u8 SelectedIdx;
+    //u8 SubLevel;
+    //u8 SubParent;
+    u8 Level[8];
+    u8 CurLevel;
     u8 EntryCnt;
 } SM_Menu;
 
@@ -40,8 +44,8 @@ void UI_DrawVScrollbar(u8 x, u8 y, u8 height, u16 min, u16 max, u16 pos);
 
 void UI_BeginMenu(SM_Menu *m);
 void UI_EndMenu();
-void UI_AddMenuEntry(const char *text, VoidCallback *cb);
-bool UI_MenuItem(const char *text, u8 x, u8 y);
-void UI_MenuSelect(SM_Menu *m, s8 idx);
+//void UI_AddMenuEntry(const char *text, VoidCallback *cb);
+bool UI_MenuItem(const char *text, u8 x, u8 y/*, u8 level*/);
+//void UI_MenuSelect(SM_Menu *m, s8 idx);
 
 #endif // UI_H_INCLUDED

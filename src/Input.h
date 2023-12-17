@@ -3,7 +3,6 @@
 
 #include <genesis.h>
 #include "KeyDef.h"
-#include "Keyboard_PS2.h"
 
 bool is_KeyDown(u8 key);
 bool is_KeyUp(u8 key);
