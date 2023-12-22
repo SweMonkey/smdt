@@ -1,7 +1,7 @@
 #ifndef TERMINAL_H_INCLUDED
 #define TERMINAL_H_INCLUDED
 
-#include "main.h"
+#include "DevMgr.h"
 
 #define TTY_PORT_RX PORT2_SRx
 #define TTY_PORT_TX PORT2_STx
@@ -20,7 +20,7 @@
 #define ICO_NET_ERROR 0x1D
 
 #define D_COLUMNS_80 128
-#define D_COLUMNS_64 64
+#define D_COLUMNS_40 64
 
 // Default cursor minmaxing
 #define C_YMAX_PAL 29
@@ -58,7 +58,7 @@ extern s16 HScroll;
 extern s16 VScroll;
 extern u8 C_XMAX;
 extern u8 C_YMAX;
-extern const u16 pColors[16];
+//extern const u16 pColors[16];
 extern u8 bWrapAround;
 
 // Font

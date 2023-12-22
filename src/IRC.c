@@ -2,6 +2,10 @@
 #include "IRC.h"
 #include "Terminal.h"
 #include "UTF8.h"
+#include "Utils.h"
+
+#define B_PRINTSTR_LEN 256
+#define B_SUBPREFIX_LEN 256
 
 /*
 1. Pass message
@@ -79,18 +83,20 @@ static struct s_linebuf
 {
     {0}, {0}, {{0}}
 };
-/*static struct s_linebuf
-{
-    char *prefix;
-    char *command;
-    char *param[16];
-} LineBuf;*/
 
-bool CR_Set = FALSE;
+static bool CR_Set = FALSE;
+static u8 bLookingForCL = 0;
+static u8 NewColor = 0;
+extern u16 ColorFG;
 
-//static char RXString[1024];
-static char *RXString = NULL;
+static char RXString[1024];
 static u16 RXStringSeq = 0;
+
+static const u16 pColors[16] =
+{
+    0x000, 0x800, 0x0A0, 0x00E, 0x008, 0xA0A, 0x08E, 0x0EE,
+    0x0E0, 0xAA0, 0xEE0, 0xE00, 0xE0E, 0x888, 0xCCC, 0xEEE
+};
 
 
 void IRC_Init()
@@ -98,37 +104,71 @@ void IRC_Init()
     TTY_Init(TRUE);
     vNewlineConv = 1;
     UTF8_Init();
-    //TTY_SetFontSize(0);
-    //bWrapAround = TRUE;
-    //TTY_SetColumns(D_COLUMNS_80);
 
-    RXString = (char*)MEM_alloc(1024);
-
-    /*LineBuf.prefix = (char*)MEM_alloc(256);
-    LineBuf.command = (char*)MEM_alloc(64);
-    for (u8 i = 0; i < 16; i++) LineBuf.param[i] = (char*)MEM_alloc(256);*/
+    PAL_setPalette(PAL2, pColors, DMA);
+    ColorFG = 15;
 }
 
 void IRC_PrintChar(u8 c)
 {
+    if (bLookingForCL)
+    {
+        if (bLookingForCL >= 2)
+        {
+            if ((c >= 0x30) && (c < 0x40)) 
+            {
+                NewColor *= 10;
+                NewColor += (c-48);
+                NewColor--;
+            }
+
+            bLookingForCL = 0;
+
+            if (NewColor < 16)
+            {
+                ColorFG = NewColor;
+            }
+            else
+            {
+                ColorFG = 15;
+            }
+            
+            NewColor = 0;
+
+            return;
+        }
+
+        if ((c >= 0x30) && (c < 0x40)) 
+        {
+            NewColor = (c-48);
+            bLookingForCL++;
+        }
+        else 
+        {
+            ColorFG = 15;
+            bLookingForCL = 0;
+        }
+        
+        return;
+    }
+
     switch (c)
     {
         case 0x00:  //null
-        break;
         case 0x01:  //start of heading
-        break;
         case 0x02:  //start of text
-        break;
-        case 0x03:  //end of text
-        break;
         case 0x04:  //end of transmission
-        break;
         case 0x05:  //enquiry
-        break;
         case 0x06:  //acknowledge
-        break;
         case 0x07:  //bell
         break;
+        
+        case 0x03:  //^C
+            //kprintf("Found control character");
+            bLookingForCL++;
+            return;
+        break;
+
         case 0x08:  //backspace
             TTY_MoveCursor(TTY_CURSOR_LEFT, 1);
         break;
@@ -146,7 +186,9 @@ void IRC_PrintChar(u8 c)
             EvenOdd = !EvenOdd;
 
             TTY_MoveCursor(TTY_CURSOR_DOWN, 1);
-            TTY_ClearLine(sy % 32, 4);
+            #ifdef EMU_BUILD
+            waitMs(17);                         // <--------- Waiting for screen to catch up
+            #endif
         break;
         case 0x0B:  //vertical tab
             TTY_MoveCursor(TTY_CURSOR_DOWN, C_VTAB);
@@ -173,7 +215,7 @@ void IRC_PrintChar(u8 c)
             TTY_MoveCursor(TTY_CURSOR_DUMMY);   // Dummy
         break;
         case 0xE2:  // Dumb handling of UTF8
-            bUTF8 = TRUE;
+            //bUTF8 = TRUE;
             return;
         break;
 
@@ -191,15 +233,6 @@ void IRC_PrintChar(u8 c)
 
 static inline u16 atoi(char *c)
 {
-    /*u16 r = 0;
-
-    for (u8 i = 0; c[i] != '\0'; ++i)
-    {
-        r = r * 10 + c[i] - '0';
-    }
-
-    return r;*/
-
     u16 value = 0;
 
     while (isdigit(*c)) 
@@ -215,77 +248,135 @@ static inline u16 atoi(char *c)
 // IRC/2 cmd numbers: https://www.alien.net.au/irc/irc2numerics.html
 void IRC_DoCommand()
 {
-    char buf[256];
+    char PrintBuf[B_PRINTSTR_LEN] = {0};
+    char subprefix[B_SUBPREFIX_LEN] = {0};
+    char subparam[B_SUBPREFIX_LEN] = {0};
 
-    if (strcmp(LineBuf.command, "PING") == 0)
+    //memset(PrintBuf, 0, B_PRINTSTR_LEN);
+
+    if (LineBuf.param[1][0] == 1)
     {
-        sprintf(buf, "PONG %s\n", LineBuf.param[0]);
-        TTY_SendString(buf);
-        //kprintf("Got ping. Response: \"%s\"", buf);
+        u16 end = 1;
+        while ((LineBuf.prefix[end++] != '!') && (end < 256));
+        strncpy(subprefix, LineBuf.prefix, end-1);
+
+        end = 1;
+        while ((LineBuf.param[1][end++] != 1) && (end < 256));
+        strncpy(subparam, LineBuf.param[1]+1, end-2);
+
+        if (strcmp(subparam, "VERSION") == 0)
+        {
+            sprintf(PrintBuf, "NOTICE %s :\1VERSION %s - Sega Mega Drive [m68k @ 7.6MHz]\1\n", subprefix, STATUS_TEXT);
+            TTY_SendString(PrintBuf);
+            kprintf("Version string: \"%s\"", PrintBuf);
+
+            sprintf(PrintBuf, "[CTCP] Received Version request from %s\n", subprefix);
+        }
+        else
+        {
+            char dst[5];
+            strncpy(dst, subparam, 4);
+
+            if (strcmp(dst, "PING") == 0)
+            {
+                sprintf(PrintBuf, "[CTCP] Received ping from %s\n", subprefix);
+            }
+        }
+    }
+    else if (strcmp(LineBuf.command, "PING") == 0)
+    {
+        sprintf(PrintBuf, "PONG %s\n", LineBuf.param[0]);
+        TTY_SendString(PrintBuf);
+
+        return;
     }
     else if (strcmp(LineBuf.command, "NOTICE") == 0)
     {
-        sprintf(buf, "[Notice]: %s %s\r\n", LineBuf.prefix, LineBuf.param[1]);
-        u16 len = strlen(buf);
-        for (u16 i = 0; i < len; i++) IRC_PrintChar(buf[i]);
+        u16 end = 1;
+        while ((LineBuf.prefix[end++] != '!') && (end < 256));
+        strncpy(subprefix, LineBuf.prefix, end-1);
+
+        sprintf(PrintBuf, "[Notice] -%s- %s\n", subprefix, LineBuf.param[1]);
     }
     else if (strcmp(LineBuf.command, "ERROR") == 0)
     {
-        sprintf(buf, "[Error]: %s %s\r\n", LineBuf.prefix, LineBuf.param[0]);
-        u16 len = strlen(buf);
-        for (u16 i = 0; i < len; i++) IRC_PrintChar(buf[i]);
+        sprintf(PrintBuf, "[Error] %s %s\n", LineBuf.prefix, LineBuf.param[0]);
+    }
+    else if (strcmp(LineBuf.command, "PRIVMSG") == 0)
+    {
+        // Extract nickname from <nick>!<<hostname>
+        u16 end = 1;
+        while ((LineBuf.prefix[end++] != '!') && (end < 256));
+        strncpy(subprefix, LineBuf.prefix, end-1);
+
+        sprintf(PrintBuf, "%s->%s: %s\n", subprefix, LineBuf.param[0], LineBuf.param[1]);
+    }
+    else if (strcmp(LineBuf.command, "MODE") == 0)
+    {
+        sprintf(PrintBuf, "[Mode] You have set personal modes: %s\n", LineBuf.param[1]);
     }
     else
     {
         u16 cmd = atoi(LineBuf.command);
-        //kprintf("Got CMD: %u", cmd);
 
         switch (cmd)
         {
             case 0:
             {
-                break;
+                return;
             }
             case 1:
             case 2:
             case 3:
+            {
+                sprintf(PrintBuf, "[Welcome] %s\n", LineBuf.param[1]);
+                break;
+            }
             case 4:
             {
-                sprintf(buf, "[Welcome]: %s\r\n", LineBuf.param[1]);
+                sprintf(PrintBuf, "[Welcome] Server %s (%s), User modes: %s, Channel modes: %s\n", LineBuf.param[1], LineBuf.param[2], LineBuf.param[3], LineBuf.param[4]);
                 break;
             }
             case 5:
             {
-                sprintf(buf, "[Support]: %s\r\n", LineBuf.param[1]);
+                sprintf(PrintBuf, "[Support] %s %s %s %s %s %s %s %s %s %s %s %s %s %s\n", LineBuf.param[1], LineBuf.param[2], LineBuf.param[3], LineBuf.param[4], LineBuf.param[5], LineBuf.param[6], LineBuf.param[7], 
+                                                                                           LineBuf.param[8], LineBuf.param[9], LineBuf.param[10], LineBuf.param[11], LineBuf.param[12], LineBuf.param[13], LineBuf.param[14]);
                 break;
             }
             case 251:
-            case 252:
             case 253:
-            case 254:
             case 255:
             case 265:
             case 266:
             {
-                sprintf(buf, "[Users]: %s\r\n", LineBuf.param[1]);
+                sprintf(PrintBuf, "[Users] %s\n", LineBuf.param[1]);
+                break;
+            }
+            case 252:
+            case 254:
+            {
+                sprintf(PrintBuf, "[Users] %s %s\n", LineBuf.param[1], LineBuf.param[2]);
                 break;
             }
             case 372:
             case 375:
             case 376:
             {
-                sprintf(buf, "[MOTD]: %s\r\n", LineBuf.param[1]);
+                sprintf(PrintBuf, "[MOTD] %s\n", LineBuf.param[1]);
                 break;
             }
         
             default:
-                //kprintf("Error: Unhandled IRC CMD: %u", cmd);
+                kprintf("Error: Unhandled IRC CMD: %u", cmd);
+                return;
             break;
-        }
-        
-        u16 len = strlen(buf);
-        for (u16 i = 0; i < len; i++) IRC_PrintChar(buf[i]);        
+        }     
     }
+
+    u16 len = strlen(PrintBuf);
+    for (u16 i = 0; i < len; i++) IRC_PrintChar(PrintBuf[i]);
+
+    //kprintf("Printing string len = %u (e-3: $%X - e-2: $%X - e-1: $%X)", len, PrintBuf[len-3], PrintBuf[len-2], PrintBuf[len-1]);
 }
 
 void IRC_ParseString()
@@ -294,6 +385,7 @@ void IRC_ParseString()
     u16 it = 0;
     u8 seq = 0;
 
+    // Warning: this kprintf causes crashes for some reason
     //kprintf("RXString: \"%s\" - len: %u", RXString, strlen(RXString));
 
     while (!bBreak)
@@ -367,8 +459,6 @@ void IRC_ParseString()
         if (seq >= 16) break;
 
         it++;
-
-        //kprintf("RxString iterator: %u", it);
     }
 
     #ifndef NO_LOGGING
@@ -397,20 +487,19 @@ void IRC_ParseRX(u8 byte)
     switch (byte)
     {
         case 0x0A:  //line feed, new line
-            //kprintf("$0A - Parsing string... Seq = %u", RXStringSeq);
             RXString[RXStringSeq++] = '\0';
+            LineBuf.prefix[0] = '\0';
+            LineBuf.command[0] = '\0';
+            for (u8 i = 0; i < 16; i++){LineBuf.param[i][0] = '\0';}
             IRC_ParseString();
             RXStringSeq = 0;
             CR_Set = FALSE;
         break;
         case 0x0D:  //carriage return
-            //kprintf("$0D - Returning...");
             CR_Set = TRUE;
         break;
 
         default:
-            //SB_PushChar(&Command, byte);
-            //kprintf("Defaulting... Seq = %u", RXStringSeq);
             if (RXStringSeq < 1023) RXString[RXStringSeq++] = byte;
             else RXStringSeq--;
         break;

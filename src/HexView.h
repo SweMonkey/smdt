@@ -1,7 +1,7 @@
 #ifndef HEXVIEW_H_INCLUDED
 #define HEXVIEW_H_INCLUDED
 
-#include "main.h"
+#include <genesis.h>
 
 extern bool bShowHexView;
 

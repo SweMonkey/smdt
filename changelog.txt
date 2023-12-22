@@ -1,0 +1,53 @@
+v0.25:
+Telnet: More IAC functionality (LINEMODE, TERM_SPEED, SEND_LOCATION, ENVIROMENT_OP, SUPRESS_GO_AHEAD) and enabled the previously disabled echo settings.
+Telnet: LINEMODE EDIT setting now controls whether to send bytes in bulk (allowing for local editing) or byte-by-byte to remote server.
+Telnet: Fixes to IAC NAWS - Now takes into account column settings (based on font size for now instead of actual 40/80 column setting) and row settings (29 for PAL and 27 for NTSC -- 1 row is always used for status bar at the top).
+PC Side: smdt-pc to replace socat has been created, capable of piping and logging Tx/Rx streams.
+IRC: Initial IRC support (Line parser/command interpreter).
+IRC: mIRC colour support.
+IRC: CTCP Support (Version and ping only).
+Terminal: Testing 256 column mode for 4x8 fonts and added left/right scrolling for 4x8 fonts.
+Terminal: Rewritten MoveCursor function since it was old and buggy.
+Terminal: Emulator scrolling bugfixes.
+PS2KB: Moved out telnet state specific code.
+PS2KB: Rewritten scancode handler, now half the code size and supports all keys/combinations and keyboard layouts (US only for now) - Still TODO: CapsLock/NumLock/ScrollLock handling is not implemented.
+A million tiny little tweaks here and there.
+
+v0.24:
+Split terminal and telnet client apart (to prepare for other protocols).
+Implemented input subsystem.
+Changed KB/JP to new input subsystem.
+Implemented statemachine (to prepare for other protocols).
+Added a startup menu.
+Initial IRC state.
+
+v0.23:
+Lowered keyboard polling timeout, it caused the text to be printed out in chunks (not very smooth looking).
+Detecting (and ignoring) UTF BOM.
+Made status icons more attractive.
+Added sent/received bytes statistics.
+Added hex viewer for RX Buffer.
+
+v0.22 - 2023-11-11:
+Added a quick and dirty antialiased 4x8 font.
+Added a circular buffer for incoming bytes.
+Fixed cursor going rogue when switching between font sizes.
+
+v0.21 - 2023-11-10:
+Added support for 4x8 font.
+
+v0.21 - 2023-11-09:
+Added baud speed selector (300, 1200, 2400, 4800).
+
+
+--- Older changes ---
+
+v0.1x-0.20 - 2023-xx-xx:
+Implemented IAC code sequence handling.
+Implemented basic UTF-8 decoding.
+Rewritten escape code sequence handling.
+Rewritten line clearing and character printing functions.
+Implemented a menu system for changing terminal settings.
+Fixed shift key on keyboard not actually shifting letters.
+Added terminal type selector (XTerm, ANSI, VT100, MEGADRIVE and UNKNOWN).
+

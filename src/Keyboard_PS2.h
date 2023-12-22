@@ -1,7 +1,7 @@
 #ifndef KEYBOARD_PS2_H_INCLUDED
 #define KEYBOARD_PS2_H_INCLUDED
 
-#include "main.h"
+#include "DevMgr.h"
 
 #define KB_PORT_DATA PORT1_DATA
 #define KB_PORT_CTRL PORT1_CTRL
@@ -11,10 +11,10 @@
 #define ICO_KB_ERROR 0x1D   //0x58
 
 extern u8 KB_Initialized;
+extern const u8 SCTable_US[3][128];
 
 void KB_Init();
 u8 KB_Poll(u8 *data);
-void KB_Handle_Scancode(u8 scancode);
-void KB_Handle_EXT_Scancode(u8 scancode);  // Handles extended keys
+void KB_Interpret_Scancode(u8 scancode);
 
 #endif // KEYBOARD_PS2_H_INCLUDED

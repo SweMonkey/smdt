@@ -25,7 +25,7 @@ void VBlank()
 
     if (CurrentState->Input != NULL) CurrentState->Input(); // Current PRG
 
-    InputTick();    // IO System 
+    InputTick();    // Pump IO system
     //VB_IRQ();       // Old cursor blink
 
     bWindowActive = (bShowQMenu || bShowHexView);
@@ -39,6 +39,8 @@ void ChangeState(State new_state, u8 argc, const char *argv[])
     CurrentState->Exit();
 
     SYS_disableInts();
+
+    InputTick();    // Flush input queue to prevent inputs "leaking" into new state
 
     switch (new_state)
     {
@@ -110,11 +112,14 @@ bool isCurrentState(State this)
     return CurrentStateEnum == this;
 }
 
+State getState()
+{
+    return CurrentStateEnum;
+}
+
 void ResetSystem(bool bHard)
 {
-    //kprintf("StateCtrl: Reset(%s)", bHard?"True":"False");
     CurrentState->Reset();
-    //bHard ? SYS_reset() : SYS_hardReset();
 }
 
 void StateTick()

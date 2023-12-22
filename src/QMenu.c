@@ -4,6 +4,7 @@
 #include "Terminal.h"
 #include "Input.h"
 #include "StateCtrl.h"
+#include "Utils.h"
 
 void WINFN_Reset();
 void WINFN_Newline();
@@ -200,10 +201,6 @@ void QMenu_Input()
 {
     if (!bShowQMenu) return;
 
-    /*if (is_KeyDown(KEY_RWIN))
-    {
-        QMenu_Toggle();
-    }*/
     if (is_KeyDown(KEY_RETURN))
     {
         EnterMenu();
@@ -337,9 +334,6 @@ void WINFN_Reset()
 {
     QMenu_Toggle();
 
-    //kprintf("WINFN_Reset: Reset(%s) - %u", SelectedIdx?"False":"True", SelectedIdx);
-    //SelectedIdx ? SYS_reset() : SYS_hardReset();
-
     switch (SelectedIdx)
     {
         case 0:
@@ -361,7 +355,7 @@ void WINFN_Newline()
 
 void WINFN_Columns()
 {
-    TTY_SetColumns(SelectedIdx?D_COLUMNS_64:D_COLUMNS_80);
+    TTY_SetColumns(SelectedIdx?D_COLUMNS_40:D_COLUMNS_80);
 }
 
 void WINFN_BGColor()
@@ -450,8 +444,6 @@ void WINFN_RXTXSTATS()
 {
     sprintf(buf1, "TX BYTES: %lu", TXBytes);
     sprintf(buf2, "RX BYTES: %lu", RXBytes);
-    //ChangeText(15, 0, buf1);
-    //ChangeText(15, 1, buf2);
 
     MainMenu[15].text[0] = buf1;
     MainMenu[15].text[1] = buf2;

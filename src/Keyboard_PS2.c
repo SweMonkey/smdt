@@ -1,33 +1,62 @@
 
 #include "Keyboard_PS2.h"
-#include "StateCtrl.h"  // bWindowActivev
+#include "StateCtrl.h"  // bWindowActive
 #include "QMenu.h"      // ChangeText() when KB is detected
 #include "Terminal.h"
 #include "Telnet.h"
 #include "Input.h"
-#include "IRQ.h"    // Buffer functions
+#include "Buffer.h"
+#include "Utils.h"
 
 #define KB_CL 0
 #define KB_DT 1
 
+// https://www.win.tue.nl/~aeb/linux/kbd/scancodes-10.html#scancodesets
+// Using set 2
+
 u8 KB_Initialized = FALSE;
 static u8 bExtKey = FALSE;
 static u8 bBreak = FALSE;
-static u8 bCaps = FALSE;
 static u8 bShift = FALSE;
 static u8 bAlt = FALSE;
-static u8 bCtrl = FALSE;
 
-static const u8 ScancodeTable[256] =
+// US Layout
+const u8 SCTable_US[3][128] =
 {
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, '`', 0, 0, 0, 0, 0, 0, 'q', '1', 0, 0, 0, 'z', 's', 'a', 'w', '2', 0, 0, 'c', 'x', 'd', 'e', '4', '3', 0, //   0-39
-    0, ' ', 'v', 'f', 't', 'r', '5', 0, 0, 'n', 'b', 'h', 'g', 'y', '6', 0, 0, 0, 'm', 'j', 'u', '7', '8', 0, 0, ',', 'k', 'i', 'o', '0', '9', 0, 0, '.', '/', 'l', ';', 'p', '-', 0, //  40-79
-    0, 0, '\'', 0, '[', '=', 0, 0, 0, 0, 0, ']', 0, '\\', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, '1', 0, '4', '7', 0, 0, 0, '0', '.', '2', '5', '6', '8', 0, 0, //  80-119
-    0, '+', '3', '-', '*', '9', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 120-159
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 160-199
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 200-239
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0                                                                          // 240-255
-};
+{   // Lower
+//  x0   x1   x2   x3   x4   x5   x6   x7   x8   x9   xA   xB   xC   xD   xE   xF     
+    0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, '`', 0x0, // 0x00 - 0x0F
+    0x0, 0x0, 0x0, 0x0, 0x0, 'q', '1', 0x0, 0x0, 0x0, 'z', 's', 'a', 'w', '2', 0x0, // 0x10 - 0x1F
+    0x0, 'c', 'x', 'd', 'e', '4', '3', 0x0, 0x0, ' ', 'v', 'f', 't', 'r', '5', 0x0, // 0x20 - 0x2F
+    0x0, 'n', 'b', 'h', 'g', 'y', '6', 0x0, 0x0, 0x0, 'm', 'j', 'u', '7', '8', 0x0, // 0x30 - 0x3F
+    0x0, ',', 'k', 'i', 'o', '0', '9', 0x0, 0x0, '.', '/', 'l', ';', 'p', '-', 0x0, // 0x40 - 0x4F
+    0x0, 0x0,'\'', 0x0, '[', '=', 0x0, 0x0, 0x0, 0x0, 0x0, ']', 0x0,'\\', 0x0, 0x0, // 0x50 - 0x5F
+    0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // 0x60 - 0x6F
+    0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // 0x70 - 0x7F
+},
+{   // Shift+<KEY>
+//  x0   x1   x2   x3   x4   x5   x6   x7   x8   x9   xA   xB   xC   xD   xE   xF     
+    0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, '~', 0x0, // 0x00 - 0x0F
+    0x0, 0x0, 0x0, 0x0, 0x0, 'Q', '!', 0x0, 0x0, 0x0, 'Z', 'S', 'A', 'W', '@', 0x0, // 0x10 - 0x1F
+    0x0, 'C', 'X', 'D', 'E', '$', '#', 0x0, 0x0, ' ', 'V', 'F', 'T', 'R', '%', 0x0, // 0x20 - 0x2F
+    0x0, 'N', 'B', 'H', 'G', 'Y', '^', 0x0, 0x0, 0x0, 'M', 'J', 'U', '&', '*', 0x0, // 0x30 - 0x3F
+    0x0, '<', 'K', 'I', 'O', ')', '(', 0x0, 0x0, '>', '?', 'L', ':', 'P', '_', 0x0, // 0x40 - 0x4F
+    0x0, 0x0, '"', 0x0, '{', '+', 0x0, 0x0, 0x0, 0x0, 0x0, '}', 0x0, '|', 0x0, 0x0, // 0x50 - 0x5F
+    0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // 0x60 - 0x6F
+    0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // 0x70 - 0x7F
+},
+{   // ALT+<KEY>
+//  x0   x1   x2   x3   x4   x5   x6   x7   x8   x9   xA   xB   xC   xD   xE   xF     
+    0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // 0x00 - 0x0F
+    0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // 0x10 - 0x1F
+    0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, ' ', 0x0, 0x0, 0x0, 0x0, 'E', 0x0, // 0x20 - 0x2F  // E = €
+    0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // 0x30 - 0x3F
+    0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // 0x40 - 0x4F
+    0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // 0x50 - 0x5F
+    0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // 0x60 - 0x6F
+    0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // 0x70 - 0x7F
+}};
+
 
 void KB_Init()
 {
@@ -43,10 +72,11 @@ void KB_Init()
     KB_Initialized = TRUE;
     bExtKey = FALSE;
     bBreak = FALSE;
-    bCaps = FALSE;
     bShift = FALSE;
     bAlt = FALSE;
-    bCtrl = FALSE;
+
+    // Writing 0xf0 followed by 1, 2 or 3 to port 0x60 will put the keyboard in scancode mode 1, 2 or 3.
+    // Writing 0xf0 followed by 0 queries the mode, resulting in a scancode byte 43, 41 or 3f from the keyboard.
 }
 
 inline void KB_Lock()
@@ -111,360 +141,75 @@ u8 KB_Poll(u8 *data)
     }
 }
 
-// https://www.win.tue.nl/~aeb/linux/kbd/scancodes-10.html#scancodesets
-// Using set 2
-void KB_Handle_Scancode(u8 scancode)
+void KB_Interpret_Scancode(u8 scancode)
 {
-    if (scancode == 0) return;
-
-    if (bExtKey)
-    {
-        KB_Handle_EXT_Scancode(scancode);
-        bExtKey = FALSE;
-
-        return;
-    }
-
     if (bBreak)
     {
+        set_KeyPress(((bExtKey?0x100:0) | scancode), KEYSTATE_UP);
         bBreak = FALSE;
-
+        bExtKey = FALSE;
         switch (scancode)
         {
-            case 0:
-                return;
+            case KEY_LSHIFT:
+            case KEY_RSHIFT:
+                bShift = 0;
             break;
-
-            case 0x11:  // LAlt
-                bAlt = FALSE;    // was TRUE, copypaste error?
-                set_KeyPress(KEY_LALT, KEYSTATE_UP);
-                return;
+            case 0x11:  //KEY_RALT
+                bAlt = 0;
             break;
-
-            case 0x12:  // LShift
-                bShift = FALSE;
-                set_KeyPress(KEY_LSHIFT, KEYSTATE_UP);
-                return;
-            break;
-
-            case 0x59:  // RShift
-                bShift = FALSE;
-                set_KeyPress(KEY_RSHIFT, KEYSTATE_UP);
-                return;
-            break;
-
             default:
             break;
         }
-
         return;
     }
 
     switch (scancode)
     {
-        case 0:
-            return;
-        break;
-
-        case 0x11:  // LAlt
-            bAlt = TRUE;
-            set_KeyPress(KEY_LALT, KEYSTATE_DOWN);
-            return;
-        break;
-
-        case 0x12:  // LShift
-            bShift = TRUE;
-            set_KeyPress(KEY_LSHIFT, KEYSTATE_DOWN);
-            return;
-        break;
-
-        case 0x59:  // RShift
-            bShift = TRUE;
-            set_KeyPress(KEY_RSHIFT, KEYSTATE_DOWN);
-            return;
-        break;
-
-        case 0x58:  // Capslock
-            bCaps = !bCaps;
-            set_KeyPress(KEY_CAPITAL, bCaps);
-            return;
-        break;
-
-        case 0x5A:  // Return
-            set_KeyPress(KEY_RETURN, KEYSTATE_DOWN);
-
-            if (!bWindowActive)
-            {
-              /*When LINEMODE is turned on, and when in EDIT mode, when any normal
-                line terminator on the client side operating system is typed, the
-                line should be transmitted with "CR LF" as the line terminator.  When
-                EDIT mode is turned off, a carriage return should be sent as "CR
-                NUL", a line feed should be sent as LF, and any other key that cannot
-                be mapped into an ASCII character, but means the line is complete
-                (like a DOIT or ENTER key), should be sent as "CR LF".*/
-                if (vLineMode & LMSM_EDIT)
-                {
-                    TTY_SendChar(0xD, 0); // Send \r - carridge return
-                    TTY_SendChar(0xA, 0); // Send \n - line feed
-                    TTY_TransmitBuffer();
-                }
-                else
-                {
-                    TTY_SendChar(0xD, TXF_NOBUFFER); // Send \r - carridge return
-                    //TTY_SendChar(0, TXF_NOBUFFER); // Send NUL
-                    TTY_SendChar(0xA, TXF_NOBUFFER); // Send \n - line feeds
-                }
-
-                //TTY_TransmitBuffer();
-
-                // -- CheckMe: Should cursor actually be moved here? or be echoed back from server?
-
-                //line feed, new line
-                TTY_MoveCursor(TTY_CURSOR_DOWN, 1);
-                TTY_ClearLine(sy % 32, 4);
-
-                //carriage return
-                sx = 0;
-                TTY_MoveCursor(TTY_CURSOR_DUMMY);   // Dummy
-            }
-
-            return;
-        break;
-
-        case 0x66:  // Backspace
-            set_KeyPress(KEY_BACKSPACE, KEYSTATE_DOWN);
-
-            if (!bWindowActive)
-            {
-                // -- CheckMe: Should cursor actually be moved here? or be echoed back from server?
-
-                TTY_MoveCursor(TTY_CURSOR_LEFT, 1);
-                VDP_setTileMapXY(BG_A, TILE_ATTR_FULL(1, 0, 0, 0, 0), sx, sy);
-                VDP_setTileMapXY(BG_B, TILE_ATTR_FULL(2, 0, 0, 0, 0), sx, sy);
-
-                // 0x8  = backspace
-                // 0x7F = delete
-                if (vLineMode & LMSM_EDIT)
-                {
-                    Buffer_ReversePop(&TxBuffer);
-                }
-                else
-                {
-                    TTY_SendChar(0x8, TXF_NOBUFFER); // send backspace
-                }
-            }
-
-            return;
-        break;
-
-        case 0x76:  // Escape
-            set_KeyPress(KEY_ESCAPE, KEYSTATE_DOWN);
-
-            if (!bWindowActive)
-            {
-                TTY_SendChar(0x1B, 0); // Send \ESC
-            }
-
-            return;
-        break;
-
         case 0xAA:  // BAT OK
             print_charXY_WP(ICO_KB_OK, STATUS_KB_POS, CHAR_GREEN);
             ChangeText(7, 0, "PORT 1: KEYBOARD");
-
-            return;
         break;
-
         case 0xE0:
             bExtKey = TRUE;
-
-            return;
         break;
-
         case 0xF0:
             bBreak = TRUE;
-
-            return;
         break;
-
         case 0xFC: // BAT FAIL
             print_charXY_WP(ICO_KB_ERROR, STATUS_KB_POS, CHAR_RED);
             ChangeText(7, 0, "PORT 1: <ERROR>");
+        break;
 
-            return;
+        // Hopefully temporary shitcode
+        // These keys will not be down/up whenever a character will be printed
+        // Temporarily buffer these keys locally...
+        case KEY_LSHIFT:
+        case KEY_RSHIFT:
+            set_KeyPress(((bExtKey?0x100:0) | scancode), KEYSTATE_DOWN);
+            bShift = 1;
+        break;
+        case 0x11:  //KEY_RALT
+            set_KeyPress(((bExtKey?0x100:0) | scancode), KEYSTATE_DOWN);
+            bAlt = 1;
         break;
 
         default:
+            set_KeyPress(((bExtKey?0x100:0) | scancode), KEYSTATE_DOWN);
         break;
     }
 
-    u8 key = ScancodeTable[scancode];
+    // More shit that should not be here...
+    u8 mod = 0;
+    if (bAlt) mod = 2;
+    else if (bShift) mod = 1;
+
+    u8 key = SCTable_US[mod][scancode];
 
     if ((key >= 0x20) && (key <= 0x7E) && (!bWindowActive))
     {
-        char chr = ScancodeTable[scancode] - ((bCaps || bShift) ? 32 : 0);
-        
         // Only print characters if ECHO is false
-        if (!vDoEcho) TTY_PrintChar(chr);
+        if (!vDoEcho) TTY_PrintChar(key);
 
-        TTY_SendChar(chr, 0);
-    }
-}
-
-void KB_Handle_EXT_Scancode(u8 scancode)
-{
-    switch (scancode)
-    {
-        case 0:
-            return;
-        break;
-
-        /*case 0x1F:  // Left GUI
-            TTY_Reset(TRUE);
-            return;
-        break;*/
-
-        case 0x11:  // RAlt
-            bAlt = TRUE;
-            set_KeyPress(KEY_RALT, KEYSTATE_DOWN);
-            return;
-        break;
-
-        case 0x1F:  // LWIN
-            set_KeyPress(KEY_LWIN, KEYSTATE_DOWN);
-            return;
-        break;
-
-        case 0x27:  // RWIN
-            set_KeyPress(KEY_RWIN, KEYSTATE_DOWN);
-            return;
-        break;
-
-        case 0x37:  // Power button
-            set_KeyPress(KEY_SLEEP, KEYSTATE_DOWN);
-            TTY_Reset(TRUE);
-            return;
-        break;
-
-        case 0x6B:  // Left arrow
-            set_KeyPress(KEY_LEFT, KEYSTATE_DOWN);
-
-            if (!bWindowActive)
-            {
-                if (!FontSize)
-                {
-                    HScroll += 8;
-                    VDP_setHorizontalScrollVSync(BG_A, HScroll % 1024);
-                    VDP_setHorizontalScrollVSync(BG_B, HScroll % 1024);
-                }
-
-                TTY_SendChar(0x1B, TXF_NOBUFFER);    // ESC
-                TTY_SendChar(0x5B, TXF_NOBUFFER);    // [
-                TTY_SendChar(0x44, TXF_NOBUFFER);    // D
-            }
-
-            #ifndef NO_LOGGING
-                KLog("KB; Extended key Left arrow");
-            #endif
-
-            #ifdef KB_DEBUG
-                TTY_PrintChar('L');
-            #endif
-
-            return;
-        break;
-
-        case 0x71:  // Delete
-            set_KeyPress(KEY_DELETE, KEYSTATE_DOWN);
-
-            TTY_SendChar(0x1B, TXF_NOBUFFER);    // ESC
-            TTY_SendChar(0x5B, TXF_NOBUFFER);    // [
-            TTY_SendChar(0x7F, TXF_NOBUFFER);    // DEL
-
-            return;
-        break;
-
-        case 0x72:  // Down arrow
-            set_KeyPress(KEY_DOWN, KEYSTATE_DOWN);
-
-            if (!bWindowActive)
-            {
-                TTY_SendChar(0x1B, TXF_NOBUFFER);    // ESC
-                TTY_SendChar(0x5B, TXF_NOBUFFER);    // [
-                TTY_SendChar(0x42, TXF_NOBUFFER);    // B
-            }
-
-            #ifndef NO_LOGGING
-                KLog("KB; Extended key Down arrow");
-            #endif
-
-            #ifdef KB_DEBUG
-                TTY_PrintChar('D');
-            #endif
-
-            return;
-        break;
-
-        case 0x74:  // Right arrow
-            set_KeyPress(KEY_RIGHT, KEYSTATE_DOWN);
-
-            if (!bWindowActive)
-            {
-                if (!FontSize)
-                {
-                    HScroll -= 8;
-                    VDP_setHorizontalScrollVSync(BG_A, HScroll % 1024);
-                    VDP_setHorizontalScrollVSync(BG_B, HScroll % 1024);
-                }
-
-                TTY_SendChar(0x1B, TXF_NOBUFFER);    // ESC
-                TTY_SendChar(0x5B, TXF_NOBUFFER);    // [
-                TTY_SendChar(0x43, TXF_NOBUFFER);    // C
-            }
-
-            #ifndef NO_LOGGING
-                KLog("KB; Extended key Right arrow");
-            #endif
-
-            #ifdef KB_DEBUG
-                TTY_PrintChar('R');
-            #endif
-
-            return;
-        break;
-
-        case 0x75:  // Up arrow
-            set_KeyPress(KEY_UP, KEYSTATE_DOWN);
-
-            if (!bWindowActive)
-            {
-                TTY_SendChar(0x1B, TXF_NOBUFFER);    // ESC
-                TTY_SendChar(0x5B, TXF_NOBUFFER);    // [
-                TTY_SendChar(0x41, TXF_NOBUFFER);    // A
-            }
-
-            #ifndef NO_LOGGING
-                KLog("KB; Extended key Up arrow");
-            #endif
-
-            #ifdef KB_DEBUG
-                TTY_PrintChar('U');
-            #endif
-
-            return;
-        break;
-
-        case 0xF0:
-            bBreak = TRUE;
-
-            #ifndef NO_LOGGING
-                KLog("KB; Extended key break");
-            #endif
-
-            return;
-        break;
-
-        default:
-        break;
+        TTY_SendChar(key, 0);
     }
 }

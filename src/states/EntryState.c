@@ -3,7 +3,7 @@
 #include "Input.h"
 #include "Terminal.h"
 #include "Keyboard_PS2.h"
-#include "main.h"
+#include "Utils.h"
 
 void MN_FUNC_TELNET();
 void MN_FUNC_IRC();
@@ -484,7 +484,7 @@ void Run_Entry()
     #ifndef EMU_BUILD
     while (KB_Poll(&kbdata))
     {
-        KB_Handle_Scancode(kbdata);
+        KB_Interpret_Scancode(kbdata);
     }
     #endif
 }

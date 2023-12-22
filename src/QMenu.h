@@ -1,7 +1,7 @@
 #ifndef QMENU_H_INCLUDED
 #define QMENU_H_INCLUDED
 
-#include "main.h"
+#include <genesis.h>
 
 extern bool bShowQMenu;
 

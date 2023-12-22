@@ -23,6 +23,7 @@ extern bool bWindowActive;
 void ChangeState(State new_state, u8 argc, const char *argv[]);
 void RevertState();
 bool isCurrentState(State this);
+State getState();
 void ResetSystem(bool bHard);
 void StateTick();
 

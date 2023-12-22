@@ -1,8 +1,9 @@
 
 #include "HexView.h"
-#include "IRQ.h"
 #include "Input.h"
 #include "UI.h"
+#include "Buffer.h"
+#include "Utils.h"
 
 static u32 FileOffset = 0;
 static s16 ScrollY = 0;
@@ -41,7 +42,7 @@ void UpdateView()
 
     UI_DrawVLine(4, 0, 24, UC_VLINE_SINGLE);
     UI_DrawVLine(28, 0, 24, UC_VLINE_SINGLE);
-    UI_DrawVScrollbar(37, 0, 24, 0, 0xFFF-0xC0+2, p);   // 0xFFF = RxBuf size - 0xC0 = amount of data on a single screen + 2 to make sure slider doesn't go over down arrow
+    UI_DrawVScrollbar(37, 0, 24, 0, (BUFFER_LEN-1)-0xC0+2, p);   // 0xFFF = RxBuf size - 0xC0 = amount of data on a single screen + 2 to make sure slider doesn't go over down arrow
 
     UI_End();
 }

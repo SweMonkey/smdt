@@ -1,8 +1,14 @@
 
 #include "Terminal.h"
 #include "IRQ.h"
+#include "Buffer.h"
 #include "Telnet.h"
 #include "../res/system.h"
+#include "Utils.h"
+
+#ifdef EMU_BUILD
+#include "StateCtrl.h"
+#endif
 
 // Modifiable variables
 u8 vNewlineConv = 0;    // 0 = none (\n = \n) -- 1 = \n becomes \n\r
@@ -12,7 +18,7 @@ u8 vLineMode = 0;
 char *vSpeed = "4800";
 
 // Font
-u8 FontSize = 2;    // 0=8x8 - 1=4x8 - 2=4x8 AA
+u8 FontSize = 0;    // 0=8x8 - 1=4x8 - 2=4x8 AA
 u8 EvenOdd = 0;
 static u8 LastPlane = 0;
 
@@ -31,18 +37,19 @@ u16 ColorBG = CL_BG, ColorFG = CL_FG;   // Selected BG/FG colour
 u8 bIntense = FALSE;                    // Text highlighed
 u8 bInverse = FALSE;                    // Text BG/FG reversed
 u8 bWrapAround = TRUE;                  // Force wrap around at column 40/80
+u8 TermColumns = D_COLUMNS_80;
 
-const u16 pColors[16] =
+static const u16 pColors[16] =
 {
     0x000, 0x00c, 0x0c0, 0x0cc, 0xc00, 0xc0c, 0xcc0, 0xccc,   // Normal
     0x444, 0x66e, 0x6e6, 0x6ee, 0xe66, 0xe6e, 0xee6, 0xeee,   // Highlighted
 };
 
-const u16 pColorsMONO[16] =
+/*static const u16 pColorsMONO[16] =
 {
     0x000, 0xccc, 0xccc, 0xccc, 0xccc, 0xccc, 0xccc, 0xccc,   // Normal
     0x444, 0xeee, 0xeee, 0xeee, 0xeee, 0xeee, 0xeee, 0xeee,   // Highlighted
-};
+};*/
 
 
 void TTY_Init(u8 bHardReset)
@@ -117,19 +124,27 @@ void TTY_Reset(u8 bClearScreen)
 
 void TTY_SetColumns(u8 col)
 {
-    switch (col)
+    TermColumns = col;
+
+    switch (TermColumns)
     {
         case D_COLUMNS_80:
         {
             VDP_setPlaneSize(128, 32, FALSE);
-            C_XMAX = 79;
+            //C_XMAX = 79;
+
+            if (!FontSize) C_XMAX = 126;
+            else C_XMAX = 254;
 
             return;
         }
-        case D_COLUMNS_64:
+        case D_COLUMNS_40:
         {
             VDP_setPlaneSize(64, 32, FALSE);
-            C_XMAX = 38;
+            //C_XMAX = 38;
+
+            if (!FontSize) C_XMAX = 62;
+            else C_XMAX = 126;
 
             return;
         }
@@ -154,6 +169,9 @@ void TTY_SetFontSize(u8 size)
 
         EvenOdd = 0;
         LastPlane = 0;
+
+        if (TermColumns == D_COLUMNS_80) C_XMAX = 254;   // this is a test, remove me if fucky
+        else C_XMAX = 126;
     }
     else if (FontSize == 2)   // 4x8 AA
     {
@@ -167,6 +185,9 @@ void TTY_SetFontSize(u8 size)
 
         EvenOdd = 0;
         LastPlane = 0;
+
+        if (TermColumns == D_COLUMNS_80) C_XMAX = 254;   // this is a test, remove me if fucky
+        else C_XMAX = 126;
     }
     else        // 8x8
     {
@@ -178,6 +199,9 @@ void TTY_SetFontSize(u8 size)
         
         *plctrl = VDP_WRITE_VRAM_ADDR(0xAC04);
         *pwdata = 0x2;
+
+        if (TermColumns == D_COLUMNS_80) C_XMAX = 126;   // this is a test, remove me if fucky
+        else C_XMAX = 62;
     }
 
     // Update visual cursor position    
@@ -293,7 +317,6 @@ inline void TTY_PrintChar(u8 c)
             break;
         }
 
-
         *pwdata = 0x2000 + c + (bInverse ? 0x2020 : 0x2120);    // Hmm
         EvenOdd = (sx % 2);
     }
@@ -320,27 +343,27 @@ inline void TTY_ClearLine(u16 y, u16 line_count)
 
     VDP_setAutoInc(2);
 
-    //u16 i = line_count;
-    //while (i--)
-    //{
-    *plctrl = VDP_WRITE_VRAM_ADDR((u32) VDP_BG_B + addr);
+    //u16 i = line_count; // uncomment this if line_count is actually used
+    //while (i--)         // uncomment this if line_count is actually used
+    //{                   // uncomment this if line_count is actually used
+        *plctrl = VDP_WRITE_VRAM_ADDR((u32) VDP_BG_B + addr);
 
-    j = 10;
-    while (j--)
-    {
-        *pldata = 0;
-        *pldata = 0;
-        *pldata = 0;
-        *pldata = 0;
-    }
-    //} // uncomment this and while above if line_count is actually used
+        j = (C_XMAX == 38 ? 8 : 16);    // Used to be 10
+        while (j--)
+        {
+            *pldata = 0;
+            *pldata = 0;
+            *pldata = 0;
+            *pldata = 0;
+        }
+    //} // uncomment this if line_count is actually used
 
     // Clear BGA too if using 4x8 font
     if (FontSize)
     {
         *plctrl = VDP_WRITE_VRAM_ADDR((u32) VDP_BG_A + addr);
 
-        j = 10;
+        j = (C_XMAX == 38 ? 8 : 16);    // Used to be 10
         while (j--)
         {
             *pldata = 0;
@@ -507,79 +530,74 @@ inline void TTY_SetAttribute(u8 v)
     }
 }
 
-inline void TTY_MoveCursor(u8 direction, u8 lines)
+
+inline void TTY_MoveCursor(u8 dir, u8 num)
 {
-    u8 n = lines;
-    s16 vsmod = 0;
+    vu32 *plctrl = (u32*) VDP_CTRL_PORT;
+    vu16 *pwdata = (u16*) VDP_DATA_PORT;
+    //s16 vsmod = 0;
 
-    if (n == 255) n = 1;
-
-    switch (direction)
+    switch (dir)
     {
         case TTY_CURSOR_UP:
-            while (n--)
-            {
-                if (sy > (C_YSTART + (VScroll >> 3))) sy--;    // > 0
-            }
+            if (sy-num <= 0) sy = 0;
+            else sy -= num;
         break;
 
         case TTY_CURSOR_DOWN:
-            while (n--)
+            TTY_ClearLine(sy+1, num);
+            sy += num;
+            
+            if (sy > (C_YMAX + (VScroll >> 3)))
             {
-                sy++;
-                if (sy > (C_YMAX + (VScroll >> 3)))
-                {
-                    VScroll += 8;
-                    vsmod = VScroll % 256;
-                    VDP_setVerticalScroll(BG_A, vsmod);
-                    VDP_setVerticalScroll(BG_B, vsmod);
+                VScroll += 8 * num;
+                //vsmod = VScroll % 256;
 
-                    //KLog_U1("vsmod: ", vsmod);
-                }
+                // Update vertical scroll
+                *plctrl = VDP_WRITE_VSRAM_ADDR((u32) 0);    // 0x40000010;
+                *pwdata = VScroll;
+                *plctrl = VDP_WRITE_VSRAM_ADDR((u32) 2);    // 0x40020010;
+                *pwdata = VScroll;
             }
         break;
 
         case TTY_CURSOR_LEFT:
-            while (n--)
+            if (sx-num < 0)
             {
-                if (sx > 0) { sx--; }
-                else if (bWrapAround)
-                {
-                    sx = C_XMAX;
-                    if (sy > C_YSTART) sy--;
-                }
+                sx = C_XMAX-(sx-num);
+                if (bWrapAround && (sy > 0)) sy--;
+            }
+            else
+            {
+                sx -= num;
             }
         break;
 
         case TTY_CURSOR_RIGHT:
-            while (n--)
+            if (sx+num >= C_XMAX)
             {
-                if (sx >= C_XMAX)
+                if (bWrapAround) 
                 {
-                    if (bWrapAround)
+                    sy++;
+
+                    if (sy > (C_YMAX + (VScroll >> 3)))
                     {
-                        sy++;
-                        if (sy > (C_YMAX + (VScroll >> 3)))
-                        {
-                            TTY_ClearLine(sy, 1);
-
-                            VScroll += 8;
-                            vsmod = VScroll % 256;
-                            VDP_setVerticalScroll(BG_A, vsmod);
-                            VDP_setVerticalScroll(BG_B, vsmod);
-
-                            #ifndef NO_LOGGING
-                                kprintf("vsmod: %d", vsmod);
-                            #endif
-                        }
-                        sx = 0;
+                        TTY_ClearLine(sy, 1);
+                        VScroll += 8;// * (((sx+num)-C_XMAX)-1);
+                        //vsmod = VScroll % 256;
+                        
+                        // Update vertical scroll
+                        *plctrl = VDP_WRITE_VSRAM_ADDR((u32) 0);    // 0x40000010;
+                        *pwdata = VScroll;
+                        *plctrl = VDP_WRITE_VSRAM_ADDR((u32) 2);    // 0x40020010;
+                        *pwdata = VScroll;
                     }
                 }
-                else 
-                {
-                    EvenOdd = (sx % 2);
-                    sx++;
-                }
+                sx = (sx+num)-C_XMAX;
+            }
+            else
+            {
+                sx += num;
             }
         break;
 
@@ -594,12 +612,8 @@ inline void TTY_MoveCursor(u8 direction, u8 lines)
     sprx = sprx >= 504 ? 504 : sprx;
     spry = spry >= 504 ? 504 : spry;
 
-    vu32 *plctrl = (u32 *)VDP_CTRL_PORT;
-    vu16 *pwdata = (u16 *)VDP_DATA_PORT;
-
     *plctrl = VDP_WRITE_VRAM_ADDR(0xAC00);
     *pwdata = spry;
     *plctrl = VDP_WRITE_VRAM_ADDR(0xAC06);
     *pwdata = sprx;
 }
-

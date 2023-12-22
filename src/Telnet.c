@@ -2,6 +2,7 @@
 #include "Telnet.h"
 #include "Terminal.h"
 #include "UTF8.h"
+#include "Utils.h"
 
 // https://www.iana.org/assignments/telnet-options/telnet-options.xhtml
 // https://users.cs.cf.ac.uk/Dave.Marshall/Internet/node141.html
@@ -202,7 +203,9 @@ inline void TELNET_ParseRX(u8 dummy)
             EvenOdd = !EvenOdd;
 
             TTY_MoveCursor(TTY_CURSOR_DOWN, 1);
-            TTY_ClearLine(sy % 32, 4);
+            #ifdef EMU_BUILD
+            waitMs(17);                         // <--------- Waiting for screen to catch up
+            #endif
         break;
         case 0x0B:  //vertical tab
             TTY_MoveCursor(TTY_CURSOR_DOWN, C_VTAB);
@@ -288,8 +291,6 @@ inline void TELNET_ParseRX(u8 dummy)
     */
     if ((*PRX >= 0x20) && (*PRX <= 0x7E)) // <= 0x7E
     {
-        //if (sx > 39) return;    // Character not visible without manually scrolling to the right, dont waste time printing it
-
         TTY_PrintChar(*PRX);
         
         return;

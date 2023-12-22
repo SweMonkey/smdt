@@ -1,6 +1,6 @@
 
 #include "UI.h"
-#include "main.h" // TRM_drawChar()
+#include "Utils.h" // TRM_drawChar()
 
 // -- Window --
 static const u8 Frame[28][40] = 

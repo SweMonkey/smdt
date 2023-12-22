@@ -1,9 +1,10 @@
 
 #include "Input.h"
 #include "Keyboard_PS2.h"
-#include "main.h"   // Debug definitions
+#include "Utils.h"
 
-static u8 KeyMap[0xFF];
+#define KM_SZ 0x1FF
+static u8 KeyMap[KM_SZ];
 
 void QMenu_Input();
 void HexView_Input();
@@ -23,7 +24,7 @@ void Input_JP(u16 joy, u16 changed, u16 state)
 
 void Input_Init()
 {
-    for (u16 i = 0; i < 0xFF; i++) KeyMap[i] = KEYSTATE_NONE;
+    for (u16 i = 0; i < KM_SZ; i++) KeyMap[i] = KEYSTATE_NONE;
 
     #ifdef EMU_BUILD
         JOY_setSupport(PORT_1, JOY_SUPPORT_6BTN);
@@ -36,24 +37,24 @@ void Input_Init()
     JOY_setSupport(PORT_2, JOY_SUPPORT_OFF);
 }
 
-bool is_KeyDown(u8 key)
+bool is_KeyDown(u16 key)
 {
-    return (KeyMap[key & 0xFF] == KEYSTATE_DOWN)?TRUE:FALSE;
+    return (KeyMap[key & KM_SZ] == KEYSTATE_DOWN)?TRUE:FALSE;
 }
 
-bool is_KeyUp(u8 key)
+bool is_KeyUp(u16 key)
 {
-    return (KeyMap[key & 0xFF] == KEYSTATE_UP)?TRUE:FALSE;
+    return (KeyMap[key & KM_SZ] == KEYSTATE_UP)?TRUE:FALSE;
 }
 
-u8 get_KeyPress(u8 KeyState)
+u16 get_KeyPress(u8 KeyState)
 {
-    return 0;//KeyMap[KeyState & 0xFF];
+    return 0;//KeyMap[KeyState & KM_SZ];
 }
 
-void set_KeyPress(u8 key, u8 KeyState)
+void set_KeyPress(u16 key, u8 KeyState)
 {
-    KeyMap[key & 0xFF] = KeyState;
+    KeyMap[key & KM_SZ] = KeyState;
 }
 
 void InputTick()
@@ -61,9 +62,9 @@ void InputTick()
     QMenu_Input();
     HexView_Input();
 
-    for (u16 i = 0; i < 0xFF; i++)
+    for (u16 i = 0; i < KM_SZ; i++)
     {
-        if (KeyMap[i & 0xFF] == KEYSTATE_UP) KeyMap[i & 0xFF] = KEYSTATE_NONE;
-        if (KeyMap[i & 0xFF] == KEYSTATE_DOWN) KeyMap[i & 0xFF] = KEYSTATE_NONE;
+        if (KeyMap[i & KM_SZ] == KEYSTATE_UP) KeyMap[i & KM_SZ] = KEYSTATE_NONE;
+        if (KeyMap[i & KM_SZ] == KEYSTATE_DOWN) KeyMap[i & KM_SZ] = KEYSTATE_NONE;
     }
 }
