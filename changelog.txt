@@ -1,13 +1,14 @@
 v0.26:
 DevMgr: Device manager created. Devices can now be mapped to pin 1+2 or pin 3+4 on any port. 2 PS/2 devices can be on the same port as a UART device.
-DevMgr: Serial/UART device can be in any port now (not recommending to change port while tx/rx is ongoing).
-DevMgr: Added a temporary crude device detection system. Joypad will be enabled on port 1 only when no keyboard is detected or when keyboard is not in port 1
+DevMgr: Serial/UART device can be in any port now (not recommended to change port while tx/rx is ongoing).
+DevMgr: Added a temporary crude device detection system. Joypad will be enabled on port 1 only when no keyboard is detected or when keyboard is not in port 1.
 PS2KB: Initial HOST->PS/2 communication (PS/2 response is always "rx fail, please resend command" though).
-Quickmenu: Some updates regarding device list and setting UART port.
+Quickmenu: Some updates regarding device list and selecting UART port.
 Quickmenu: Text colour is selectable when using 4x8 font.
-Telnet: Added some missing escape codes (skeleton code mostly)
-Terminal and telnet: A few tweaks related to scrolling, cursor handling and special characters
-More UTF8 "characters" added
+Telnet: Added some missing escape codes (skeleton code mostly).
+Terminal and telnet: A few tweaks related to scrolling, cursor handling and special characters.
+Terminal: Blinky cursor is back. It used to cause lockups, lets hope it doesn't anymore.
+More UTF8 "characters" added.
 
 v0.25:
 Telnet: More IAC functionality (LINEMODE, TERM_SPEED, SEND_LOCATION, ENVIROMENT_OP, SUPRESS_GO_AHEAD) and enabled the previously disabled echo settings.
