@@ -164,7 +164,6 @@ void IRC_PrintChar(u8 c)
         break;
         
         case 0x03:  //^C
-            //kprintf("Found control character");
             bLookingForCL++;
             return;
         break;
@@ -178,26 +177,17 @@ void IRC_PrintChar(u8 c)
         case 0x0A:  //line feed, new line
             if (vNewlineConv == 1)  // Convert \n to \n\r
             {
-                sx = 0;
-                TTY_MoveCursor(TTY_CURSOR_DUMMY);   // Dummy
+                TTY_SetSX(0);
             }
-
-            EvenOdd = (sx % 2);
-            EvenOdd = !EvenOdd;
-
             TTY_MoveCursor(TTY_CURSOR_DOWN, 1);
-            #ifdef EMU_BUILD
-            waitMs(17);                         // <--------- Waiting for screen to catch up
-            #endif
         break;
         case 0x0B:  //vertical tab
             TTY_MoveCursor(TTY_CURSOR_DOWN, C_VTAB);
         break;
         case 0x0C:  //form feed, new page
-            sx = 0;
-            sy = C_YSTART;
+            TTY_SetSX(0);
+            TTY_SetSY(C_YSTART);
 
-            HScroll = D_HSCROLL;
             VScroll = D_VSCROLL;
 
             VDP_clearPlane(BG_A, TRUE);
@@ -209,12 +199,11 @@ void IRC_PrintChar(u8 c)
             TTY_MoveCursor(TTY_CURSOR_DUMMY);   // Dummy
         break;
         case 0x0D:  //carriage return
-            sx = 0;
-            EvenOdd = (sx % 2);
-            EvenOdd = !EvenOdd;
+            TTY_SetSX(0);
             TTY_MoveCursor(TTY_CURSOR_DUMMY);   // Dummy
         break;
         case 0xE2:  // Dumb handling of UTF8
+        case 0xEF:
             //bUTF8 = TRUE;
             return;
         break;
@@ -229,20 +218,6 @@ void IRC_PrintChar(u8 c)
         
         return;
     }
-}
-
-static inline u16 atoi(char *c)
-{
-    u16 value = 0;
-
-    while (isdigit(*c)) 
-    {
-        value *= 10;
-        value += (u16) (*c - '0');
-        c++;
-    }
-
-    return value;
 }
 
 // IRC/2 cmd numbers: https://www.alien.net.au/irc/irc2numerics.html
@@ -317,7 +292,7 @@ void IRC_DoCommand()
     }
     else
     {
-        u16 cmd = atoi(LineBuf.command);
+        u16 cmd = atoi16(LineBuf.command);
 
         switch (cmd)
         {

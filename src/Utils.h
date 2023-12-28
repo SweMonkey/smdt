@@ -3,7 +3,7 @@
 
 #include <genesis.h>
 
-#define STATUS_TEXT "SMDTC v0.25"
+#define STATUS_TEXT "SMDTC v0.26"
 
 #define CHAR_RED PAL0      // 2
 #define CHAR_GREEN PAL0    // 0
@@ -28,5 +28,8 @@ void print_charXY_WP(const char c, u16 x, u8 palette);
 void TRM_drawChar(const u8 c, u8 x, u8 y, u8 palette);
 void TRM_drawText(const char *str, u16 x, u16 y, u8 palette);
 void TRM_clearTextArea(u16 x, u16 y, u16 w, u16 h);
+
+u8 atoi(char *c);
+u16 atoi16(char *c);
 
 #endif // UTILS_H_INCLUDED

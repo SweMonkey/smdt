@@ -22,4 +22,60 @@
 #define PORT3_SRx 0xA1001D
 #define PORT3_STx 0xA1001B
 
+#define DEVMODE_PARALLEL 0
+#define DEVMODE_SERIAL 1
+
+typedef enum e_port {DP_None, DP_Port1, DP_Port2, DP_Port3} DevPort;
+
+typedef struct s_deviceid
+{
+    char *sName;    // Device name
+    u8 Bitmask;     // Used bits        (Example; Used bits = b00000011)
+    u8 Bitshift;    // Used bits shift  (Example; If Shift=2 then Used bits = b00001100)
+    u8 Mode;        // 0=Parallel / 1=Serial
+} SM_DeviceId;
+
+typedef struct s_device
+{
+    vu8 *Ctrl;  // Control port
+    vu8 *Data;  // Data port
+    vu8 *SCtrl; // Serial control port
+    vu8 *RxData;// Rx port
+    vu8 *TxData;// Tx port
+    DevPort PAssign;   // Port assignment
+    SM_DeviceId Id;
+} SM_Device;
+
+#define DEV_MAX 6
+
+#define DEV_PORT ((s >> 1)+1)
+#define DEV_SLOT(device) (device.Id.Bitshift >> 1)
+#define DEV_FULL(device) DEV_PORT, DEV_SLOT(device)
+
+
+#define SetDevCtrl(d, b) (*d.Ctrl ^= ((b & d.Id.Bitmask) << d.Id.Bitshift)) // TODO: Can't XOR this stuff - Temp: Make sure to call UnsetDevCtrl at least once before calling SetDevCtrl
+#define OrDevCtrl(d, b) (*d.Ctrl |= ((b & d.Id.Bitmask) << d.Id.Bitshift))
+#define AndDevCtrl(d, b) (*d.Ctrl &= ((b & d.Id.Bitmask) << d.Id.Bitshift))
+#define UnsetDevCtrl(d) (*d.Ctrl &= ~(d.Id.Bitmask << d.Id.Bitshift))
+
+#define SetDevData(d, b) (*d.Data ^= ((b & d.Id.Bitmask) << d.Id.Bitshift)) // TODO: Can't XOR this stuff - Temp: Make sure to call UnsetDevData at least once before calling SetDevData
+#define OrDevData(d, b) (*d.Data |= ((b & d.Id.Bitmask) << d.Id.Bitshift))
+#define AndDevData(d, b) (*d.Data &= ((b & d.Id.Bitmask) << d.Id.Bitshift))
+#define UnsetDevData(d) (*d.Data &= ~(d.Id.Bitmask << d.Id.Bitshift))
+
+#define GetDevData(d, b) ((*d.Data & ((b & d.Id.Bitmask) << d.Id.Bitshift)) >> d.Id.Bitshift)
+
+// Debug
+/*
+#define SetDevData(d, b) (kprintf("SetDevData: $%X"  , (*d.Data^ ((b & d.Id.Bitmask) << d.Id.Bitshift))));(*d.Data ^=  ((b & d.Id.Bitmask) << d.Id.Bitshift))
+#define OrDevData(d, b)  (kprintf("OrDevData: $%X"   , (*d.Data| ((b & d.Id.Bitmask) << d.Id.Bitshift))));(*d.Data |=  ((b & d.Id.Bitmask) << d.Id.Bitshift))
+#define AndDevData(d, b) (kprintf("AndDevData: $%X"  , (*d.Data& ((b & d.Id.Bitmask) << d.Id.Bitshift))));(*d.Data &=  ((b & d.Id.Bitmask) << d.Id.Bitshift))
+#define UnsetDevData(d)  (kprintf("UnsetDevData: $%X", (*d.Data&~(     d.Id.Bitmask  << d.Id.Bitshift))));(*d.Data &= ~(d.Id.Bitmask << d.Id.Bitshift))
+*/
+
+extern SM_Device *DevList[DEV_MAX];
+
+void SetDevicePort(SM_Device *d, DevPort p);
+void ConfigureDevices();
+
 #endif // DEVMGR_H_INCLUDED

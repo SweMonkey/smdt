@@ -99,3 +99,29 @@ void TRM_clearTextArea(u16 x, u16 y, u16 w, u16 h)
         // VDP_setTileMapDataRowEx(..) take care of using temporary buffer to build the data so we are ok here
         VDP_setTileMapDataRowEx(WINDOW, data, TILE_ATTR(PAL1, 1, 0, 0), ya++, x, wa, CPU);
 }
+
+inline u8 atoi(char *c)
+{
+    u8 r = 0;
+
+    for (u8 i = 0; c[i] != '\0'; ++i)
+    {
+        r = r * 10 + c[i] - '0';
+    }
+
+    return r;
+}
+
+inline u16 atoi16(char *c)
+{
+    u16 value = 0;
+
+    while (isdigit(*c)) 
+    {
+        value *= 10;
+        value += (u16) (*c - '0');
+        c++;
+    }
+
+    return value;
+}

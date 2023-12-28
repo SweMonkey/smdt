@@ -26,7 +26,7 @@ void VBlank()
     if (CurrentState->Input != NULL) CurrentState->Input(); // Current PRG
 
     InputTick();    // Pump IO system
-    //VB_IRQ();       // Old cursor blink
+    VB_IRQ();       // Old cursor blink
 
     bWindowActive = (bShowQMenu || bShowHexView);
 }

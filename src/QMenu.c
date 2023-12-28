@@ -6,16 +6,21 @@
 #include "StateCtrl.h"
 #include "Utils.h"
 
+extern SM_Device DEV_UART;
+
 void WINFN_Reset();
 void WINFN_Newline();
 void WINFN_Columns();
 void WINFN_BGColor();
+void WINFN_FGColor();
 void WINFN_TERMTYPE();
 void WINFN_SERIALSPEED();
 void WINFN_FONTSIZE();
 void WINFN_PRINTDELAY();
 void WINFN_RXTXSTATS();
 void WINFN_DEBUGSEL();
+void WINFN_SERIALPORTSEL();
+void WINFN_DEVLISTENTRY();
 
 static struct s_menu
 {
@@ -27,7 +32,7 @@ static struct s_menu
     VoidCallback *exit_function; // Function callback which is called when exiting entry
     const char *title;          // Window title text
     u8 next_menu[8];            // Menu number selected entry leads to (255 = Do nothing)
-    const char *text[8];        // Entry text
+    char text[8][20];              // Entry text
 } MainMenu[] =
 {{//0
     6,
@@ -75,11 +80,11 @@ static struct s_menu
     0, 0,
     NULL, NULL, NULL,
     "MD SETTINGS",
-    {7, 8, 10, 12},
+    {7, 8, 10, 16},
     {"CONNECTED DEVICES",
-     "BG COLOR",
+     "COLOUR",
      "SERIAL SPEED",
-     "PRINT DELAY"}
+     "SELECT SERIAL PORT"}
 },
 {//5
     2,
@@ -87,8 +92,8 @@ static struct s_menu
     NULL, WINFN_Newline, NULL,
     "NEWLINE CONVERSION",
     {255, 255},
-    {"\\N = \\N",
-     "\\N = \\N\\R"}
+    {"NONE",
+     "LF = CRLF"}
 },
 {//6
     2,
@@ -100,24 +105,26 @@ static struct s_menu
      "40"}
 },
 {//7
-    3,
+    6,
     0, 0,
-    NULL, NULL, NULL,
+    WINFN_DEVLISTENTRY, NULL, NULL,
     "CONNECTED DEVICES",
-    {255, 255, 255},
-    {"PORT 1: <UNKNOWN>",
-     "PORT 2: UART",
-     "PORT 3: <UNKNOWN>"}
+    {255, 255, 255, 255, 255, 255},
+    {"P1:0= <?>",
+     "P1:1= <?>",
+     "P2:0= <?>",
+     "P2:1= <?>",
+     "P3:0= <?>",
+     "P3:1= <?>"}
 },
 {//8
-    3,
+    2,
     0, 0,
-    NULL, WINFN_BGColor, NULL,
-    "BG COLOR",
-    {255, 255, 255},
-    {"BLACK",
-     "WHITE",
-     "RANDOM"}
+    NULL, NULL, NULL,
+    "COLOUR",
+    {17, 18},
+    {"BG COLOUR",
+     "FG COLOUR(4x8 ONLY)"}
 },
 {//9
     5,
@@ -144,7 +151,7 @@ static struct s_menu
 },
 {//11
     3,
-    2, 0,
+    0, 0,
     NULL, WINFN_FONTSIZE, NULL,
     "FONT SIZE",
     {255, 255, 255},
@@ -178,9 +185,7 @@ static struct s_menu
     NULL, NULL, NULL,
     "ABOUT",
     {255, 255, 255},
-    {"","",""/*"Code: smds",
-     "Testing: b1tsh1ft3r",
-     "4x8 Fonts: RKT"*/}
+    {"","",""}
 },
 {//15
     2,
@@ -190,6 +195,39 @@ static struct s_menu
     {255, 255},
     {"TX BYTES: 0",
      "RX BYTES: 0"}
+},
+{//16
+    4,
+    2, 0,
+    NULL, WINFN_SERIALPORTSEL, NULL,
+    "SELECT SERIAL PORT",
+    {255, 255, 255, 255},
+    {"DISCONNECTED",
+     "PORT 1",
+     "PORT 2",
+     "PORT 3"}
+},
+{//17
+    3,
+    0, 0,
+    NULL, WINFN_BGColor, NULL,
+    "BG COLOUR",
+    {255, 255, 255},
+    {"BLACK",
+     "WHITE",
+     "RANDOM"}
+},
+{//18
+    5,
+    0, 0,
+    NULL, WINFN_FGColor, NULL,
+    "FG COLOUR",
+    {255, 255, 255, 255, 255},
+    {"BLACK",
+     "WHITE",
+     "AMBER",
+     "GREEN",
+     "RANDOM"}
 }};
 
 static u8 SelectedIdx = 0;
@@ -326,7 +364,7 @@ void QMenu_Toggle()
 
 void ChangeText(u8 menu_idx, u8 entry_idx, const char *new_text)
 {
-    MainMenu[menu_idx].text[entry_idx] = new_text;
+    strncpy(MainMenu[menu_idx].text[entry_idx], new_text, 20);
 }
 
 
@@ -378,6 +416,49 @@ void WINFN_BGColor()
     }    
 }
 
+extern u16 Cursor_CL;
+
+void WINFN_FGColor()
+{
+    if (FontSize == 0) return;
+    u16 r = random();
+
+    switch (SelectedIdx)
+    {
+        case 0: // Black
+            PAL_setColor(47, 0);
+            PAL_setColor(46, 0x222);
+            Cursor_CL = 0x0E0;
+        break;
+        case 1: // White
+            PAL_setColor(47, 0xEEE);
+            PAL_setColor(46, 0x666);
+            Cursor_CL = 0x0E0;
+        break;
+        case 2: // Amber
+            PAL_setColor(47, 0x0AE);
+            PAL_setColor(46, 0x046);
+            Cursor_CL = 0x0AE;
+        break;
+        case 3: // Green
+            PAL_setColor(47, 0x0A0);
+            PAL_setColor(46, 0x040);
+            Cursor_CL = 0x0E0;
+        break;
+        case 4: // Random
+            PAL_setColor(47, r);
+            PAL_setColor(46, r & 0x666);
+            Cursor_CL = r;
+        break;
+    
+        default:
+            PAL_setColor(47, 0xEEE);
+            PAL_setColor(46, 0x666);
+            Cursor_CL = 0x0E0;
+        break;
+    }    
+}
+
 void WINFN_TERMTYPE()
 {
     vTermType = SelectedIdx;
@@ -385,7 +466,7 @@ void WINFN_TERMTYPE()
 
 void WINFN_SERIALSPEED()
 {
-    vu8 *PSCTRL = (vu8 *)TTY_PORT_SCTRL;
+    vu8 *PSCTRL = (vu8 *)DEV_UART.SCtrl;
 
     switch (SelectedIdx)
     {
@@ -445,8 +526,8 @@ void WINFN_RXTXSTATS()
     sprintf(buf1, "TX BYTES: %lu", TXBytes);
     sprintf(buf2, "RX BYTES: %lu", RXBytes);
 
-    MainMenu[15].text[0] = buf1;
-    MainMenu[15].text[1] = buf2;
+    strncpy(MainMenu[15].text[0], buf1, 20);
+    strncpy(MainMenu[15].text[1], buf2, 20);
 }
 
 void WINFN_DEBUGSEL()
@@ -456,4 +537,43 @@ void WINFN_DEBUGSEL()
         QMenu_Toggle();
         HexView_Toggle();
     }
+}
+
+void WINFN_SERIALPORTSEL()
+{
+    SetDevicePort(&DEV_UART, SelectedIdx);
+    
+    vu8 *SCtrl;
+    SCtrl = (vu8 *)DEV_UART.SCtrl;
+    *SCtrl = 0x38;
+}
+
+void WINFN_DEVLISTENTRY()
+{
+    char buf[32];
+    u8 p = 0, s = 0;
+    u8 d = 0;
+
+    for (u8 i = 0; i < DEV_MAX; i++)
+    {
+        if (DevList[i] == 0) continue;
+        if (DevList[i]->PAssign == DP_None) continue;
+
+        p = DevList[i]->PAssign;
+        s = DevList[i]->Id.Bitshift >> 1;
+
+        if (DevList[i]->Id.Mode == DEVMODE_PARALLEL)
+        {
+            sprintf(buf, "P%u:%u= %s", p, s, DevList[i]->Id.sName);
+        }
+        else if (DevList[i]->Id.Mode == DEVMODE_SERIAL)
+        {
+            sprintf(buf, "P%u:S= %s", p, DevList[i]->Id.sName);
+        }
+
+        ChangeText(7, d, buf);
+        d++;
+    }
+
+    MainMenu[7].num_entries = d;
 }

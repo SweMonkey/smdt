@@ -140,37 +140,37 @@ void Input_IRC()
         {
         }
 
-        if (is_KeyDown(KEY_LEFT))
+        if (is_KeyDown(KEY_KP4_LEFT))
         {
             if (!FontSize)
             {
                 HScroll += 8;
-                VDP_setHorizontalScrollVSync(BG_A, HScroll % 1024);
-                VDP_setHorizontalScrollVSync(BG_B, HScroll % 1024);
+                VDP_setHorizontalScroll(BG_A, HScroll);
+                VDP_setHorizontalScroll(BG_B, HScroll);
             }
             else
             {
                 HScroll += 4;
-                VDP_setHorizontalScroll(BG_A, (HScroll-4) % 1024);
-                VDP_setHorizontalScroll(BG_B, (HScroll-8) % 1024);
+                VDP_setHorizontalScroll(BG_A, (HScroll+4));  // -4
+                VDP_setHorizontalScroll(BG_B, (HScroll  ));  // -8
             }
 
             TTY_MoveCursor(TTY_CURSOR_DUMMY);
         }
 
-        if (is_KeyDown(KEY_RIGHT))
+        if (is_KeyDown(KEY_KP6_RIGHT))
         {
             if (!FontSize)
             {
                 HScroll -= 8;
-                VDP_setHorizontalScrollVSync(BG_A, HScroll % 1024);
-                VDP_setHorizontalScrollVSync(BG_B, HScroll % 1024);
+                VDP_setHorizontalScroll(BG_A, HScroll);
+                VDP_setHorizontalScroll(BG_B, HScroll);
             }
             else
             {
                 HScroll -= 4;
-                VDP_setHorizontalScroll(BG_A, (HScroll-4) % 1024);
-                VDP_setHorizontalScroll(BG_B, (HScroll-8) % 1024);
+                VDP_setHorizontalScroll(BG_A, (HScroll+4));  // -4
+                VDP_setHorizontalScroll(BG_B, (HScroll  ));  // -8
             }
 
             TTY_MoveCursor(TTY_CURSOR_DUMMY);
@@ -188,15 +188,22 @@ void Input_IRC()
             TTY_ClearLine(sy % 32, 4);
 
             //carriage return
-            sx = 0;
+            TTY_SetSX(0);
             TTY_MoveCursor(TTY_CURSOR_DUMMY);   // Dummy
         }
 
         if (is_KeyDown(KEY_BACKSPACE))
         {
             TTY_MoveCursor(TTY_CURSOR_LEFT, 1);
-            VDP_setTileMapXY(BG_A, TILE_ATTR_FULL(1, 0, 0, 0, 0), sx, sy);
-            VDP_setTileMapXY(BG_B, TILE_ATTR_FULL(2, 0, 0, 0, 0), sx, sy);
+
+            if (!FontSize)
+            {
+                VDP_setTileMapXY(BG_B, TILE_ATTR_FULL(2, 0, 0, 0, 0), TTY_GetSX(), sy);
+            }
+            else
+            {
+                VDP_setTileMapXY(!(TTY_GetSX() % 2), TILE_ATTR_FULL(2, 0, 0, 0, 0), TTY_GetSX()>>1, sy);
+            }
 
             Buffer_ReversePop(&TxBuffer);
         }

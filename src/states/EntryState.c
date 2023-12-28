@@ -60,7 +60,10 @@ static const char *DevicePage[27] =
     "mega drive",
     "",
     "Not implemented.",
-    "","","","","","","","","","","","","","","","","","","","","",""
+    "Please use the quick menu",
+    "(Right win key) when in a",
+    "session.",
+    "","","","","","","","","","","","","","","","","","",""
 };
 
 static const char *HelpPage[27] =
@@ -284,7 +287,7 @@ static void DrawSubMenu(u8 idx)
         {
             case SM_CHECKBOX:
                 bv = 0;//(u8)&SubMenu[SubMenuIdx].ptr[i];
-                kprintf("bv = %u", bv);
+                //kprintf("bv = %u", bv);
                 sprintf(buf, "[%c]", (char)(bv==FALSE?' ':'X'));
             break;
 
@@ -358,8 +361,6 @@ static void ExitMenu()
     VoidCallback *func = MainMenu[MenuIdx].exit_function;
     if (func != NULL) func();
 
-    //if (MainMenu[MenuIdx].prev_menu == MenuIdx) QMenu_Toggle();   // prev_menu == MenuIdx is only true when at the root menu, therefor close the window if trying to back out
-    //else 
     DrawMenu(MainMenu[MenuIdx].prev_menu);
 }
 
@@ -430,6 +431,8 @@ void MN_FUNC_DEVICES()
 static u8 kbdata;
 #endif
 
+//extern char FStringTemp[64];
+
 void Enter_Entry(u8 argc, const char *argv[])
 {
     VDP_setWindowVPos(FALSE, 30);
@@ -449,17 +452,6 @@ void Enter_Entry(u8 argc, const char *argv[])
     TRM_drawText("enter or leave an entry", 12, 17, PAL1);
 
     TRM_drawText("-smds", 12, 24, PAL1);
-
-    /*
-    TRM_drawText("Session", 1, 3, PAL1);
-    TRM_drawText("Terminal", 1, 4, PAL1);
-    TRM_drawText("Devices", 1, 5, PAL1);
-    TRM_drawText("Help", 1, 6, PAL1);
-
-    //JOY_setSupport(PORT_2, JOY_SUPPORT_KEYBOARD);
-
-    kprintf("PORT1: %u - PORT2: %u", JOY_getPortType(PORT_1), JOY_getPortType(PORT_2));
-    */
 
     UpdateView();
 }

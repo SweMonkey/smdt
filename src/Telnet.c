@@ -4,6 +4,10 @@
 #include "UTF8.h"
 #include "Utils.h"
 
+// https://vt100.net/docs/vt100-ug/chapter3.html
+// https://invisible-island.net/xterm/ctlseqs/ctlseqs.html
+// http://www.braun-home.net/michael/info/misc/VT100_commands.htm
+
 // https://www.iana.org/assignments/telnet-options/telnet-options.xhtml
 // https://users.cs.cf.ac.uk/Dave.Marshall/Internet/node141.html
 // https://www.omnisecu.com/tcpip/telnet-commands-and-options.php
@@ -75,6 +79,11 @@ static inline void DoIAC(u8 dummy);
 
 // Telnet modifiable variables
 u8 vDoGA = 0;
+u8 vDECOM = FALSE;  // DEC Origin Mode
+
+// DECSTBM
+static s16 DMarginTop = 0;
+static s16 DMarginBottom = 0;
 
 // UTF BOM
 u8 BOM[4] = {0,0,0,0};
@@ -88,6 +97,10 @@ u8 ESC_Param[4] = {0xFF,0xFF,0xFF,0xFF};
 u8 ESC_ParamSeq = 0;
 char ESC_Buffer[4] = {'\0','\0','\0','\0'};
 u8 ESC_BufferSeq = 0;
+
+u8 ESC_QBuffer[6];
+u8 ESC_QSeq = 0;
+u16 QSeqNumber = 0; // atoi'd ESC_QBuffer
 
 // IAC
 u8 bIAC = FALSE;                        // TRUE = Currently in a "Intercept As Command" stream
@@ -135,6 +148,10 @@ void TELNET_Init()
     IAC_SubNegotiationBytes[3] = 0;
 
     vDoGA = 0;
+    vDECOM = FALSE;
+
+    DMarginTop = 0;
+    DMarginBottom = bPALSystem?0x1D:0x1B;
 }
 
 inline void TELNET_ParseRX(u8 dummy)
@@ -195,26 +212,17 @@ inline void TELNET_ParseRX(u8 dummy)
         case 0x0A:  //line feed, new line
             if (vNewlineConv == 1)  // Convert \n to \n\r
             {
-                sx = 0;
-                TTY_MoveCursor(TTY_CURSOR_DUMMY);   // Dummy
+                TTY_SetSX(0);
             }
-
-            EvenOdd = (sx % 2);
-            EvenOdd = !EvenOdd;
-
             TTY_MoveCursor(TTY_CURSOR_DOWN, 1);
-            #ifdef EMU_BUILD
-            waitMs(17);                         // <--------- Waiting for screen to catch up
-            #endif
         break;
         case 0x0B:  //vertical tab
             TTY_MoveCursor(TTY_CURSOR_DOWN, C_VTAB);
         break;
         case 0x0C:  //form feed, new page
-            sx = 0;
-            sy = C_YSTART;
+            TTY_SetSX(0);
+            TTY_SetSY(C_YSTART);
 
-            HScroll = D_HSCROLL;
             VScroll = D_VSCROLL;
 
             VDP_clearPlane(BG_A, TRUE);
@@ -226,9 +234,7 @@ inline void TELNET_ParseRX(u8 dummy)
             TTY_MoveCursor(TTY_CURSOR_DUMMY);   // Dummy
         break;
         case 0x0D:  //carriage return
-            sx = 0;
-            EvenOdd = (sx % 2);
-            EvenOdd = !EvenOdd;
+            TTY_SetSX(0);
             TTY_MoveCursor(TTY_CURSOR_DUMMY);   // Dummy
         break;
         case 0x1B:  //Escape 1
@@ -245,31 +251,19 @@ inline void TELNET_ParseRX(u8 dummy)
             ESC_Buffer[2] = '\0';
             ESC_Buffer[3] = '\0';
             ESC_BufferSeq = 0;
+            ESC_QBuffer[0] = 0;
+            ESC_QBuffer[1] = 0;
+            ESC_QBuffer[2] = 0;
+            ESC_QBuffer[3] = 0;
+            ESC_QBuffer[4] = 0;
+            ESC_QBuffer[5] = 0;
+            ESC_QSeq = 0;
 
             return;
         break;
         case 0xE2:  // Dumb handling of UTF8
+        case 0xEF:
             bUTF8 = TRUE;
-            return;
-        break;
-        case 0xBB:  // EF <BB> BF = UTF-8 BOM
-            if (RXBytes != BOM_Seq[0]+1) break;
-
-            BOM[1] = 0xBB;
-            BOM_Seq[1] = RXBytes;
-            return;
-        break;
-        case 0xBF:  // EF BB <BF> = UTF-8 BOM
-            if (RXBytes != BOM_Seq[1]+1) break;
-
-            BOM[2] = 0xBF;
-            BOM_Seq[2] = RXBytes;
-            //kprintf("Recieved UTF-8 BOM");
-            return;
-        break;
-        case 0xEF:  // <EF> BB BF = UTF-8 BOM
-            BOM[0] = 0xEF;
-            BOM_Seq[0] = RXBytes;
             return;
         break;
         case TC_IAC:  // IAC
@@ -297,18 +291,6 @@ inline void TELNET_ParseRX(u8 dummy)
     }
 }
 
-static inline u8 atoi(char *c)
-{
-    u8 r = 0;
-
-    for (u8 i = 0; c[i] != '\0'; ++i)
-    {
-        r = r * 10 + c[i] - '0';
-    }
-
-    return r;
-}
-
 // https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797
 // https://en.wikipedia.org/wiki/ANSI_escape_code#CSIsection
 static inline void DoEscape(u8 dummy)
@@ -320,8 +302,76 @@ static inline void DoEscape(u8 dummy)
     if (ESC_Seq == 1)
     {
         ESC_Type = *PRX;    // '[' or ' '
+        //if (ESC_Type != 0x5B) kprintf("ESC_Type: $%X", ESC_Type);
         return;
     }
+
+    // https://invisible-island.net/xterm/ctlseqs/ctlseqs.html
+    if (ESC_QSeq > 0)
+    {
+        ESC_QBuffer[ESC_QSeq-1] = *PRX;
+        //kprintf("ESC_Q: $%X - '%c'", ESC_QBuffer[ESC_QSeq-1], (char)ESC_QBuffer[ESC_QSeq-1]);
+
+        if (*PRX == 'h')
+        {
+            QSeqNumber = atoi16((char*)ESC_QBuffer);
+            //kprintf("QSeqNumber = %u", QSeqNumber);
+
+            switch (QSeqNumber)
+            {
+                case 6:   // Origin Mode (DECOM), VT100.
+                vDECOM = TRUE;
+                break;
+            
+                case 7:   // Auto-Wrap Mode (DECAWM), VT100.
+                bWrapAround = TRUE;
+                break;
+
+                // 1000h = Send Mouse X & Y on button press and release.  See the section Mouse Tracking.  This is the X11 xterm mouse protocol.
+                // 1006h = Enable SGR Mouse Mode, xterm.
+
+                default:
+                //kprintf("Got an unknown ?%ch", (char)ESC_QBuffer[0]);
+                break;
+            }
+
+            goto EndEscape;
+        }
+        if (*PRX == 'l')
+        {
+            QSeqNumber = atoi16((char*)ESC_QBuffer);
+            //kprintf("QSeqNumber = %u", QSeqNumber);
+
+            switch (QSeqNumber)
+            {
+                case 6:   // Normal Cursor Mode (DECOM), VT100.
+                vDECOM = FALSE;
+                break;
+            
+                case 7:   // No Auto-Wrap Mode (DECAWM), VT100.
+                bWrapAround = FALSE;
+                break;
+
+
+                default:
+                //kprintf("Got an unknown ?%cl", (char)ESC_QBuffer[0]);
+                break;
+            }
+
+            goto EndEscape;
+        }
+
+        if (ESC_QSeq > 5) 
+        {
+            //for (u8 i = 0; i < 6; i++) kprintf("ESC_QBuffer[%u] = $%X (%c)", i, ESC_QBuffer[i], (char)ESC_QBuffer[i]);
+            goto EndEscape;
+        }
+
+        ESC_QSeq++;
+
+        return;
+    }
+
 
     switch (*PRX)
     {
@@ -342,12 +392,14 @@ static inline void DoEscape(u8 dummy)
             return;
         }
 
-        /*case '7':   // Save cursor position (DEC)
+        /*
+        case '7':   // Save cursor position (DEC)
         {
             if (ESC_Type == ' ')
-            {            
+            {
                 SavedCX = sx;
                 SavedCY = sy;
+                kprintf("Hit a '7' ($%X)", atoi(ESC_Buffer));
                 goto EndEscape;
             }
         }
@@ -355,9 +407,10 @@ static inline void DoEscape(u8 dummy)
         case '8':   // Restores the cursor to the last saved position (DEC)
         {
             if (ESC_Type == ' ')
-            {            
+            {
                 sx = SavedCX;
                 sy = SavedCY;
+                kprintf("Hit a '8' ($%X)", atoi(ESC_Buffer));
                 goto EndEscape;
             }
         }
@@ -365,11 +418,13 @@ static inline void DoEscape(u8 dummy)
         case 'M':   // Moves cursor one line up, scrolling if needed
         {
             if (ESC_Type == ' ')
-            {            
+            {
                 TTY_MoveCursor(TTY_CURSOR_UP, 1);
+                kprintf("Hit a 'M' ($%X)", atoi(ESC_Buffer));
                 goto EndEscape;
             }
-        }*/
+        }
+        */
 
         case 'c':
         {
@@ -440,11 +495,12 @@ static inline void DoEscape(u8 dummy)
 
         case 'l':   // Reset screen mode
         {
+            //kprintf("Hit a 'l' (%u)", atoi(ESC_Buffer));
             switch (atoi(ESC_Buffer))
             {
                 case 7:     // Disables line wrapping
                 case 137:   // 7 prefixed with =
-                    bWrapAround = TRUE;
+                    bWrapAround = FALSE;    // Was TRUE, copy paste error?
                 break;
 
                 case 0x19:
@@ -462,61 +518,64 @@ static inline void DoEscape(u8 dummy)
 
         case 'A':
         {
-            if (sy > C_YSTART)
-            {
-                TTY_MoveCursor(TTY_CURSOR_UP, atoi(ESC_Buffer));
-            }
+            TTY_SetSY_A(TTY_GetSY_A() - atoi(ESC_Buffer));
+            //kprintf("Hit a 'A' (%u) - adj.sy: %ld", atoi(ESC_Buffer), TTY_GetSY_A());
 
             goto EndEscape;
         }
 
         case 'B':
         {
-            if (sy < C_YMAX)
-            {
-                TTY_MoveCursor(TTY_CURSOR_DOWN, atoi(ESC_Buffer));
-            }
+            TTY_SetSY_A(TTY_GetSY_A() + atoi(ESC_Buffer));            
+            //kprintf("Hit a 'B' (%u) - adj.sy: %ld", atoi(ESC_Buffer), TTY_GetSY_A());
 
             goto EndEscape;
         }
 
         case 'C':
         {
-            if (sx < C_XMAX) 
-            {
-                TTY_MoveCursor(TTY_CURSOR_RIGHT, atoi(ESC_Buffer));
-            }
+            TTY_SetSX(TTY_GetSX() + atoi(ESC_Buffer));
+            //kprintf("Hit a 'C' (%u) - sx: %ld", atoi(ESC_Buffer), TTY_GetSX());
 
             goto EndEscape;
         }
 
         case 'D':
         {
-            if (sx > 0) 
-            {
-                TTY_MoveCursor(TTY_CURSOR_LEFT, atoi(ESC_Buffer));
-            }
+            TTY_SetSX(TTY_GetSX() - atoi(ESC_Buffer));
+            //kprintf("Hit a 'D' (%u) - sx: %ld", atoi(ESC_Buffer), TTY_GetSX());
 
             goto EndEscape;
         }
 
         case 'H':   // Move cursor to upper left corner if no parameters or to yy;xx
+        case 'f':   // Some say its the same, other say its different...
         {
             if (ESC_Buffer[0] != '\0') ESC_Param[ESC_ParamSeq++] = atoi(ESC_Buffer);
             //for (u8 i = 0; i < ESC_ParamSeq; i++) kprintf("ESC_ParamSeq: %u = %u", (u8)i, ESC_Param[i]);
 
-            if ((ESC_Param[0] == 0xFF) && (ESC_Param[1] == 0xFF))
+            
+            if (((ESC_Param[0] == 0xFF) && (ESC_Param[1] == 0xFF)) || ((ESC_Param[0] == 0) && (ESC_Param[1] == 0)))
             {
-                sx = 0;
-                sy = (VScroll >> 3) + C_YSTART;
+                TTY_SetSX(0);
+                TTY_SetSY_A(0);
+                //kprintf("Reset cursor: sx: %ld - sy: %ld", sx, sy);
             }
             else
             {
-                sx = ESC_Param[1] != 0xFF ? ESC_Param[1]-1 : 0;
-                sy = (ESC_Param[0] ? ESC_Param[0]-1 : 0) + (VScroll >> 3) + C_YSTART;
+                TTY_SetSX(ESC_Param[1]-1);
+                
+                if (vDECOM)
+                {
+                    if ((ESC_Param[0]-1) < DMarginTop) ESC_Param[0] = DMarginTop+1;
 
-                //kprintf("Move cursor: cx: %u - cy: %u -- sx: %ld - sy: %ld", (ESC_Param[1] != 0xFF ? ESC_Param[1] : 0), (ESC_Param[0] ? ESC_Param[0] : 0), sx, sy);
-            }
+                    if ((ESC_Param[0]-1) > DMarginBottom) ESC_Param[0] = DMarginBottom+1;
+                }
+
+                TTY_SetSY_A(ESC_Param[0]-1);
+                
+                //kprintf("Move cursor: cx: %u - cy: %u -- sx: %ld - sy: %ld (*PRX=%c)", (ESC_Param[1] != 0xFF ? ESC_Param[1] : 0), (ESC_Param[0] ? ESC_Param[0] : 0), sx, sy-((VScroll >> 3) + C_YSTART), *PRX);
+            }            
 
             TTY_MoveCursor(TTY_CURSOR_DUMMY);   // Dummy
 
@@ -525,9 +584,8 @@ static inline void DoEscape(u8 dummy)
 
         case 'J':
         {
+            //kprintf("Hit a 'J' (%u)", atoi(ESC_Buffer));
             u8 n = atoi(ESC_Buffer);
-
-            //kprintf("ESC[xJ: n = $%X", n);
 
             switch (n)
             {
@@ -556,14 +614,13 @@ static inline void DoEscape(u8 dummy)
 
         case 'K':
         {
+            //kprintf("Hit a 'K' (%u)", atoi(ESC_Buffer));
             u8 n = atoi(ESC_Buffer);
-
-            //kprintf("ESC[xK: n = $%X", n);
 
             switch (n)
             {
                 case 1: // Erase start of line to the cursor (Keep cursor position)
-                    TTY_ClearPartialLine(sy % 32, 0, sx);
+                    TTY_ClearPartialLine(sy % 32, 0, TTY_GetSX());
                 break;
 
                 case 2: // Erase the entire line (Keep cursor position)
@@ -572,7 +629,7 @@ static inline void DoEscape(u8 dummy)
             
                 case 0: // Erase from cursor to end of line (Keep cursor position)
                 default:
-                    TTY_ClearPartialLine(sy % 32, sx, C_XMAX);
+                    TTY_ClearPartialLine(sy % 32, TTY_GetSX(), C_XMAX);
                 break;
             }            
 
@@ -601,14 +658,22 @@ static inline void DoEscape(u8 dummy)
             switch (n)
             {
                 case 6:
-                    sprintf(str, "[%ld;%ldR", sy, sx);
+                    sprintf(str, "[%ld;%ldR", TTY_GetSY_A(), TTY_GetSX());
                     TTY_SendString(str);
+                    //kprintf("Cursor position requested (sx: %ld - sy: %ld)", TTY_GetSX(), TTY_GetSY_A());
                 break;
 
                 default:
                 break;
             }
 
+            goto EndEscape;
+        }
+
+        case 'r':
+        {
+            ESC_Param[ESC_ParamSeq++] = atoi(ESC_Buffer);
+            //kprintf("Hit a 'r' - %u ; %u", ESC_Param[0], ESC_Param[1]);
             goto EndEscape;
         }
 
@@ -619,6 +684,14 @@ static inline void DoEscape(u8 dummy)
 
         case ' ':
         {
+            return;
+        }
+
+        case '?':
+        {
+            QSeqNumber = 0;
+            ESC_QSeq++;
+            //kprintf("Hit a '?'");
             return;
         }
 
@@ -977,14 +1050,14 @@ static inline void DoIAC(u8 dummy)
                     TTY_SendChar(TC_IAC, TXF_NOBUFFER);
                     TTY_SendChar(TC_SB, TXF_NOBUFFER);
                     TTY_SendChar(0, TXF_NOBUFFER);
-                    TTY_SendChar((FontSize==3?0x28:0x50), TXF_NOBUFFER); // Columns - Use internal columns (D_COLUMNS_80/D_COLUMNS_64) here or use font size (4x8=80 & 8x8=40)?
+                    TTY_SendChar((FontSize==0?0x28:0x50), TXF_NOBUFFER); // Columns - Use internal columns (D_COLUMNS_80/D_COLUMNS_40) here or use font size (4x8=80 & 8x8=40)? - Type? used to be FontSize==3
                     TTY_SendChar(0, TXF_NOBUFFER);
                     TTY_SendChar((bPALSystem?0x1D:0x1B), TXF_NOBUFFER); // Rows - 29=PAL - 27=NTSC
                     TTY_SendChar(TC_IAC, TXF_NOBUFFER);
                     TTY_SendChar(TC_SE, TXF_NOBUFFER);
 
                     #ifdef IAC_LOGGING
-                    kprintf("Response: IAC WILL NAWS - IAC SB 0x%04X 0x%04X IAC SE", (FontSize==3?0x28:0x50), (bPALSystem?0x1D:0x1B));
+                    kprintf("Response: IAC WILL NAWS - IAC SB 0x%04X 0x%04X IAC SE", (FontSize==0?0x28:0x50), (bPALSystem?0x1D:0x1B));
                     #endif
                     break;
                 }

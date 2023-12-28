@@ -20,6 +20,8 @@ static u8 bBreak = FALSE;
 static u8 bShift = FALSE;
 static u8 bAlt = FALSE;
 
+SM_Device DEV_KBPS2;
+
 // US Layout
 const u8 SCTable_US[3][128] =
 {
@@ -60,15 +62,6 @@ const u8 SCTable_US[3][128] =
 
 void KB_Init()
 {
-    vu8 *PCTRL;
-    vu8 *PDATA;
-
-    PCTRL = (vu8 *)KB_PORT_CTRL;
-    *PCTRL = 0;   // All pins are input
-
-    PDATA = (vu8 *)KB_PORT_DATA;
-    *PDATA = 0;
-
     KB_Initialized = TRUE;
     bExtKey = FALSE;
     bBreak = FALSE;
@@ -81,34 +74,28 @@ void KB_Init()
 
 inline void KB_Lock()
 {
-    vu8 *PCTRL = (vu8 *)KB_PORT_CTRL;
-    vu8 *PDATA = (vu8 *)KB_PORT_DATA;
+    SetDevCtrl(DEV_KBPS2, 0x3); // Set pin 0 and 1 as output (smd->kb)
+    UnsetDevData(DEV_KBPS2);
+    SetDevData(DEV_KBPS2, 0x2); // Set clock low, data high - Stop kb sending data
 
-    *PCTRL = 0x3;   // Set pin 0 and 1 as output (smd->kb)
-    *PDATA = 0x2;   // Set clock low, data high - Stop kb sending data
 }
 
 inline void KB_Unlock()
 {
-    vu8 *PCTRL = (vu8 *)KB_PORT_CTRL;
-    vu8 *PDATA = (vu8 *)KB_PORT_DATA;
-
-    *PDATA = 0x3; // Set clock high, data high - Allow kb to send data
-    *PCTRL = 0;   // Set pin 0 and 1 as input (kb->smd)
+    UnsetDevData(DEV_KBPS2);    
+    SetDevData(DEV_KBPS2, 0x3); // Set clock high, data high - Allow kb to send data
+    UnsetDevCtrl(DEV_KBPS2);    // Set pin 0 and 1 as input (kb->smd)
 }
 
 u8 KB_Poll(u8 *data)
 {
     u32 timeout = 0;
     u16 stream_buffer = 0;
-    vu8 *PDATA = (vu8 *)KB_PORT_DATA;
 
     KB_Unlock();
 
-    while ((*PDATA & 1) == 1)
+    while (GetDevData(DEV_KBPS2, 0x1))
     {
-        PDATA = (vu8 *)KB_PORT_DATA;
-
         if (timeout >= 3200)   // 32000
         {
             KB_Lock();
@@ -120,11 +107,11 @@ u8 KB_Poll(u8 *data)
 
     for (u8 b = 0; b < 11; b++)  // Recieve byte
     {
-        while ((*PDATA & 1) == 1){PDATA = (vu8 *)KB_PORT_DATA;} // Wait for clock to go low
+        while (GetDevData(DEV_KBPS2, 0x1)); // Wait for clock to go low
 
-        stream_buffer |= ((*PDATA >> KB_DT) & 1) << b;
+        stream_buffer |= (GetDevData(DEV_KBPS2, 0x2) >> KB_DT) << b;
 
-        while ((*PDATA & 1) == 0){PDATA = (vu8 *)KB_PORT_DATA;} // Wait for clock to go high
+        while (!GetDevData(DEV_KBPS2, 0x1)); // Wait for clock to go high
     }
 
     KB_Lock();
@@ -212,4 +199,87 @@ void KB_Interpret_Scancode(u8 scancode)
 
         TTY_SendChar(key, 0);
     }
+}
+
+//https://www.burtonsys.com/ps2_chapweske.htm
+void KB_SendCommand(u8 cmd) // bits: xxxxx0dd ddddddp1 - where d= data, p= parity
+{
+    u8 p, c, b = 7;
+    u8 bc[11];
+
+    bc[0] = 0;  // Start
+    for (u8 i = 1; i < 9; i++)
+    {
+        c = (cmd >> b) & 1;
+        if (c) p++;
+
+        bc[i] = c << KB_DT;
+        b--;
+    }
+
+    if ((p % 2) == 0) p = 2;
+    else p = 0;
+
+    bc[9] = p;  // Parity
+    bc[10] = 2;  // Stop
+
+    //kprintf("<%u> %u %u %u %u %u %u %u %u <%u> <%u>", bc[0], bc[1], bc[2], bc[3], bc[4], bc[5], bc[6], bc[7], bc[8], bc[9], bc[10]);
+    //return;
+
+    /*
+    1)   Bring the Clock line low for at least 100 microseconds.
+    2)   Bring the Data line low.
+    3)   Release the Clock line.
+    4)   Wait for the device to bring the Clock line low.
+    5)   Set/reset the Data line to send the first data bit
+    6)   Wait for the device to bring Clock high.
+    7)   Wait for the device to bring Clock low.
+    8)   Repeat steps 5-7 for the other seven data bits and the parity bit
+    9)   Release the Data line.
+    10) Wait for the device to bring Data low.
+    11) Wait for the device to bring Clock  low.
+    12) Wait for the device to release Data and Clock
+    */
+
+    u16 timeout = 0;
+    
+    UnsetDevCtrl(DEV_KBPS2);    // (1) Set data(2) and clock(1) as input
+    SetDevCtrl(DEV_KBPS2, 0x1); // (1) Set clock as output
+    UnsetDevData(DEV_KBPS2);    // (1) Hold clock to low for at least 100 microseconds
+    // wait here for 100 µS
+    waitMs(1);
+    OrDevCtrl(DEV_KBPS2, 0x3);  // (2) Set data(2) and clock(1) as output
+    UnsetDevData(DEV_KBPS2);    // (2) Set data(2) and clock(1) low
+    AndDevCtrl(DEV_KBPS2, 0x2); // (3) Release clock line (data output - clock input)
+
+    for (u8 b = 0; b < 11; b++)  // Recieve byte
+    {
+        timeout = 0;
+        while (GetDevData(DEV_KBPS2, 0x1)){if (timeout >= 3200)goto timedout;else timeout++;}; // (4) Wait for clock to go low
+
+        UnsetDevData(DEV_KBPS2);
+        OrDevData(DEV_KBPS2, bc[b]);
+
+        while (!GetDevData(DEV_KBPS2, 0x1)){if (timeout >= 3200)goto timedout;else timeout++;}; // (6) Wait for clock to go high
+    }
+
+    UnsetDevCtrl(DEV_KBPS2);    // (9) Set data(2) and clock(1) as input
+    
+    timeout = 0;
+
+    // Ack
+    while (GetDevData(DEV_KBPS2, 0x2)){if (timeout >= 3200)goto timedout;else timeout++;}; // (10) Wait for data to go low
+    while (GetDevData(DEV_KBPS2, 0x1)){if (timeout >= 3200)goto timedout;else timeout++;}; // (11) Wait for clock to go low
+
+    // Release
+    //while (!GetDevData(DEV_KBPS2, 0x2)){if (timeout >= 3200)goto timedout;else timeout++;}; // (10) Wait for data to go high
+    //while (!GetDevData(DEV_KBPS2, 0x1)){if (timeout >= 3200)goto timedout;else timeout++;}; // (11) Wait for clock to go high
+
+    //waitMs(1);
+    timedout:
+    OrDevCtrl(DEV_KBPS2, 0x3); // Set pin 0 and 1 as output (smd->kb)
+    UnsetDevData(DEV_KBPS2);
+    OrDevData(DEV_KBPS2, 0x2); // Set clock low, data high - Stop kb sending data
+    
+    // Call KB_Poll() after this to recieve response/data
 }

@@ -11,13 +11,14 @@ void HexView_Input();
 
 void Input_JP(u16 joy, u16 changed, u16 state)
 {
-    set_KeyPress(KEY_RETURN, (changed & state & BUTTON_A)     ? KEYSTATE_DOWN : KEYSTATE_UP);
-    set_KeyPress(KEY_ESCAPE, (changed & state & BUTTON_B)     ? KEYSTATE_DOWN : KEYSTATE_UP);
-    set_KeyPress(KEY_RWIN,   (changed & state & BUTTON_START) ? KEYSTATE_DOWN : KEYSTATE_UP);
-    set_KeyPress(KEY_UP,     (changed & state & BUTTON_UP)    ? KEYSTATE_DOWN : KEYSTATE_UP);
-    set_KeyPress(KEY_DOWN,   (changed & state & BUTTON_DOWN)  ? KEYSTATE_DOWN : KEYSTATE_UP);
-    set_KeyPress(KEY_LEFT,   (changed & state & BUTTON_LEFT)  ? KEYSTATE_DOWN : KEYSTATE_UP);
-    set_KeyPress(KEY_RIGHT,  (changed & state & BUTTON_RIGHT) ? KEYSTATE_DOWN : KEYSTATE_UP);
+    set_KeyPress(KEY_RETURN,   (changed & state & BUTTON_A)     ? KEYSTATE_DOWN : KEYSTATE_UP);
+    set_KeyPress(KEY_ESCAPE,   (changed & state & BUTTON_B)     ? KEYSTATE_DOWN : KEYSTATE_UP);
+    set_KeyPress(KEY_BACKSPACE,(changed & state & BUTTON_C)     ? KEYSTATE_DOWN : KEYSTATE_UP);
+    set_KeyPress(KEY_RWIN,     (changed & state & BUTTON_START) ? KEYSTATE_DOWN : KEYSTATE_UP);
+    set_KeyPress(KEY_UP,       (changed & state & BUTTON_UP)    ? KEYSTATE_DOWN : KEYSTATE_UP);
+    set_KeyPress(KEY_DOWN,     (changed & state & BUTTON_DOWN)  ? KEYSTATE_DOWN : KEYSTATE_UP);
+    set_KeyPress(KEY_LEFT,     (changed & state & BUTTON_LEFT)  ? KEYSTATE_DOWN : KEYSTATE_UP);
+    set_KeyPress(KEY_RIGHT,    (changed & state & BUTTON_RIGHT) ? KEYSTATE_DOWN : KEYSTATE_UP);
 
     return;
 }
