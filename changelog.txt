@@ -1,3 +1,21 @@
+v0.27:
+SRAM: Added the ability to save config to SRAM.
+IRC: Added "tabs" to have several channels/private messaging going at once. It uses 8-bit tilemap buffers in RAM, 
+it is limited to 3 concurrent "tabs" at once due to RAM requirements (3*8KB = 24KB RAM used). Use F1/F2/F3 to change tab.
+IRC: Added a typing input at the bottom of the screen.
+IRC: Commands implemented, prefixed with '/'. Use '/raw <IRC COMMAND>' to send raw IRC command strings.
+IRC: You can now initiate a private conversation.
+IRC: User list added, press F5 to show/hide window
+IRC: Can now change username via the /nick <your_nick> command.
+Telnet: Added a proper bell... ok PSG beeps.
+Terminal: Added the terminal emulator as its own launchable session type.
+TRM: Some windowing cleanup. (TRM = Window plane UI backend)
+NET: Moved Networking stuff out of the terminal emulator (Rx/Tx etc) into a new unit 'NET'.
+PS2KB: Added timeout code when in the middle of reading a bitstream. May cause dropped key input when the MD is very busy with network traffic. This blocking bug has existed at least since v0.20.
+PS2KB: Added Swedish keyboard layout.
+Fixed some tables that was supposed to be in ROM but instead got placed in RAM (type const * const varname)
+Various bugfixes, most related to mIRC colour fuckery.
+
 v0.26:
 DevMgr: Device manager created. Devices can now be mapped to pin 1+2 or pin 3+4 on any port. 2 PS/2 devices can be on the same port as a UART device.
 DevMgr: Serial/UART device can be in any port now (not recommended to change port while tx/rx is ongoing).
@@ -46,7 +64,7 @@ Added a circular buffer for incoming bytes.
 Fixed cursor going rogue when switching between font sizes.
 
 v0.21 - 2023-11-10:
-Added support for 4x8 font.
+Added support for 4x8 font (thanks to RKT).
 
 v0.21 - 2023-11-09:
 Added baud speed selector (300, 1200, 2400, 4800).

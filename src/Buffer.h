@@ -3,7 +3,7 @@
 
 #include <genesis.h>
 
-#define BUFFER_LEN 2048
+#define BUFFER_LEN 1024
 
 typedef struct s_buffer
 {
@@ -12,11 +12,11 @@ typedef struct s_buffer
     u16 tail;
 } Buffer;
 
-extern Buffer RxBuffer;
-extern Buffer TxBuffer;
-
 u8 Buffer_Push(Buffer *b, u8 data);
 u8 Buffer_Pop(Buffer *b, u8 *data);
 u8 Buffer_ReversePop(Buffer *b);
+
+void Buffer_Flush(Buffer *b);
+void Buffer_PeekLast(Buffer *b, u16 num, u8 r[]);    // Get the last <num> bytes up to head
 
 #endif // BUFFER_H_INCLUDED

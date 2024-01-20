@@ -7,10 +7,11 @@
 
 void MN_FUNC_TELNET();
 void MN_FUNC_IRC();
-void MN_FUNC_TERMINAL();
+void MN_FUNC_TERMINAL_SETTINGS();
 void MN_FUNC_DEVICES();
+void MN_FUNC_TERM_EMULATOR();
 
-static const char *TelnetPage[27] =
+static const char * const TelnetPage[27] =
 {
     "Telnet session",
     "4800 Baud - 8n1",
@@ -20,7 +21,7 @@ static const char *TelnetPage[27] =
     "","","","","","","","","","","","","","","","","","","","","",""
 };
 
-static const char *IRCPage[27] =
+static const char * const IRCPage[27] =
 {
     "IRC session",
     "",
@@ -29,13 +30,22 @@ static const char *IRCPage[27] =
     "", "","","","","","","","","","","","","","","","","","","","","",""
 };
 
-static const char *SessionPage[27] =
+static const char * const TerminalPage[27] =
+{
+    "Terminal emulator",
+    "",
+    "Press <RETURN> to launch",
+    "the terminal emulator",
+    "", "","","","","","","","","","","","","","","","","","","","","",""
+};
+
+static const char * const SessionPage[27] =
 {
     "Select session type",
     "","","","","","","","","","","","","","","","","","","","","","","","","",""
 };
 
-static const char *TerminalPage[27] =
+static const char * const TerminalSettingsPage[27] =
 {
     "Options controlling the",
     "terminal emulation",
@@ -44,7 +54,7 @@ static const char *TerminalPage[27] =
     "","","","","","","","","","","","","","","","","","","","","","",""
 };
 
-static const char *ConnectionPage[27] =
+static const char * const ConnectionPage[27] =
 {
     "Options controlling the",
     "connection",
@@ -53,7 +63,7 @@ static const char *ConnectionPage[27] =
     "","","","","","","","","","","","","","","","","","","","","","",""
 };
 
-static const char *DevicePage[27] =
+static const char * const DevicePage[27] =
 {
     "Options controlling the",
     "devices connected to your",
@@ -66,15 +76,7 @@ static const char *DevicePage[27] =
     "","","","","","","","","","","","","","","","","","",""
 };
 
-static const char *HelpPage[27] =
-{
-    "How to use SMDT",
-    "",
-    "Not implemented.",
-    "","","","","","","","","","","","","","","","","","","","","","","",""
-};
-
-static const char *AboutPage[27] =
+static const char * const AboutPage[27] =
 {
     "About SMDT",
     "",
@@ -82,28 +84,23 @@ static const char *AboutPage[27] =
     "","","","","","","","","","","","","","","","","","","","","","","",""
 };
 
-/*static const char *NopPage[27] =
+/*static const char * const NopPage[27] =
 {
     "Not implemented.",
     "","","","","","","","","","","","","","","","","","","","","","","","","",""
 };*/
 
 
-static const char *TerminalSubPage[27] =
+static const char * const TerminalSubPage[27] =
 {
     "Options controlling the",
     "terminal emulation",
     "",
     "",
     "","","","","","","","","","","","","","","","","","","","","","",""
-    /*"[ ] Wrap mode initially on",
-    "[ ] Convert CR to CRLF",
-    "[x] Local echo",
-    "",
-    "","","","","","","","","","","","","","","","","","","","","","",""*/
 };
 
-static const char *KeyboardSubPage[27] =
+static const char * const KeyboardSubPage[27] =
 {
     "Options controlling the",
     "effects of keys",
@@ -112,14 +109,14 @@ static const char *KeyboardSubPage[27] =
     "","","","","","","","","","","","","","","","","","","","","","",""
 };
 
-static const char *BellSubPage[27] =
+static const char * const BellSubPage[27] =
 {
     "Options controlling the",
     "terminal bell",
     "", "", "","","","","","","","","","","","","","","","","","","","","","",""
 };
 
-static const char *FeaturesSubPage[27] =
+static const char * const FeaturesSubPage[27] =
 {
     "Enabling and disabling",
     "advanced terminal",
@@ -128,40 +125,40 @@ static const char *FeaturesSubPage[27] =
 
 static struct s_menu
 {
-    u8 num_entries;                 // Number of entries in menu
+    const u8 num_entries;                 // Number of entries in menu
     u8 selected_entry;              // Saved selected entry (automatic, leave at 0)
     u8 prev_menu;                   // Previous menu to return to when going back (automatic, leave at 0)
     VoidCallback *entry_function;   // Function callback which is called when entering entry
     VoidCallback *activate_function;// Function callback which is called when trying to enter an entry without submenu (next_menu=255)
     VoidCallback *exit_function;    // Function callback which is called when exiting entry
-    u8 next_menu[8];                // Menu number selected entry leads to (255 = Do nothing)
-    const char **page[8];           // Sidepanel text
-    u8 type[8];                     // 0=Normal entry - 1=Submenu
-    const char *text[8];            // Entry text
+    const u8 next_menu[8];                // Menu number selected entry leads to (255 = Do nothing)
+    const char * const *page[8];           // Sidepanel text
+    const u8 type[8];                     // 0=Normal entry - 1=Submenu
+    const char * const text[8];            // Entry text
 } MainMenu[] =
 {{//0
-    6,
+    5,
     0, 0,
     NULL, NULL, NULL,
-    {1, 4, 255, 255, 255, 255},
-    {SessionPage, TerminalPage, ConnectionPage, DevicePage, HelpPage, AboutPage},
+    {1, 4, 255, 255, 255},
+    {SessionPage, TerminalSettingsPage, ConnectionPage, DevicePage, AboutPage},
     {0},
     {"Session",
      "Terminal",
      "Connection",
      "Devices",
-     "Help",
      "About"}
 },
 {//1
-    2,
+    3,
     0, 0,
     NULL, NULL, NULL,
-    {2, 3},
-    {TelnetPage, IRCPage},
+    {2, 3, 6},
+    {TelnetPage, IRCPage, TerminalPage},
     {0},
     {"Telnet",
-     "IRC"}
+     "IRC",
+     "Terminal"}
 },
 {//2    - Launch telnet client
     0,
@@ -181,7 +178,7 @@ static struct s_menu
     {0},
     {""}
 },
-{//4    - Terminal
+{//4    - Terminal (settings menu)
     4,
     0, 0,
     NULL, NULL, NULL,
@@ -193,26 +190,35 @@ static struct s_menu
      "Bell",
      "Features"}
 },
-{//5(128)    - Actual terminal this time
+{//5(128)    - Actual terminal this time (settings menu)
     0,
     0, 0,
-    MN_FUNC_TERMINAL, NULL, NULL,
+    MN_FUNC_TERMINAL_SETTINGS, NULL, NULL,
     {255},
     {NULL},
     {0},
     {""}
-}};
+},
+{//6    - Launch terminal emulator client
+    0,
+    0, 0,
+    MN_FUNC_TERM_EMULATOR, NULL, NULL,
+    {255},
+    {NULL},
+    {0},
+    {""}
+},};
 
 #define SM_CHECKBOX 1
 #define SM_TEXTBOX 2
 
 static struct s_submenu
 {
-    u8 num_entries;             // Number of entries in menu
+    const u8 num_entries;       // Number of entries in menu
     u8 selected_entry;          // Saved selected entry (automatic, leave at 0)
-    u8 type[16];
+    const u8 type[16];
     void *ptr[16];
-    const char *text[16];        // Entry text
+    const char * const text[16];        // Entry text
 } SubMenu[] =
 {{//0
     3, 0,
@@ -223,7 +229,7 @@ static struct s_submenu
      "Local echo"}
 }};
 
-static const u8 Frame[][40] = 
+static const u8 Frame[5][40] = 
 {
     {201, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 187},
     {186, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 186},
@@ -307,7 +313,7 @@ static void DrawSubMenu(u8 idx)
     TRM_drawText(SubMenu[SubMenuIdx].text[SubSelectedIdx], SubMenuPosX+4, SubMenuPosY+2+SubSelectedIdx, PAL3);
 }
 
-static void DrawPage(const char *page[])
+static void DrawPage(const char * const page[])
 {
     if (page == NULL) return;
 
@@ -415,7 +421,7 @@ void MN_FUNC_IRC()
     ChangeState(PS_IRC, 0, NULL);
 }
 
-void MN_FUNC_TERMINAL()
+void MN_FUNC_TERMINAL_SETTINGS()
 {
     DrawSubMenu(0);
 }
@@ -425,13 +431,16 @@ void MN_FUNC_DEVICES()
 
 }
 
+void MN_FUNC_TERM_EMULATOR()
+{
+    ChangeState(PS_Terminal, 0, NULL);
+}
+
 // -- State ------------------------------------------------------------------
 
 #ifndef EMU_BUILD
 static u8 kbdata;
 #endif
-
-//extern char FStringTemp[64];
 
 void Enter_Entry(u8 argc, const char *argv[])
 {
@@ -442,8 +451,6 @@ void Enter_Entry(u8 argc, const char *argv[])
     DrawFrame();
     TRM_drawText("SMDT - Startup Menu", 1, 1, PAL1);
     TRM_drawText("Welcome to SMDT!", 12, 8, PAL1);
-    
-    //TRM_drawText("Keyboard required!", 12, 10, PAL1);
 
     TRM_drawText("Use Up/Down key to select", 12, 13, PAL1);
     TRM_drawText("an entry", 12, 14, PAL1);
@@ -464,7 +471,6 @@ void Exit_Entry()
 {
     VDP_setWindowVPos(FALSE, 1);
     TRM_clearTextArea(0, 0, 36, 1);
-    TRM_drawText(STATUS_TEXT, 1, 0, PAL1);
 }
 
 void Reset_Entry()
@@ -514,6 +520,6 @@ void Input_Entry()
 
 const PRG_State EntryState = 
 {
-    Enter_Entry, ReEnter_Entry, Exit_Entry, Reset_Entry, Run_Entry, Input_Entry
+    Enter_Entry, ReEnter_Entry, Exit_Entry, Reset_Entry, Run_Entry, Input_Entry, NULL, NULL
 };
 

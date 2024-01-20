@@ -25,6 +25,11 @@
 #define DEVMODE_PARALLEL 0
 #define DEVMODE_SERIAL 1
 
+#define ICO_ID_UNKNOWN 0x1F // Unknown input device '?'
+#define ICO_KB_OK 0x1C      // Keyboard input device 'K'
+#define ICO_JP_OK 0x1E      // Joypad input device 'J'
+#define ICO_ID_ERROR 0x1D   // Error with input device 'X'
+
 typedef enum e_port {DP_None, DP_Port1, DP_Port2, DP_Port3} DevPort;
 
 typedef struct s_deviceid
@@ -74,6 +79,7 @@ typedef struct s_device
 */
 
 extern SM_Device *DevList[DEV_MAX];
+extern DevPort DEV_UART_PORT;   // Default UART port - Read only!
 
 void SetDevicePort(SM_Device *d, DevPort p);
 void ConfigureDevices();

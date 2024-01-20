@@ -2,7 +2,7 @@
 #include "HexView.h"
 #include "Input.h"
 #include "UI.h"
-#include "Buffer.h"
+#include "Network.h"
 #include "Utils.h"
 
 static u32 FileOffset = 0;
@@ -111,7 +111,7 @@ void DrawHexView()
     TRM_clearTextArea(0, 0, 35, 1);
     TRM_clearTextArea(0, 1, 40, 29);
 
-    UI_CreateWindow(&HexWindow, "HexView - Rx Buffer");
+    UI_CreateWindow(&HexWindow, "HexView - Rx Buffer", UC_NONE);
 
     FileOffset = 0;
     ScrollY = 0;

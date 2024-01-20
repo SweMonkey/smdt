@@ -6,34 +6,27 @@
 static u8 CursorBlink = 0; // Cursor blink counter
 extern SM_Device DEV_UART;
 extern u8 FontSize;
+extern bool bPALSystem;
 u16 Cursor_CL = 0x0E0;
 
 void VB_IRQ()
 {
     // Cursor blink
-    if (CursorBlink == 20)
+    if (CursorBlink == (bPALSystem?12:15))
     {
-        if (FontSize) PAL_setColor(31, Cursor_CL);
-        else PAL_setColor(2, Cursor_CL);
-
+        *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_CRAM_ADDR((u32)4);
+        *((vu16*) VDP_DATA_PORT) = 0x0E0;
+        *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_CRAM_ADDR((u32)62);
+        *((vu16*) VDP_DATA_PORT) = Cursor_CL;
         CursorBlink++;
     }
-    else if (CursorBlink == 40)
+    else if (CursorBlink == (bPALSystem?24:30))
     {
-        if (FontSize) PAL_setColor(31, 0x000);
-        else PAL_setColor(2, 0x000);
-        
+        *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_CRAM_ADDR((u32)4);
+        *((vu16*) VDP_DATA_PORT) = 0;
+        *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_CRAM_ADDR((u32)62);
+        *((vu16*) VDP_DATA_PORT) = 0;
         CursorBlink = 0;
     }
     else CursorBlink++;
-}
-
-void HB_IRQ()
-{
-}
-
-void Ext_IRQ()
-{
-    vu8 *byte = (u8*)DEV_UART.RxData;
-    Buffer_Push(&RxBuffer, *byte);
 }

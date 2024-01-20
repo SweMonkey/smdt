@@ -2,11 +2,12 @@
 #include "Keyboard_PS2.h"
 #include "StateCtrl.h"  // bWindowActive
 #include "QMenu.h"      // ChangeText() when KB is detected
-#include "Terminal.h"
+#include "Terminal.h"   // TTY_PrintChar
 #include "Telnet.h"
 #include "Input.h"
 #include "Buffer.h"
 #include "Utils.h"
+#include "Network.h"
 
 #define KB_CL 0
 #define KB_DT 1
@@ -19,6 +20,7 @@ static u8 bExtKey = FALSE;
 static u8 bBreak = FALSE;
 static u8 bShift = FALSE;
 static u8 bAlt = FALSE;
+static u8 bCtrl = FALSE;
 
 SM_Device DEV_KBPS2;
 
@@ -51,13 +53,58 @@ const u8 SCTable_US[3][128] =
 //  x0   x1   x2   x3   x4   x5   x6   x7   x8   x9   xA   xB   xC   xD   xE   xF     
     0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // 0x00 - 0x0F
     0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // 0x10 - 0x1F
-    0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, ' ', 0x0, 0x0, 0x0, 0x0, 'E', 0x0, // 0x20 - 0x2F  // E = €
+    0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, ' ', 0x0, 0x0, 0x0, 0x0,0xEE, 0x0, // 0x20 - 0x2F  0x2E = €
     0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // 0x30 - 0x3F
     0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // 0x40 - 0x4F
     0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // 0x50 - 0x5F
     0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // 0x60 - 0x6F
     0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // 0x70 - 0x7F
 }};
+
+// Swedish Layout
+const u8 SCTable_SV[3][128] =
+{
+{   // Lower
+//  x0   x1   x2   x3   x4   x5   x6   x7   x8   x9   xA   xB   xC   xD   xE   xF     
+    0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,0x15, 0x0, // 0x00 - 0x0F  x 0x14=§
+    0x0, 0x0, 0x0, 0x0, 0x0, 'q', '1', 0x0, 0x0, 0x0, 'z', 's', 'a', 'w', '2', 0x0, // 0x10 - 0x1F  x
+    0x0, 'c', 'x', 'd', 'e', '4', '3', 0x0, 0x0, ' ', 'v', 'f', 't', 'r', '5', 0x0, // 0x20 - 0x2F  x
+    0x0, 'n', 'b', 'h', 'g', 'y', '6', 0x0, 0x0, 0x0, 'm', 'j', 'u', '7', '8', 0x0, // 0x30 - 0x3F  x
+    0x0, ',', 'k', 'i', 'o', '0', '9', 0x0, 0x0, '.', '-', 'l',0x94, 'p', '+', 0x0, // 0x40 - 0x4F  x
+    0x0, 0x0,0x84, 0x0,0x86,0x60, 0x0, 0x0, 0x0, 0x0, 0x0, '"', 0x0,'\'', 0x0, 0x0, // 0x50 - 0x5F  x 0x55 may be the wrong ' (´) - 0x5B is wrong " (should be ¨ but it is not in ascii)
+    0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // 0x60 - 0x6F  x
+    0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // 0x70 - 0x7F  x
+},
+{   // Shift+<KEY>
+//  x0   x1   x2   x3   x4   x5   x6   x7   x8   x9   xA   xB   xC   xD   xE   xF     
+    0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,0xAB, 0x0, // 0x00 - 0x0F  x 0x14=½
+    0x0, 0x0, 0x0, 0x0, 0x0, 'Q', '!', 0x0, 0x0, 0x0, 'Z', 'S', 'A', 'W', '"', 0x0, // 0x10 - 0x1F  x
+    0x0, 'C', 'X', 'D', 'E', 0x9, '#', 0x0, 0x0, ' ', 'V', 'F', 'T', 'R', '%', 0x0, // 0x20 - 0x2F  x 0x25 = ¤ (Not in ascii) 
+    0x0, 'N', 'B', 'H', 'G', 'Y', '&', 0x0, 0x0, 0x0, 'M', 'J', 'U', '/', '(', 0x0, // 0x30 - 0x3F  x
+    0x0, ';', 'K', 'I', 'O', '=', ')', 0x0, 0x0, ':', '_', 'L',0x99, 'P', '?', 0x0, // 0x40 - 0x4F  x 0x4C=Ö
+    0x0, 0x0,0x8E, 0x0,0x8F,0x27, 0x0, 0x0, 0x0, 0x0, 0x0, '^', 0x0, '*', 0x0, 0x0, // 0x50 - 0x5F  x 0x55 may be the wrong ' (`)
+    0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // 0x60 - 0x6F  x
+    0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // 0x70 - 0x7F  x
+},
+{   // ALT+<KEY>
+//  x0   x1   x2   x3   x4   x5   x6   x7   x8   x9   xA   xB   xC   xD   xE   xF     
+    0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,0x14, 0x0, // 0x00 - 0x0F  x 0x14=¶
+    0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,0xAE, 0x0, 0x0, 0x0, '@', 0x0, // 0x10 - 0x1F
+    0x0, 0x0,0xAF, 0x0, 0x0, '$',0x9C, 0x0, 0x0, ' ', 0x0, 0x0, 0x0, 0x0,0xEE, 0x0, // 0x20 - 0x2F  0x2E = €
+    0x0, 0x0, 0x0, 0x0, 0x0,0x1B,0x9D, 0x0, 0x0, 0x0,0xE6, 0x0,0x19, '{', '[', 0x0, // 0x30 - 0x3F
+    0x0, 0x0, 0x0,0x1A, 0x0, '}', ']', 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,0xE3,'\\', 0x0, // 0x40 - 0x4F
+    0x0, 0x0, 0x0, 0x0, 0x0,0xF1, 0x0, 0x0, 0x0, 0x0, 0x0,0x7E, 0x0,0x60, 0x0, 0x0, // 0x50 - 0x5F
+    0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // 0x60 - 0x6F
+    0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, // 0x70 - 0x7F
+}};
+
+u8 const * const SCTablePtr[2][3] =
+{
+    {SCTable_US[0], SCTable_US[1], SCTable_US[2]}, 
+    {SCTable_SV[0], SCTable_SV[1], SCTable_SV[2]}
+};
+
+u8 vKBLayout = 0;
 
 
 void KB_Init()
@@ -67,6 +114,7 @@ void KB_Init()
     bBreak = FALSE;
     bShift = FALSE;
     bAlt = FALSE;
+    bCtrl = FALSE;
 
     // Writing 0xf0 followed by 1, 2 or 3 to port 0x60 will put the keyboard in scancode mode 1, 2 or 3.
     // Writing 0xf0 followed by 0 queries the mode, resulting in a scancode byte 43, 41 or 3f from the keyboard.
@@ -77,7 +125,6 @@ inline void KB_Lock()
     SetDevCtrl(DEV_KBPS2, 0x3); // Set pin 0 and 1 as output (smd->kb)
     UnsetDevData(DEV_KBPS2);
     SetDevData(DEV_KBPS2, 0x2); // Set clock low, data high - Stop kb sending data
-
 }
 
 inline void KB_Unlock()
@@ -96,23 +143,25 @@ u8 KB_Poll(u8 *data)
 
     while (GetDevData(DEV_KBPS2, 0x1))
     {
-        if (timeout >= 3200)   // 32000
+        if (timeout++ >= 128)   // 3200 32000
         {
             KB_Lock();
             return 0;
         }
-
-        timeout++;
     }
 
     for (u8 b = 0; b < 11; b++)  // Recieve byte
     {
-        while (GetDevData(DEV_KBPS2, 0x1)); // Wait for clock to go low
+        timeout = 0;
+        while (GetDevData(DEV_KBPS2, 0x1)){if (timeout++ >= 128)goto timedout;}  // Wait for clock to go low
 
         stream_buffer |= (GetDevData(DEV_KBPS2, 0x2) >> KB_DT) << b;
 
-        while (!GetDevData(DEV_KBPS2, 0x1)); // Wait for clock to go high
+        timeout = 0;
+        while (!GetDevData(DEV_KBPS2, 0x1)){if (timeout++ >= 128)goto timedout;} // Wait for clock to go high
     }
+
+    timedout:
 
     KB_Lock();
 
@@ -144,6 +193,9 @@ void KB_Interpret_Scancode(u8 scancode)
             case 0x11:  //KEY_RALT
                 bAlt = 0;
             break;
+            case KEY_LCONTROL:  // CTRL^ Sequence
+                bCtrl = 0;
+            break;
             default:
             break;
         }
@@ -153,8 +205,6 @@ void KB_Interpret_Scancode(u8 scancode)
     switch (scancode)
     {
         case 0xAA:  // BAT OK
-            print_charXY_WP(ICO_KB_OK, STATUS_KB_POS, CHAR_GREEN);
-            ChangeText(7, 0, "PORT 1: KEYBOARD");
         break;
         case 0xE0:
             bExtKey = TRUE;
@@ -163,8 +213,6 @@ void KB_Interpret_Scancode(u8 scancode)
             bBreak = TRUE;
         break;
         case 0xFC: // BAT FAIL
-            print_charXY_WP(ICO_KB_ERROR, STATUS_KB_POS, CHAR_RED);
-            ChangeText(7, 0, "PORT 1: <ERROR>");
         break;
 
         // Hopefully temporary shitcode
@@ -179,25 +227,35 @@ void KB_Interpret_Scancode(u8 scancode)
             set_KeyPress(((bExtKey?0x100:0) | scancode), KEYSTATE_DOWN);
             bAlt = 1;
         break;
+        case KEY_LCONTROL:  // CTRL^ Sequence
+            set_KeyPress(((bExtKey?0x100:0) | scancode), KEYSTATE_DOWN);
+            bCtrl = TRUE;
+        break;
 
         default:
             set_KeyPress(((bExtKey?0x100:0) | scancode), KEYSTATE_DOWN);
         break;
     }
 
+    // Filter out nonprintable scancodes here
+
     // More shit that should not be here...
     u8 mod = 0;
     if (bAlt) mod = 2;
     else if (bShift) mod = 1;
 
-    u8 key = SCTable_US[mod][scancode];
+    u8 key = SCTablePtr[vKBLayout][mod][scancode]; //SCTable_US[mod][scancode];
 
-    if ((key >= 0x20) && (key <= 0x7E) && (!bWindowActive))
+    if (isPrintable(key) && !bWindowActive)//((key >= 0x20) && (key <= 0x7E) && (!bWindowActive))
     {
-        // Only print characters if ECHO is false
-        if (!vDoEcho) TTY_PrintChar(key);
+        if (bCtrl)
+        {
+            NET_SendChar(0x3, 0);               // Add control byte to TxBuffer
+            if (!vDoEcho) TTY_PrintChar('^');   // Print ^ to TTY if ECHO is false
+        }
 
-        TTY_SendChar(key, 0);
+        NET_SendChar(key, 0);               // Send key to TxBuffer
+        if (!vDoEcho) TTY_PrintChar(key);   // Only print characters if ECHO is false
     }
 }
 
@@ -217,11 +275,8 @@ void KB_SendCommand(u8 cmd) // bits: xxxxx0dd ddddddp1 - where d= data, p= parit
         b--;
     }
 
-    if ((p % 2) == 0) p = 2;
-    else p = 0;
-
-    bc[9] = p;  // Parity
-    bc[10] = 2;  // Stop
+    bc[9] = ((p % 2) == 0 ? 1<<KB_DT:0);  // Parity
+    bc[10] = 1 << KB_DT;  // Stop
 
     //kprintf("<%u> %u %u %u %u %u %u %u %u <%u> <%u>", bc[0], bc[1], bc[2], bc[3], bc[4], bc[5], bc[6], bc[7], bc[8], bc[9], bc[10]);
     //return;
@@ -255,12 +310,12 @@ void KB_SendCommand(u8 cmd) // bits: xxxxx0dd ddddddp1 - where d= data, p= parit
     for (u8 b = 0; b < 11; b++)  // Recieve byte
     {
         timeout = 0;
-        while (GetDevData(DEV_KBPS2, 0x1)){if (timeout >= 3200)goto timedout;else timeout++;}; // (4) Wait for clock to go low
+        while (GetDevData(DEV_KBPS2, 0x1)){if (timeout++ >= 128)goto timedout;}//{if (timeout >= 3200)goto timedout;else timeout++;}; // (4) Wait for clock to go low
 
         UnsetDevData(DEV_KBPS2);
         OrDevData(DEV_KBPS2, bc[b]);
 
-        while (!GetDevData(DEV_KBPS2, 0x1)){if (timeout >= 3200)goto timedout;else timeout++;}; // (6) Wait for clock to go high
+        while (!GetDevData(DEV_KBPS2, 0x1)){if (timeout++ >= 128)goto timedout;}//{if (timeout >= 3200)goto timedout;else timeout++;}; // (6) Wait for clock to go high
     }
 
     UnsetDevCtrl(DEV_KBPS2);    // (9) Set data(2) and clock(1) as input
@@ -268,18 +323,18 @@ void KB_SendCommand(u8 cmd) // bits: xxxxx0dd ddddddp1 - where d= data, p= parit
     timeout = 0;
 
     // Ack
-    while (GetDevData(DEV_KBPS2, 0x2)){if (timeout >= 3200)goto timedout;else timeout++;}; // (10) Wait for data to go low
-    while (GetDevData(DEV_KBPS2, 0x1)){if (timeout >= 3200)goto timedout;else timeout++;}; // (11) Wait for clock to go low
+    while (GetDevData(DEV_KBPS2, 0x2)){if (timeout++ >= 128)goto timedout;} // (10) Wait for data to go low
+    while (GetDevData(DEV_KBPS2, 0x1)){if (timeout++ >= 128)goto timedout;} // (11) Wait for clock to go low
 
     // Release
-    //while (!GetDevData(DEV_KBPS2, 0x2)){if (timeout >= 3200)goto timedout;else timeout++;}; // (10) Wait for data to go high
-    //while (!GetDevData(DEV_KBPS2, 0x1)){if (timeout >= 3200)goto timedout;else timeout++;}; // (11) Wait for clock to go high
+    //while (!GetDevData(DEV_KBPS2, 0x2)){if (timeout++ >= 128)goto timedout;} // (10) Wait for data to go high
+    //while (!GetDevData(DEV_KBPS2, 0x1)){if (timeout++ >= 128)goto timedout;} // (11) Wait for clock to go high
 
     //waitMs(1);
     timedout:
     OrDevCtrl(DEV_KBPS2, 0x3); // Set pin 0 and 1 as output (smd->kb)
     UnsetDevData(DEV_KBPS2);
     OrDevData(DEV_KBPS2, 0x2); // Set clock low, data high - Stop kb sending data
-    
+
     // Call KB_Poll() after this to recieve response/data
 }

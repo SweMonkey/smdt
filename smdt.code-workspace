@@ -30,7 +30,8 @@
 			"keyboard_ps2.h": "c",
 			"system.h": "c",
 			"devmgr.h": "c",
-			"main.h": "c"
+			"main.h": "c",
+			"sstream": "c"
 		}
 	}
 }

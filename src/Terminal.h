@@ -9,12 +9,6 @@
 #define TTY_CURSOR_RIGHT 3
 #define TTY_CURSOR_DUMMY 4, 0
 
-#define ICO_NET_SEND 0x1A       // Up arrow
-#define ICO_NET_RECV 0x1B       // Down arrow
-#define ICO_NET_IDLE_SEND 0x18
-#define ICO_NET_IDLE_RECV 0x19
-#define ICO_NET_ERROR 0x1D
-
 #define D_COLUMNS_80 128
 #define D_COLUMNS_40 64
 
@@ -26,25 +20,19 @@
 #define C_YSTART 1  // 0 if no window plane
 
 // Default X/Y Scroll
-#define D_HSCROLL 0    // Old default: 9
+extern s8 D_HSCROLL;
 #define D_VSCROLL 0
 
 // Default FG/BG colors
 #define CL_FG 7
 #define CL_BG 0
 
-// Tx flags
-#define TXF_NOBUFFER 1
-
 // Modifiable variables
 extern u8 vNewlineConv;
 extern u8 vTermType;
 extern u8 vDoEcho;
 extern u8 vLineMode;
-extern char *vSpeed;
-
-// Telnet flags
-extern u8 vtEcho;
+extern char vSpeed[];
 
 // TTY
 extern u8 TTY_Initialized;
@@ -55,6 +43,10 @@ extern u8 C_XMAX;
 extern u8 C_YMAX;
 extern u8 bWrapAround;
 extern u8 TermColumns;
+
+extern u16 Custom_BGCL;
+extern u16 Custom_FG0CL;   // Custom text colour for 4x8 font
+extern u16 Custom_FG1CL;   // Custom text antialiasing colour for 4x8 font 
 
 // Font
 extern u8 FontSize;
@@ -68,9 +60,7 @@ void TTY_Init(u8 bHardReset);
 void TTY_Reset(u8 bClearScreen);
 void TTY_SetColumns(u8 col);
 void TTY_SetFontSize(u8 size);
-void TTY_SendChar(const u8 c, u8 flags);
-void TTY_TransmitBuffer();
-void TTY_SendString(const char *str);
+
 void TTY_PrintChar(u8 c);
 void TTY_ClearLine(u16 y, u16 line_count);
 void TTY_ClearPartialLine(u16 y, u16 from_x, u16 to_x);

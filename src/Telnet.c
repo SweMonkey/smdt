@@ -3,6 +3,7 @@
 #include "Terminal.h"
 #include "UTF8.h"
 #include "Utils.h"
+#include "Network.h"
 
 // https://vt100.net/docs/vt100-ug/chapter3.html
 // https://invisible-island.net/xterm/ctlseqs/ctlseqs.html
@@ -85,10 +86,6 @@ u8 vDECOM = FALSE;  // DEC Origin Mode
 static s16 DMarginTop = 0;
 static s16 DMarginBottom = 0;
 
-// UTF BOM
-u8 BOM[4] = {0,0,0,0};
-u32 BOM_Seq[4] = {0,0,0,0};
-
 // Escapes [
 u8 bESCAPE = FALSE;         // If true: an escape code was recieved last byte
 u8 ESC_Seq = 0;
@@ -111,10 +108,7 @@ u8 IAC_SubNegotiationOption = 0xFF;     // Current TO_xxx option to operate in a
 u8 IAC_SNSeq = 0;                       // Counter - where in "IAC_SubNegotiationBytes" we are
 u8 IAC_SubNegotiationBytes[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};   // Recieved byte stream in a subnegotiation block
 
-const char *TermType[] =
-{
-    "XTERM", "ANSI", "VT100", "MEGADRIVE", "UNKNOWN"
-};
+extern const char *TermTypeList[];
 
 
 void TELNET_Init()
@@ -152,6 +146,12 @@ void TELNET_Init()
 
     DMarginTop = 0;
     DMarginBottom = bPALSystem?0x1D:0x1B;
+
+    // Variable overrides
+    vDoEcho = 0;
+    vLineMode = 0;
+    vNewlineConv = 0;
+    bWrapAround = TRUE;
 }
 
 inline void TELNET_ParseRX(u8 dummy)
@@ -180,46 +180,54 @@ inline void TELNET_ParseRX(u8 dummy)
 
     switch (*PRX)
     {
-        case 0x00:  //null
+        case 0x00:  // Null
         break;
-        case 0x01:  //start of heading
+        case 0x01:  // Start of heading
         break;
-        case 0x02:  //start of text
+        case 0x02:  // Start of text
         break;
-        case 0x03:  //end of text
+        case 0x03:  // End of text
         break;
-        case 0x04:  //end of transmission
+        case 0x04:  // End of transmission
         break;
-        case 0x05:  //enquiry
+        case 0x05:  // Enquiry
         break;
-        case 0x06:  //acknowledge
+        case 0x06:  // Acknowledge
         break;
-        case 0x07:  //bell
-            PAL_setColor(0, 0x666);
+        case 0x07:  // Bell
+            PSG_setEnvelope(0, PSG_ENVELOPE_MAX);
             waitMs(100);
-            PAL_setColor(0, 0x000);
+            PSG_setEnvelope(0, PSG_ENVELOPE_MIN);
             waitMs(100);
-            PAL_setColor(0, 0x666);
+            PSG_setEnvelope(0, PSG_ENVELOPE_MAX);
             waitMs(100);
-            PAL_setColor(0, 0x000);
+            PSG_setEnvelope(0, PSG_ENVELOPE_MIN);
+            waitMs(100);
+            PSG_setEnvelope(0, PSG_ENVELOPE_MAX);
+            waitMs(100);
+            PSG_setEnvelope(0, PSG_ENVELOPE_MIN);
+            waitMs(100);
+            PSG_setEnvelope(0, PSG_ENVELOPE_MAX);
+            waitMs(100);
+            PSG_setEnvelope(0, PSG_ENVELOPE_MIN);
         break;
-        case 0x08:  //backspace
+        case 0x08:  // Backspace
             TTY_MoveCursor(TTY_CURSOR_LEFT, 1);
         break;
-        case 0x09:  //horizontal tab
+        case 0x09:  // Horizontal tab
             TTY_MoveCursor(TTY_CURSOR_RIGHT, C_HTAB);
         break;
-        case 0x0A:  //line feed, new line
+        case 0x0A:  // Line feed (new line)
             if (vNewlineConv == 1)  // Convert \n to \n\r
             {
                 TTY_SetSX(0);
             }
             TTY_MoveCursor(TTY_CURSOR_DOWN, 1);
         break;
-        case 0x0B:  //vertical tab
+        case 0x0B:  // Vertical tab
             TTY_MoveCursor(TTY_CURSOR_DOWN, C_VTAB);
         break;
-        case 0x0C:  //form feed, new page
+        case 0x0C:  // Form feed (new page)
             TTY_SetSX(0);
             TTY_SetSY(C_YSTART);
 
@@ -228,16 +236,18 @@ inline void TELNET_ParseRX(u8 dummy)
             VDP_clearPlane(BG_A, TRUE);
             VDP_clearPlane(BG_B, TRUE);
 
-            VDP_setVerticalScrollVSync(BG_A, VScroll);
-            VDP_setVerticalScrollVSync(BG_B, VScroll);
+            VDP_setVerticalScroll(BG_A, VScroll);
+            VDP_setVerticalScroll(BG_B, VScroll);
 
             TTY_MoveCursor(TTY_CURSOR_DUMMY);   // Dummy
         break;
-        case 0x0D:  //carriage return
+        case 0x0D:  // Carriage return
             TTY_SetSX(0);
             TTY_MoveCursor(TTY_CURSOR_DUMMY);   // Dummy
         break;
-        case 0x1B:  //Escape 1
+        case 0x15:  // NAK (negative acknowledge)
+        break;
+        case 0x1B:  // Escape 1
             bESCAPE = TRUE;
             ESC_Seq = 0;
             ESC_Type = 0;
@@ -302,7 +312,6 @@ static inline void DoEscape(u8 dummy)
     if (ESC_Seq == 1)
     {
         ESC_Type = *PRX;    // '[' or ' '
-        //if (ESC_Type != 0x5B) kprintf("ESC_Type: $%X", ESC_Type);
         return;
     }
 
@@ -325,6 +334,12 @@ static inline void DoEscape(u8 dummy)
             
                 case 7:   // Auto-Wrap Mode (DECAWM), VT100.
                 bWrapAround = TRUE;
+                break;
+            
+                case 25:   // Shows the cursor, from the VT220. (DECTCEM)
+                break;
+
+                case 2004:   // Turn on bracketed paste mode. In bracketed paste mode, text pasted into the terminal will be surrounded by ESC [200~ and ESC [201~; programs running in the terminal should not treat characters bracketed by those sequences as commands (Vim, for example, does not treat them as commands). From xterm
                 break;
 
                 // 1000h = Send Mouse X & Y on button press and release.  See the section Mouse Tracking.  This is the X11 xterm mouse protocol.
@@ -350,6 +365,12 @@ static inline void DoEscape(u8 dummy)
             
                 case 7:   // No Auto-Wrap Mode (DECAWM), VT100.
                 bWrapAround = FALSE;
+                break;
+            
+                case 25:   // Hides the cursor. (DECTCEM)
+                break;
+
+                case 2004:   // Turn off bracketed paste mode. 
                 break;
 
 
@@ -437,8 +458,6 @@ static inline void DoEscape(u8 dummy)
 
         case 'h':   // Screen modes
         {
-            //kprintf("Hit a 'h' (%u)", atoi(ESC_Buffer));
-
             switch (atoi(ESC_Buffer))
             {
                 case 0: // 40 x 25 monochrome (text)
@@ -495,7 +514,6 @@ static inline void DoEscape(u8 dummy)
 
         case 'l':   // Reset screen mode
         {
-            //kprintf("Hit a 'l' (%u)", atoi(ESC_Buffer));
             switch (atoi(ESC_Buffer))
             {
                 case 7:     // Disables line wrapping
@@ -519,32 +537,24 @@ static inline void DoEscape(u8 dummy)
         case 'A':
         {
             TTY_SetSY_A(TTY_GetSY_A() - atoi(ESC_Buffer));
-            //kprintf("Hit a 'A' (%u) - adj.sy: %ld", atoi(ESC_Buffer), TTY_GetSY_A());
-
             goto EndEscape;
         }
 
         case 'B':
         {
-            TTY_SetSY_A(TTY_GetSY_A() + atoi(ESC_Buffer));            
-            //kprintf("Hit a 'B' (%u) - adj.sy: %ld", atoi(ESC_Buffer), TTY_GetSY_A());
-
+            TTY_SetSY_A(TTY_GetSY_A() + atoi(ESC_Buffer));
             goto EndEscape;
         }
 
         case 'C':
         {
             TTY_SetSX(TTY_GetSX() + atoi(ESC_Buffer));
-            //kprintf("Hit a 'C' (%u) - sx: %ld", atoi(ESC_Buffer), TTY_GetSX());
-
             goto EndEscape;
         }
 
         case 'D':
         {
             TTY_SetSX(TTY_GetSX() - atoi(ESC_Buffer));
-            //kprintf("Hit a 'D' (%u) - sx: %ld", atoi(ESC_Buffer), TTY_GetSX());
-
             goto EndEscape;
         }
 
@@ -559,7 +569,6 @@ static inline void DoEscape(u8 dummy)
             {
                 TTY_SetSX(0);
                 TTY_SetSY_A(0);
-                //kprintf("Reset cursor: sx: %ld - sy: %ld", sx, sy);
             }
             else
             {
@@ -573,8 +582,6 @@ static inline void DoEscape(u8 dummy)
                 }
 
                 TTY_SetSY_A(ESC_Param[0]-1);
-                
-                //kprintf("Move cursor: cx: %u - cy: %u -- sx: %ld - sy: %ld (*PRX=%c)", (ESC_Param[1] != 0xFF ? ESC_Param[1] : 0), (ESC_Param[0] ? ESC_Param[0] : 0), sx, sy-((VScroll >> 3) + C_YSTART), *PRX);
             }            
 
             TTY_MoveCursor(TTY_CURSOR_DUMMY);   // Dummy
@@ -584,13 +591,12 @@ static inline void DoEscape(u8 dummy)
 
         case 'J':
         {
-            //kprintf("Hit a 'J' (%u)", atoi(ESC_Buffer));
             u8 n = atoi(ESC_Buffer);
 
             switch (n)
             {
                 case 1: // Clear screen from cursor up (Keep cursor position)
-                    TTY_ClearLine(sy % 32, ((sy - C_YMAX) % 32));   // This is probably wrong.    // sy-1 or not in first param?
+                    TTY_ClearLine(TTY_GetSY(), TTY_GetSY_A());
                 break;
 
                 case 2: // Clear screen (move cursor to top left only if emulating ANSI.SYS otherwise keep cursor position)
@@ -605,7 +611,7 @@ static inline void DoEscape(u8 dummy)
             
                 case 0: // Clear screen from cursor down (Keep cursor position)
                 default:
-                    TTY_ClearLine((sy+0) % 32, ((sy + C_YMAX) % 32));  // sy+1 or not in first param?
+                    TTY_ClearLine(TTY_GetSY(), C_YMAX - TTY_GetSY_A());
                 break;
             }            
 
@@ -614,7 +620,6 @@ static inline void DoEscape(u8 dummy)
 
         case 'K':
         {
-            //kprintf("Hit a 'K' (%u)", atoi(ESC_Buffer));
             u8 n = atoi(ESC_Buffer);
 
             switch (n)
@@ -640,8 +645,6 @@ static inline void DoEscape(u8 dummy)
         {
             ESC_Param[ESC_ParamSeq++] = atoi(ESC_Buffer);
 
-            //kprintf("Got an 'm' : ESC_Param[%u] = $%X", ESC_ParamSeq-1, ESC_Param[ESC_ParamSeq-1]);
-
             if (ESC_Param[0] != 255) TTY_SetAttribute(ESC_Param[0]);
             if (ESC_Param[1] != 255) TTY_SetAttribute(ESC_Param[1]);
             if (ESC_Param[2] != 255) TTY_SetAttribute(ESC_Param[2]);
@@ -659,8 +662,7 @@ static inline void DoEscape(u8 dummy)
             {
                 case 6:
                     sprintf(str, "[%ld;%ldR", TTY_GetSY_A(), TTY_GetSX());
-                    TTY_SendString(str);
-                    //kprintf("Cursor position requested (sx: %ld - sy: %ld)", TTY_GetSX(), TTY_GetSY_A());
+                    NET_SendString(str);
                 break;
 
                 default:
@@ -673,7 +675,6 @@ static inline void DoEscape(u8 dummy)
         case 'r':
         {
             ESC_Param[ESC_ParamSeq++] = atoi(ESC_Buffer);
-            //kprintf("Hit a 'r' - %u ; %u", ESC_Param[0], ESC_Param[1]);
             goto EndEscape;
         }
 
@@ -691,7 +692,6 @@ static inline void DoEscape(u8 dummy)
         {
             QSeqNumber = 0;
             ESC_QSeq++;
-            //kprintf("Hit a '?'");
             return;
         }
 
@@ -712,18 +712,18 @@ static inline void DoEscape(u8 dummy)
 
 static inline void IAC_SuggestNAWS()
 {
-    TTY_SendChar(TC_IAC, TXF_NOBUFFER);
-    TTY_SendChar(TC_WILL, TXF_NOBUFFER);
-    TTY_SendChar(TO_NAWS, TXF_NOBUFFER);
+    NET_SendChar(TC_IAC, TXF_NOBUFFER);
+    NET_SendChar(TC_WILL, TXF_NOBUFFER);
+    NET_SendChar(TO_NAWS, TXF_NOBUFFER);
 
     //IAC_NAWS_PENDING = TRUE;
 }
 
 static inline void IAC_SuggestEcho(u8 enable)
 {
-    TTY_SendChar(TC_IAC, TXF_NOBUFFER);
-    TTY_SendChar((enable?TC_DO:TC_DONT), TXF_NOBUFFER);
-    TTY_SendChar(TO_ECHO, TXF_NOBUFFER);
+    NET_SendChar(TC_IAC, TXF_NOBUFFER);
+    NET_SendChar((enable?TC_DO:TC_DONT), TXF_NOBUFFER);
+    NET_SendChar(TO_ECHO, TXF_NOBUFFER);
 }
 
 static inline void DoIAC(u8 dummy)
@@ -792,15 +792,15 @@ static inline void DoIAC(u8 dummy)
                         kprintf("Got <SEND TERM_TYPE> subneg.");
                         #endif
                         // Send "IAC SB TERMINAL-TYPE IS <some_terminal_type> IAC SE"
-                        TTY_SendChar(TC_IAC, TXF_NOBUFFER);
-                        TTY_SendChar(TC_SB, TXF_NOBUFFER);
-                        TTY_SendChar(TO_TERM_TYPE, TXF_NOBUFFER);
-                        TTY_SendChar(TS_IS, TXF_NOBUFFER);
-                        TTY_SendString(TermType[vTermType]);
-                        TTY_SendChar(TC_IAC, TXF_NOBUFFER);
-                        TTY_SendChar(TC_SE, TXF_NOBUFFER);
+                        NET_SendChar(TC_IAC, TXF_NOBUFFER);
+                        NET_SendChar(TC_SB, TXF_NOBUFFER);
+                        NET_SendChar(TO_TERM_TYPE, TXF_NOBUFFER);
+                        NET_SendChar(TS_IS, TXF_NOBUFFER);
+                        NET_SendString(TermTypeList[vTermType]);
+                        NET_SendChar(TC_IAC, TXF_NOBUFFER);
+                        NET_SendChar(TC_SE, TXF_NOBUFFER);
                         #ifdef IAC_LOGGING
-                        kprintf("Response: IAC SB TERM_TYPE IS %s IAC SE", TermType[vTermType]);
+                        kprintf("Response: IAC SB TERM_TYPE IS %s IAC SE", TermTypeList[vTermType]);
                         #endif
                     }
                     break;
@@ -822,15 +822,15 @@ static inline void DoIAC(u8 dummy)
                         #endif
 
                         // IAC SB TERMINAL-SPEED IS ... IAC SE
-                        TTY_SendChar(TC_IAC, TXF_NOBUFFER);
-                        TTY_SendChar(TC_SB, TXF_NOBUFFER);
-                        TTY_SendChar(TO_TERM_SPEED, TXF_NOBUFFER);
-                        TTY_SendChar(TS_IS, TXF_NOBUFFER);
-                        TTY_SendString(vSpeed);
-                        TTY_SendChar(',', TXF_NOBUFFER);
-                        TTY_SendString(vSpeed);
-                        TTY_SendChar(TC_IAC, TXF_NOBUFFER);
-                        TTY_SendChar(TC_SE, TXF_NOBUFFER);
+                        NET_SendChar(TC_IAC, TXF_NOBUFFER);
+                        NET_SendChar(TC_SB, TXF_NOBUFFER);
+                        NET_SendChar(TO_TERM_SPEED, TXF_NOBUFFER);
+                        NET_SendChar(TS_IS, TXF_NOBUFFER);
+                        NET_SendString(vSpeed);
+                        NET_SendChar(',', TXF_NOBUFFER);
+                        NET_SendString(vSpeed);
+                        NET_SendChar(TC_IAC, TXF_NOBUFFER);
+                        NET_SendChar(TC_SE, TXF_NOBUFFER);
 
                         #ifdef IAC_LOGGING
                         kprintf("Response: IAC SB TERMINAL-SPEED IS %s,%s IAC SE", vSpeed, vSpeed);
@@ -863,13 +863,13 @@ static inline void DoIAC(u8 dummy)
                             {
                                 vLineMode = NewLM;
 
-                                TTY_SendChar(TC_IAC, TXF_NOBUFFER);
-                                TTY_SendChar(TC_SB, TXF_NOBUFFER);
-                                TTY_SendChar(TO_LINEMODE, TXF_NOBUFFER);
-                                TTY_SendChar(LM_MODE, TXF_NOBUFFER);
-                                TTY_SendChar((vLineMode | LMSM_MODEACK), TXF_NOBUFFER);
-                                TTY_SendChar(TC_IAC, TXF_NOBUFFER);
-                                TTY_SendChar(TC_SE, TXF_NOBUFFER);
+                                NET_SendChar(TC_IAC, TXF_NOBUFFER);
+                                NET_SendChar(TC_SB, TXF_NOBUFFER);
+                                NET_SendChar(TO_LINEMODE, TXF_NOBUFFER);
+                                NET_SendChar(LM_MODE, TXF_NOBUFFER);
+                                NET_SendChar((vLineMode | LMSM_MODEACK), TXF_NOBUFFER);
+                                NET_SendChar(TC_IAC, TXF_NOBUFFER);
+                                NET_SendChar(TC_SE, TXF_NOBUFFER);
 
                                 #ifdef IAC_LOGGING
                                 kprintf("Response: IAC SB LINEMODE MODE %u IAC SE", (vLineMode | LMSM_MODEACK));
@@ -926,9 +926,9 @@ static inline void DoIAC(u8 dummy)
             {
                 case TO_BIN_TRANS:
                 {        
-                    TTY_SendChar(TC_IAC, TXF_NOBUFFER);
-                    TTY_SendChar(TC_DONT, TXF_NOBUFFER);
-                    TTY_SendChar(TO_BIN_TRANS, TXF_NOBUFFER);
+                    NET_SendChar(TC_IAC, TXF_NOBUFFER);
+                    NET_SendChar(TC_DONT, TXF_NOBUFFER);
+                    NET_SendChar(TO_BIN_TRANS, TXF_NOBUFFER);
                     
                     #ifdef IAC_LOGGING
                     kprintf("Server: IAC WILL TRANSMIT_BINARY - Response: IAC DONT TRANSMIT_BINARY - FULL IMPL. TODO");
@@ -946,9 +946,9 @@ static inline void DoIAC(u8 dummy)
                 case TO_SUPPRESS_GO_AHEAD:
                     vDoGA = 0;
 
-                    TTY_SendChar(TC_IAC, TXF_NOBUFFER);
-                    TTY_SendChar(TC_WILL, TXF_NOBUFFER);
-                    TTY_SendChar(TO_SUPPRESS_GO_AHEAD, TXF_NOBUFFER);
+                    NET_SendChar(TC_IAC, TXF_NOBUFFER);
+                    NET_SendChar(TC_WILL, TXF_NOBUFFER);
+                    NET_SendChar(TO_SUPPRESS_GO_AHEAD, TXF_NOBUFFER);
 
                     #ifdef IAC_LOGGING
                     kprintf("Server: IAC WILL SUPPRESS_GO_AHEAD - Client response: IAC WILL SUPPRESS_GO_AHEAD");
@@ -992,9 +992,9 @@ static inline void DoIAC(u8 dummy)
             {
                 case TO_BIN_TRANS:
                 {        
-                    TTY_SendChar(TC_IAC, TXF_NOBUFFER);
-                    TTY_SendChar(TC_WONT, TXF_NOBUFFER);
-                    TTY_SendChar(TO_BIN_TRANS, TXF_NOBUFFER);
+                    NET_SendChar(TC_IAC, TXF_NOBUFFER);
+                    NET_SendChar(TC_WONT, TXF_NOBUFFER);
+                    NET_SendChar(TO_BIN_TRANS, TXF_NOBUFFER);
                     
                     #ifdef IAC_LOGGING
                     kprintf("Server: IAC DO TRANSMIT_BINARY - Response: IAC WONT TRANSMIT_BINARY - FULL IMPL. TODO");
@@ -1004,9 +1004,9 @@ static inline void DoIAC(u8 dummy)
 
                 case TO_ECHO:
                 {        
-                    TTY_SendChar(TC_IAC, TXF_NOBUFFER);
-                    TTY_SendChar(TC_WILL, TXF_NOBUFFER);
-                    TTY_SendChar(TO_ECHO, TXF_NOBUFFER);
+                    NET_SendChar(TC_IAC, TXF_NOBUFFER);
+                    NET_SendChar(TC_WILL, TXF_NOBUFFER);
+                    NET_SendChar(TO_ECHO, TXF_NOBUFFER);
                     vDoEcho = 1;
                     #ifdef IAC_LOGGING
                     kprintf("Response: IAC WILL ECHO");
@@ -1018,9 +1018,9 @@ static inline void DoIAC(u8 dummy)
                 case TO_SUPPRESS_GO_AHEAD:
                     vDoGA = 0;
 
-                    TTY_SendChar(TC_IAC, TXF_NOBUFFER);
-                    TTY_SendChar(TC_WILL, TXF_NOBUFFER);
-                    TTY_SendChar(TO_SUPPRESS_GO_AHEAD, TXF_NOBUFFER);
+                    NET_SendChar(TC_IAC, TXF_NOBUFFER);
+                    NET_SendChar(TC_WILL, TXF_NOBUFFER);
+                    NET_SendChar(TO_SUPPRESS_GO_AHEAD, TXF_NOBUFFER);
 
                     #ifdef IAC_LOGGING
                     kprintf("Response: IAC WILL SUPPRESS_GO_AHEAD");
@@ -1029,9 +1029,9 @@ static inline void DoIAC(u8 dummy)
 
                 case TO_TERM_TYPE:
                 {            
-                    TTY_SendChar(TC_IAC, TXF_NOBUFFER);
-                    TTY_SendChar(TC_WILL, TXF_NOBUFFER);
-                    TTY_SendChar(TO_TERM_TYPE, TXF_NOBUFFER);
+                    NET_SendChar(TC_IAC, TXF_NOBUFFER);
+                    NET_SendChar(TC_WILL, TXF_NOBUFFER);
+                    NET_SendChar(TO_TERM_TYPE, TXF_NOBUFFER);
 
                     #ifdef IAC_LOGGING
                     kprintf("Response: IAC WILL TERM_TYPE");
@@ -1041,20 +1041,20 @@ static inline void DoIAC(u8 dummy)
                 
                 case TO_NAWS:
                 {
-                    TTY_SendChar(TC_IAC, TXF_NOBUFFER);
-                    TTY_SendChar(TC_WILL, TXF_NOBUFFER);
-                    TTY_SendChar(TO_NAWS, TXF_NOBUFFER);
+                    NET_SendChar(TC_IAC, TXF_NOBUFFER);
+                    NET_SendChar(TC_WILL, TXF_NOBUFFER);
+                    NET_SendChar(TO_NAWS, TXF_NOBUFFER);
                     
                     // IAC SB NAWS <16-bit value> <16-bit value> IAC SE
                     // Sent by the Telnet client to inform the Telnet server of the window width and height.
-                    TTY_SendChar(TC_IAC, TXF_NOBUFFER);
-                    TTY_SendChar(TC_SB, TXF_NOBUFFER);
-                    TTY_SendChar(0, TXF_NOBUFFER);
-                    TTY_SendChar((FontSize==0?0x28:0x50), TXF_NOBUFFER); // Columns - Use internal columns (D_COLUMNS_80/D_COLUMNS_40) here or use font size (4x8=80 & 8x8=40)? - Type? used to be FontSize==3
-                    TTY_SendChar(0, TXF_NOBUFFER);
-                    TTY_SendChar((bPALSystem?0x1D:0x1B), TXF_NOBUFFER); // Rows - 29=PAL - 27=NTSC
-                    TTY_SendChar(TC_IAC, TXF_NOBUFFER);
-                    TTY_SendChar(TC_SE, TXF_NOBUFFER);
+                    NET_SendChar(TC_IAC, TXF_NOBUFFER);
+                    NET_SendChar(TC_SB, TXF_NOBUFFER);
+                    NET_SendChar(0, TXF_NOBUFFER);
+                    NET_SendChar((FontSize==0?0x28:0x50), TXF_NOBUFFER); // Columns - Use internal columns (D_COLUMNS_80/D_COLUMNS_40) here or use font size (4x8=80 & 8x8=40)? - Type? used to be FontSize==3
+                    NET_SendChar(0, TXF_NOBUFFER);
+                    NET_SendChar((bPALSystem?0x1D:0x1B), TXF_NOBUFFER); // Rows - 29=PAL - 27=NTSC
+                    NET_SendChar(TC_IAC, TXF_NOBUFFER);
+                    NET_SendChar(TC_SE, TXF_NOBUFFER);
 
                     #ifdef IAC_LOGGING
                     kprintf("Response: IAC WILL NAWS - IAC SB 0x%04X 0x%04X IAC SE", (FontSize==0?0x28:0x50), (bPALSystem?0x1D:0x1B));
@@ -1064,9 +1064,9 @@ static inline void DoIAC(u8 dummy)
 
                 case TO_TERM_SPEED:
                 {            
-                    TTY_SendChar(TC_IAC, TXF_NOBUFFER);
-                    TTY_SendChar(TC_WILL, TXF_NOBUFFER);
-                    TTY_SendChar(TO_TERM_SPEED, TXF_NOBUFFER);
+                    NET_SendChar(TC_IAC, TXF_NOBUFFER);
+                    NET_SendChar(TC_WILL, TXF_NOBUFFER);
+                    NET_SendChar(TO_TERM_SPEED, TXF_NOBUFFER);
 
                     #ifdef IAC_LOGGING
                     kprintf("Response: IAC WILL TERM_SPEED");
@@ -1077,17 +1077,17 @@ static inline void DoIAC(u8 dummy)
                 // https://datatracker.ietf.org/doc/html/rfc779
                 case TO_SEND_LOCATION:
                 {            
-                    /*TTY_SendChar(TC_IAC, TXF_NOBUFFER);
-                    TTY_SendChar(TC_WILL, TXF_NOBUFFER);
-                    TTY_SendChar(TO_SEND_LOCATION, TXF_NOBUFFER);*/
+                    /*NET_SendChar(TC_IAC, TXF_NOBUFFER);
+                    NET_SendChar(TC_WILL, TXF_NOBUFFER);
+                    NET_SendChar(TO_SEND_LOCATION, TXF_NOBUFFER);*/
 
                     // IAC SB SEND-LOCATION <location> IAC SE
-                    TTY_SendChar(TC_IAC, TXF_NOBUFFER);
-                    TTY_SendChar(TC_SB, TXF_NOBUFFER);
-                    TTY_SendChar(TO_SEND_LOCATION, TXF_NOBUFFER);
-                    TTY_SendString("MegaDriveLand");
-                    TTY_SendChar(TC_IAC, TXF_NOBUFFER);
-                    TTY_SendChar(TC_SE, TXF_NOBUFFER);
+                    NET_SendChar(TC_IAC, TXF_NOBUFFER);
+                    NET_SendChar(TC_SB, TXF_NOBUFFER);
+                    NET_SendChar(TO_SEND_LOCATION, TXF_NOBUFFER);
+                    NET_SendString("MegaDriveLand");
+                    NET_SendChar(TC_IAC, TXF_NOBUFFER);
+                    NET_SendChar(TC_SE, TXF_NOBUFFER);
 
                     #ifdef IAC_LOGGING
                     kprintf("Response: IAC SB SEND-LOCATION <location> IAC SE");
@@ -1097,9 +1097,9 @@ static inline void DoIAC(u8 dummy)
 
                 case TO_LINEMODE:
                 {
-                    TTY_SendChar(TC_IAC, TXF_NOBUFFER);
-                    TTY_SendChar(TC_WILL, TXF_NOBUFFER);
-                    TTY_SendChar(TO_LINEMODE, TXF_NOBUFFER);
+                    NET_SendChar(TC_IAC, TXF_NOBUFFER);
+                    NET_SendChar(TC_WILL, TXF_NOBUFFER);
+                    NET_SendChar(TO_LINEMODE, TXF_NOBUFFER);
                     
                     #ifdef IAC_LOGGING
                     kprintf("Response: IAC WILL LINEMODE");
@@ -1112,9 +1112,9 @@ static inline void DoIAC(u8 dummy)
                 case TO_ENV:
                 {
                     // Just refuse for now
-                    TTY_SendChar(TC_IAC, TXF_NOBUFFER);
-                    TTY_SendChar(TC_WONT, TXF_NOBUFFER);
-                    TTY_SendChar(TO_ENV, TXF_NOBUFFER);
+                    NET_SendChar(TC_IAC, TXF_NOBUFFER);
+                    NET_SendChar(TC_WONT, TXF_NOBUFFER);
+                    NET_SendChar(TO_ENV, TXF_NOBUFFER);
                     
                     #ifdef IAC_LOGGING
                     kprintf("Response: IAC WONT ENV");
@@ -1127,9 +1127,9 @@ static inline void DoIAC(u8 dummy)
                 case TO_ENV_OP:
                 {
                     // Just refuse to send enviroment variables
-                    TTY_SendChar(TC_IAC, TXF_NOBUFFER);
-                    TTY_SendChar(TC_WONT, TXF_NOBUFFER);
-                    TTY_SendChar(TO_ENV_OP, TXF_NOBUFFER);
+                    NET_SendChar(TC_IAC, TXF_NOBUFFER);
+                    NET_SendChar(TC_WONT, TXF_NOBUFFER);
+                    NET_SendChar(TO_ENV_OP, TXF_NOBUFFER);
                     
                     #ifdef IAC_LOGGING
                     kprintf("Response: IAC WONT ENV_OP");
@@ -1153,9 +1153,9 @@ static inline void DoIAC(u8 dummy)
             switch (IAC_Option)
             {
                 case TO_ECHO:
-                    TTY_SendChar(TC_IAC, TXF_NOBUFFER);
-                    TTY_SendChar(TC_WONT, TXF_NOBUFFER);
-                    TTY_SendChar(TO_ECHO, TXF_NOBUFFER);
+                    NET_SendChar(TC_IAC, TXF_NOBUFFER);
+                    NET_SendChar(TC_WONT, TXF_NOBUFFER);
+                    NET_SendChar(TO_ECHO, TXF_NOBUFFER);
                     vDoEcho = 0;
                     #ifdef IAC_LOGGING
                     kprintf("Response: IAC WONT ECHO");
@@ -1189,4 +1189,3 @@ static inline void DoIAC(u8 dummy)
 
     return;
 }
-

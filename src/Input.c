@@ -63,9 +63,5 @@ void InputTick()
     QMenu_Input();
     HexView_Input();
 
-    for (u16 i = 0; i < KM_SZ; i++)
-    {
-        if (KeyMap[i & KM_SZ] == KEYSTATE_UP) KeyMap[i & KM_SZ] = KEYSTATE_NONE;
-        if (KeyMap[i & KM_SZ] == KEYSTATE_DOWN) KeyMap[i & KM_SZ] = KEYSTATE_NONE;
-    }
+    memset(KeyMap, KEYSTATE_NONE, KM_SZ);
 }

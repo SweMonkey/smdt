@@ -36,7 +36,6 @@ static const u8 Frame[28][40] =
 };
 
 SM_Window *Target = NULL;
-SM_Menu *TargetMenu = NULL;
 
 
 void UI_Begin(SM_Window *w)
@@ -50,21 +49,40 @@ void UI_End()
     Target = NULL;
 }
 
+void UI_SetVisible(SM_Window *w, bool v)
+{
+    w->bVisible = v;
+}
+
+void UI_ToggleVisible(SM_Window *w)
+{
+    w->bVisible = !w->bVisible;
+}
+
+bool UI_GetVisible(SM_Window *w)
+{
+    return w->bVisible;
+}
+
 void UI_RepaintWindow()
 {
     if (Target == NULL) return;
 
-    const char *c = Target->Title;
-    u8 x = 1;
-    while (*c) Target->WinBuffer[1][x++] = *c++;
+    if (!(Target->Flags & UC_NOBORDER))
+    {
+        const char *c = Target->Title;
+        u8 x = 1;
+        while (*c) Target->WinBuffer[1][x++] = *c++;
+    }
 
-    for (u8 y = 0; y < 28; y++)
+    for (u8 y = (Target->Flags & UC_NOBORDER)?1:0; y < 28; y++)
     {
     for (u8 x = 0; x < 40; x++)
     {
-        if ((y == 0) && (x > 35)) continue;
+        if ((y == 0) && (x > 35)) continue; // Don't clear status icons area
+        if (Target->WinBuffer[y][x] == 0) continue;
 
-        TRM_drawChar(Target->WinBuffer[y][x], x, y, Target->WinAttr[y][x]);
+        TRM_drawChar(Target->WinBuffer[y][x], x, y, PAL1);
     }
     }
 }
@@ -79,18 +97,24 @@ void UI_SetWindowTitle(const char *title)
     // Redraw title here?
 }
 
-void UI_CreateWindow(SM_Window *w, const char *title)
+void UI_CreateWindow(SM_Window *w, const char *title, u8 flags)
 {
     if (w == NULL) return;
 
-    memcpy(w->WinBuffer, Frame, 1120);
-    memset(w->WinAttr, PAL1, 1120);
+    w->Flags = flags;
+
+    if (w->Flags & UC_NOBORDER) memset(w->WinBuffer, 0, 1120);   // prev: filled with 0
+    else memcpy(w->WinBuffer, Frame, 1120);
+
     memcpy(w->Title, title, 34);
     w->Title[34] = '\0';
 
-    const char *c = w->Title;
-    u8 x = 1;
-    while (*c) w->WinBuffer[1][x++] = *c++;
+    if (!(w->Flags & UC_NOBORDER))
+    {
+        const char *c = w->Title;
+        u8 x = 1;
+        while (*c) w->WinBuffer[1][x++] = *c++;
+    }
 }
 
 // -- Clear / Print text --
@@ -113,7 +137,19 @@ void UI_ClearRect(u8 x, u8 y, u8 width, u8 height)
     for (u8 _x = 0; _x < width; _x++)
     {
         Target->WinBuffer[_y+y+3][_x+x+1] = 0x20;
-        Target->WinAttr[_y+y+3][_x+x+1] = PAL1;
+    }
+    }
+}
+
+void UI_FillRect(u8 x, u8 y, u8 width, u8 height, u8 fillbyte)
+{
+    if (Target == NULL) return;
+
+    for (u8 _y = 0; _y < height; _y++)
+    {
+    for (u8 _x = 0; _x < width; _x++)
+    {
+        Target->WinBuffer[_y+y][_x+x] = fillbyte;
     }
     }
 }
@@ -425,8 +461,6 @@ void UI_DrawVScrollbar(u8 x, u8 y, u8 height, u16 min, u16 max, u16 pos)
     fix32 pfm = fix32Mul(pfd, FIX32(height-y-2));
     u8 pos_ = fix32ToInt(pfm);
 
-    //kprintf("pos: %u - pfm: %u", *pos, fix32ToInt(pfm));
-
     UI_ClearRect(x, y+1, 1, height-2);
 
     Target->WinBuffer[y+3][x+1] = 0x1E;         // Up arrow
@@ -434,106 +468,24 @@ void UI_DrawVScrollbar(u8 x, u8 y, u8 height, u16 min, u16 max, u16 pos)
     Target->WinBuffer[y+pos_+4][x+1] = 0xDB;    // Slider
 }
 
-
-// -- Menu test 1/2394932 --
-#include "Input.h"
-
-void UI_BeginMenu(SM_Menu *m)
+// -- ItemList --
+void UI_DrawItemList(u8 x, u8 y, u8 width, u8 height, const char *caption, char list[][16], u16 item_count, u16 scroll)
 {
-    TargetMenu = m;
-    TargetMenu->EntryCnt = 0;
-    //TargetMenu->SubParent = 255;
-    
-    if (is_KeyDown(KEY_RETURN))
+    if (Target == NULL) return;
+
+    u8 max_visible = height-4;
+    u16 max = (item_count <= max_visible) ? 0 : (item_count-max_visible);
+    u16 scroll_ = (scroll < max) ? scroll : max;
+
+    UI_DrawPanel(x, y, width, height, UC_PANEL_SINGLE);
+    UI_DrawVScrollbar(x+width-2, y+1, height-2, 0, max, scroll_);
+    UI_DrawText(x+1, y, caption);
+
+    char tmp[width-3];
+
+    for (u16 i = 0; i < (item_count < max_visible ? item_count : max_visible); i++)
     {
-        //TargetMenu->SubLevel++;
-        //TargetMenu->SubParent = TargetMenu->SelectedIdx;
-        TargetMenu->Level[TargetMenu->CurLevel] = TargetMenu->SelectedIdx;
+        strncpy(tmp, list[i+scroll_], width-3);
+        UI_DrawText(x+1, y+2+i, tmp);
     }
-    
-    if (is_KeyDown(KEY_ESCAPE))
-    {
-        //if (TargetMenu->SubLevel > 0) TargetMenu->SubLevel--;
-        //TargetMenu->Action = TargetMenu->SelectedIdx * -1;
-    }
-}
-
-void UI_EndMenu()
-{
-    if (is_KeyDown(KEY_UP))
-    {
-        if (TargetMenu->SelectedIdx > 0) TargetMenu->SelectedIdx--;
-        else TargetMenu->SelectedIdx = TargetMenu->EntryCnt-1;
-    }
-
-    if (is_KeyDown(KEY_DOWN))
-    {
-        if (TargetMenu->SelectedIdx < TargetMenu->EntryCnt-1) TargetMenu->SelectedIdx++;
-        else TargetMenu->SelectedIdx = 0;
-    }
-
-    TargetMenu = NULL;       
-}
-
-void UI_AddMenuEntry(const char *text, VoidCallback *cb)
-{
-}
-
-bool UI_MenuItem(const char *text, u8 x, u8 y/*, u8 level*/)
-{
-    if ((Target == NULL)/* || (level != TargetMenu->SubLevel) || ((y != TargetMenu->SubParent) && (TargetMenu->SubParent != 255))*/) return FALSE;
-
-    //TargetMenu->SubParent = y;
-
-    //bool r = FALSE;
-    const char *c = text;
-    u8 _x = x+1;
-
-
-    if (TargetMenu->Level[TargetMenu->EntryCnt] != TargetMenu->CurLevel)
-    {
-        //TargetMenu->Action = 0;
-        return 0;   
-    }
-
-    if (TargetMenu->SelectedIdx == TargetMenu->EntryCnt)
-    {
-        while (*c)
-        {
-            Target->WinBuffer[y+3][_x] = *c++;
-            Target->WinAttr[y+3][_x++] = PAL3;
-        }
-
-        //r = TRUE;
-    }
-    else
-    {
-        while (*c) Target->WinBuffer[y+3][_x++] = *c++;
-
-        //r = FALSE;
-    }
-
-    TargetMenu->EntryCnt++;
-
-    return 1;//r;
-}
-
-void UI_MenuSelect(SM_Menu *m, s8 idx)
-{
-    /*if (idx >= m->EntryCnt)
-    {
-        idx = 0;
-    }
-    else if (idx < 0)
-    {
-        idx = m->EntryCnt-1;
-    }*/
-
-    m->SelectedIdx = idx;
-
-    kprintf("SelectedIdx: %u - Cnt: %u", m->SelectedIdx, m->EntryCnt);
-}
-
-void UI_MenuEnter()
-{
 }

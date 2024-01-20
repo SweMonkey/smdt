@@ -6,6 +6,7 @@
 extern bool bShowQMenu;
 
 void QMenu_Input();
+void SetupQItemTags();
 void DrawMenu(u8 idx);
 void EnterMenu();
 void ExitMenu();

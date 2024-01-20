@@ -3,10 +3,6 @@
 
 #include "DevMgr.h"
 
-#define ICO_KB_UNKNOWN 0x1F //0x3F
-#define ICO_KB_OK 0x1C      //0x4B
-#define ICO_KB_ERROR 0x1D   //0x58
-
 extern u8 KB_Initialized;
 extern const u8 SCTable_US[3][128];
 

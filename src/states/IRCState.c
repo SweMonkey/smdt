@@ -1,38 +1,63 @@
 
 #include "StateCtrl.h"
 #include "IRC.h"
-#include "Terminal.h"
+#include "Terminal.h"   // FontSize, HScroll
 #include "Buffer.h"
 #include "Input.h"
 #include "Keyboard_PS2.h"
 #include "Utils.h"
+#include "UI.h"
+#include "TMBuffer.h"
+#include "Network.h"
+#include "SRAM.h"
 
 #ifndef EMU_BUILD
 static u8 rxdata;
 static u8 kbdata;
 #endif
+
 static u8 bOnce = FALSE;
+SM_Window UserWin;
+u16 UserListScroll = 0;
+u8 KBTxData[40];    // Buffer for the last 40 typed characters from the keyboard
+
+extern bool bShowQMenu;
+extern bool bShowHexView;
+extern u8 PG_CurrentIdx;
+extern u8 PG_OpenPages;
+extern TMBuffer PG_Buffer[];
+extern char PG_UserList[512][16];
+extern u16 PG_UserNum;
+extern char vUsername[];
+extern char vQuitStr[];
 
 #ifdef EMU_BUILD
-asm(".global ircdump\nircdump:\n.incbin \"tmp/streams/rx_irc_cmd.log\"");
+asm(".global ircdump\nircdump:\n.incbin \"tmp/streams/rx_hmm.log\"");
 extern const unsigned char ircdump[];
 #endif
+
+void IRC_PrintChar(u8 c);
+
 
 void Enter_IRC(u8 argc, const char *argv[])
 {
     IRC_Init();
 
-    #ifdef EMU_BUILD
-    fix32 start = getTimeAsFix32(0);
+    TRM_SetWinParam(FALSE, TRUE, 20, 1);
+    TRM_SetStatusText(STATUS_TEXT);
 
-    // putty_irc.log 405
-    // freenode_nodate.log 4479
-    // rx_irc.log 423
-    // irc_linetest.log 64
-    // rx_irc_cmd.log 5682
+    UI_CreateWindow(&UserWin, "", UC_NOBORDER);
+    TRM_clearTextArea(26, 1, 14, 2);    // Clear top 2 tile lines above Channel/User window - can contain leftovers from fullscreen windows
+
+    memset(KBTxData, 0, 40);
+
+    #ifdef EMU_BUILD
+    // rx_freenode.log 18403
+    // rx_freenode2.log 58037
+    // rx_freenode3.log 170665
     u8 data; 
     u32 p = 0;
-    u32 s = 5682;
+    u32 s = 18853;
     while (p < s)
     {
         while(Buffer_Push(&RxBuffer, ircdump[p]) != 0xFF)
@@ -40,7 +65,7 @@ void Enter_IRC(u8 argc, const char *argv[])
             p++;
             if (bOnce)
             {
-                print_charXY_WP(ICO_NET_RECV, STATUS_NET_RECV_POS, CHAR_GREEN);
+                TRM_SetStatusIcon(ICO_NET_RECV, STATUS_NET_RECV_POS, CHAR_GREEN);
                 bOnce = !bOnce;
             }
 
@@ -53,16 +78,13 @@ void Enter_IRC(u8 argc, const char *argv[])
             
             if (!bOnce)
             {
-                print_charXY_WP(ICO_NET_IDLE_RECV, STATUS_NET_RECV_POS, CHAR_WHITE);
+                TRM_SetStatusIcon(ICO_NET_IDLE_RECV, STATUS_NET_RECV_POS, CHAR_WHITE);
                 bOnce = !bOnce;
             }
         }
+        
+        TMB_UploadBuffer(&PG_Buffer[PG_CurrentIdx]);
     }
-
-    fix32 end = getTimeAsFix32(0);
-    char buf[16];
-    fix32ToStr(end-start, buf, 4);
-    kprintf("Time elapsed: %s", buf);    
     #endif
 }
 
@@ -72,10 +94,14 @@ void ReEnter_IRC()
 
 void Exit_IRC()
 {
+    char buf[64];
+    sprintf(buf, "QUIT %s\n", vQuitStr);
+    NET_SendString(buf);
 }
 
 void Reset_IRC()
 {
+    IRC_Reset();
 }
 
 void Run_IRC()
@@ -88,7 +114,7 @@ void Run_IRC()
 
         if (bOnce)
         {
-            print_charXY_WP(ICO_NET_RECV, STATUS_NET_RECV_POS, CHAR_GREEN);
+            TRM_SetStatusIcon(ICO_NET_RECV, STATUS_NET_RECV_POS, CHAR_GREEN);
             bOnce = !bOnce;
         }
     }
@@ -100,32 +126,166 @@ void Run_IRC()
     
     if (!bOnce)
     {
-        print_charXY_WP(ICO_NET_IDLE_RECV, STATUS_NET_RECV_POS, CHAR_WHITE);
+        TRM_SetStatusIcon(ICO_NET_IDLE_RECV, STATUS_NET_RECV_POS, CHAR_WHITE);
         bOnce = !bOnce;
-    }
+    }        
     #endif
+
+    TMB_UploadBuffer(&PG_Buffer[PG_CurrentIdx]);
+
+    Buffer_PeekLast(&TxBuffer, 38, KBTxData);
+    PrintTextLine(KBTxData);
+
+    if (UI_GetVisible(&UserWin) && !bShowHexView)
+    {
+        TRM_clearTextArea(26, 1, 14, 2);
+        UI_Begin(&UserWin);
+        if (PG_UserNum > 0) UI_DrawItemList(25, 0, 14, 25, "User List", PG_UserList, PG_UserNum, UserListScroll);
+        else 
+        {
+            //UI_ClearRect(25, 0, 14, 25);
+            UI_DrawPanel(25, 0, 14, 25, UC_PANEL_DOUBLE);
+            UI_DrawText(26, 10, "Requesting");
+            UI_DrawText(26, 11, "user list.");
+            UI_DrawText(26, 13, "Please wait");
+        }
+        UI_End();
+    }
 }
 
-void ParseTx()
+void ChangePage(u8 num)
 {
-    u8 buf[256];
+    char TitleBuf[40];
+    PG_CurrentIdx = num;
+    //TMB_SetActiveBuffer(&PG_Buffer[PG_CurrentIdx]);
+
+    if (PG_CurrentIdx == 0) UI_SetVisible(&UserWin, FALSE);
+
+    sprintf(TitleBuf, "%s - %-21s", STATUS_TEXT, PG_Buffer[PG_CurrentIdx].Title);
+    TRM_SetStatusText(TitleBuf);
+
+    TMB_UploadBufferFull(&PG_Buffer[PG_CurrentIdx]);
+}
+
+u8 ParseTx()
+{
+    u8 inbuf[256] = {0};
+    u8 outbuf[300] = {0};
     u16 i = 0, j = 0;
     u8 data;
 
-    // Pop the TxBuffer back into buf
-    while ((Buffer_Pop(&TxBuffer, &data) != 0xFF) && (i++ < 255))
+    // Pop the TxBuffer back into inbuf
+    while ((Buffer_Pop(&TxBuffer, &data) != 0xFF) && (i < 256))
     {
-        buf[i] = data;
+        inbuf[i] = data;
+        i++;
     }
 
-    // parse data
-
-    // Push buf back into TxBuffer
-    j = 0;
-    while (j++ < (i-1))
+    if (inbuf[0] == '/') // Parse as command
     {
-        Buffer_Push(&TxBuffer, buf[j]);
+        char command[16];
+        char param[64];
+        u16 end_c = 1;
+        u16 end_p = 1;
+        while (inbuf[end_c++] != ' ');
+        strncpy(command, (char*)inbuf+1, end_c-2);
+
+        end_p = end_c;
+
+        while (inbuf[end_p++] != 0);
+        strncpy(param, (char*)inbuf+end_c, end_p-2);
+
+        // do tolower() on command string here
+
+        if (strcmp(command, "privmsg") == 0)
+        {
+            u8 tmbbuf[300] = {0};
+            u8 last_pg = PG_CurrentIdx;
+            end_p = end_c;
+            while (inbuf[end_c++] != ' ');
+            strncpy(command, (char*)inbuf+end_p, end_c-end_p-1);
+
+            sprintf((char*)outbuf, "PRIVMSG %s :%s\n", command, (char*)inbuf+end_c);
+            sprintf((char*)tmbbuf, "%s: %s\n", vUsername, (char*)inbuf+end_c);
+
+            // Try to find an unused page or an existing one
+            for (u8 ch = 0; ch < MAX_CHANNELS; ch++)
+            {
+                if (strcmp(PG_Buffer[ch].Title, command) == 0) // Find the page this message belongs to
+                {
+                    TMB_SetActiveBuffer(&PG_Buffer[ch]);
+                    break;
+                }
+                else if (strcmp(PG_Buffer[ch].Title, PG_EMPTYNAME) == 0) // See if there is an empty page
+                {
+                    char TitleBuf[40];
+                    strncpy(PG_Buffer[ch].Title, command, 32);
+                    TMB_SetActiveBuffer(&PG_Buffer[ch]);
+
+                    snprintf(TitleBuf, 40, "%s - %-21s", STATUS_TEXT, PG_Buffer[PG_CurrentIdx].Title);
+                    TRM_SetStatusText(TitleBuf);
+                    break;
+                }
+                else    // No empty pages and no page match, print on overflow page (0)
+                {
+                    TMB_SetActiveBuffer(&PG_Buffer[0]);
+                }
+            }
+
+            for (u16 c = 0; c < strlen((char*)tmbbuf); c++)
+            {
+                IRC_PrintChar(tmbbuf[c]);
+            }
+
+            TMB_SetActiveBuffer(&PG_Buffer[last_pg]);
+        }
+        else if (strcmp(command, "join") == 0)
+        {
+            sprintf((char*)outbuf, "JOIN %s\n", param);
+        }
+        else if (strcmp(command, "raw") == 0)
+        {
+            sprintf((char*)outbuf, "%s\n", param);
+        }
+        else if (strcmp(command, "quit") == 0)
+        {
+            sprintf((char*)outbuf, "QUIT %s\n", vQuitStr);
+        } 
+        else if (strcmp(command, "nick") == 0)
+        {
+            sprintf((char*)outbuf, "NICK %s\n", param);
+            strncpy(vUsername, param, 31);
+            SRAM_SaveData();
+        } 
+        else
+        {
+            return 1;
+        }
     }
+    else // Else send as message
+    {
+        u8 tmbbuf[300] = {0};
+        
+        if (strlen((char*)inbuf) == 0) return 1;  // Dont send empty messages
+
+        TMB_SetActiveBuffer(&PG_Buffer[PG_CurrentIdx]);
+
+        sprintf((char*)outbuf, "PRIVMSG %s :%s\n", PG_Buffer[PG_CurrentIdx].Title, (char*)inbuf);
+        sprintf((char*)tmbbuf, "%s: %s\n", vUsername, (char*)inbuf);
+
+        for (u16 c = 0; c < strlen((char*)tmbbuf); c++)
+        {
+            IRC_PrintChar(tmbbuf[c]);
+        }        
+    }
+
+    while (j < strlen((char*)outbuf))
+    {
+        Buffer_Push(&TxBuffer, outbuf[j]);
+        j++;
+    }
+
+    return 0;
 }
 
 void Input_IRC()
@@ -134,10 +294,12 @@ void Input_IRC()
     {
         if (is_KeyDown(KEY_UP))
         {
+            if (UserListScroll > 0) UserListScroll--;
         }
 
         if (is_KeyDown(KEY_DOWN))
         {
+            if (UserListScroll < (PG_UserNum-19)) UserListScroll++;
         }
 
         if (is_KeyDown(KEY_KP4_LEFT))
@@ -154,8 +316,6 @@ void Input_IRC()
                 VDP_setHorizontalScroll(BG_A, (HScroll+4));  // -4
                 VDP_setHorizontalScroll(BG_B, (HScroll  ));  // -8
             }
-
-            TTY_MoveCursor(TTY_CURSOR_DUMMY);
         }
 
         if (is_KeyDown(KEY_KP6_RIGHT))
@@ -172,46 +332,84 @@ void Input_IRC()
                 VDP_setHorizontalScroll(BG_A, (HScroll+4));  // -4
                 VDP_setHorizontalScroll(BG_B, (HScroll  ));  // -8
             }
-
-            TTY_MoveCursor(TTY_CURSOR_DUMMY);
         }
 
         if (is_KeyDown(KEY_RETURN))
         {
-            //ParseTx();  // Mess with the TxBuffer a bit...
-            TTY_TransmitBuffer();
-            //TTY_SendChar(0xD, 0); // Send \r - carridge return
-            //TTY_SendChar(0xA, 0); // Send \n - line feed
-
-            //line feed, new line
-            TTY_MoveCursor(TTY_CURSOR_DOWN, 1);
-            TTY_ClearLine(sy % 32, 4);
-
-            //carriage return
-            TTY_SetSX(0);
-            TTY_MoveCursor(TTY_CURSOR_DUMMY);   // Dummy
+            // Parse user input and send it
+            if (ParseTx() == 0) NET_TransmitBuffer();
         }
 
         if (is_KeyDown(KEY_BACKSPACE))
         {
-            TTY_MoveCursor(TTY_CURSOR_LEFT, 1);
-
-            if (!FontSize)
-            {
-                VDP_setTileMapXY(BG_B, TILE_ATTR_FULL(2, 0, 0, 0, 0), TTY_GetSX(), sy);
-            }
-            else
-            {
-                VDP_setTileMapXY(!(TTY_GetSX() % 2), TILE_ATTR_FULL(2, 0, 0, 0, 0), TTY_GetSX()>>1, sy);
-            }
-
             Buffer_ReversePop(&TxBuffer);
+        }
+
+        if (is_KeyDown(KEY_F1))
+        {
+            ChangePage(0);
+        }
+        if (is_KeyDown(KEY_F2))
+        {
+            ChangePage(1);
+        }
+        if (is_KeyDown(KEY_F3))
+        {
+            ChangePage(2);
+        }
+        /*if (is_KeyDown(KEY_F4))
+        {
+            ChangePage(3);
+        }*/
+
+        if (is_KeyDown(KEY_LEFT))
+        {
+            if (PG_CurrentIdx > 0) PG_CurrentIdx--;
+
+            ChangePage(PG_CurrentIdx);
+        }
+
+        if (is_KeyDown(KEY_RIGHT))
+        {
+            if (PG_CurrentIdx < MAX_CHANNELS-1) PG_CurrentIdx++;
+
+            ChangePage(PG_CurrentIdx);
+        }
+
+        // Toggle user list window and request NAMES list from remote server, list will be recieved at a later point
+        if (is_KeyDown(KEY_F5))
+        {
+            char req[40];
+            u16 i = 0;
+
+            if (PG_CurrentIdx != 0)
+            { 
+                UI_ToggleVisible(&UserWin);
+
+                if (UserWin.bVisible)
+                {
+                    TRM_SetWinWidth(13);
+
+                    snprintf(req, 40, "NAMES %s\n", PG_Buffer[PG_CurrentIdx].Title);
+
+                    Buffer_Flush(&TxBuffer);
+
+                    while (i < strlen(req))
+                    {
+                        Buffer_Push(&TxBuffer, req[i]);
+                        i++;
+                    }
+
+                    NET_TransmitBuffer();
+                }
+                else TRM_SetWinWidth(20);
+            }
         }
     }
 }
 
 const PRG_State IRCState = 
 {
-    Enter_IRC, ReEnter_IRC, Exit_IRC, Reset_IRC, Run_IRC, Input_IRC
+    Enter_IRC, ReEnter_IRC, Exit_IRC, Reset_IRC, Run_IRC, Input_IRC, NULL, NULL
 };
 

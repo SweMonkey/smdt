@@ -3,7 +3,7 @@
 
 #include <genesis.h>
 
-typedef enum e_state {PS_Dummy = 0, PS_Telnet = 1, PS_Entry = 2, PS_Debug = 3, PS_IRC = 4} State;
+typedef enum e_state {PS_Dummy = 0, PS_Telnet = 1, PS_Entry = 2, PS_Debug = 3, PS_IRC = 4, PS_Terminal} State;
 
 typedef void StateArg_CB(u8 argc, const char *argv[]);
 
@@ -16,6 +16,8 @@ typedef struct s_state
 
     VoidCallback *Run;
     VoidCallback *Input;
+    VoidCallback *HBlank;
+    VoidCallback *VBlank;
 } PRG_State;
 
 extern bool bWindowActive;

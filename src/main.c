@@ -8,8 +8,9 @@
 #include "../res/system.h"
 #include "Utils.h"
 #include "HexView.h"    // bShowHexView
-#include "QMenu.h"    // bShowQMenu
-#include "IRQ.h"
+#include "QMenu.h"      // bShowQMenu
+#include "Network.h"
+#include "SRAM.h"
 
 
 int main(bool hardReset)
@@ -25,7 +26,9 @@ int main(bool hardReset)
     #endif 
     #if (HALT_Z80_ON_DMA != 0)
     kprintf("Warning: HALT_Z80_ON_DMA is enabled!");
-    #endif 
+    #endif
+
+    DMA_setBufferSize(DMA_BUFFER_SIZE_MIN);
 
     VDP_setHScrollTableAddress(0xA000); // 0xA000 - 0xA3FF  HScroll
     VDP_setSpriteListAddress(0xAC00);   // 0xAC00 - 0xAFFF  SAT
@@ -37,9 +40,15 @@ int main(bool hardReset)
     PAL_setPalette(PAL1, palette_black, DMA);
     PAL_setPalette(PAL2, palette_black, DMA);
     PAL_setPalette(PAL3, palette_black, DMA);
+
+    PSG_init();
+    PSG_setEnvelope(0, PSG_ENVELOPE_MAX);
+    PSG_setTone(0, 200);
+    waitMs(200);
+    PSG_setEnvelope(0, PSG_ENVELOPE_MIN);
     
     PAL_setColor( 1, 0x00e);    // Icon Red
-    PAL_setColor( 2, 0x0e0);    // Icon Green
+    PAL_setColor( 3, 0x0e0);    // Icon Green
     PAL_setColor(14, 0x000);    // Icon BG
     PAL_setColor(15, 0xeee);    // Icon Normal
     PAL_setColor(17, 0x000);    // Window text BG Normal / Terminal text BG
@@ -47,10 +56,11 @@ int main(bool hardReset)
     PAL_setColor(49, 0xeee);    // Window text BG Inverted / Terminal text FG? Was used for something there...
     PAL_setColor(50, 0x000);    // Window text FG Inverted
 
+    VDP_loadTileSet(&GFX_BGBLOCKS, 0, DMA);
     VDP_loadTileSet(&GFX_ASCII_MENU, 0x220, DMA);
     VDP_loadTileSet(&GFX_ICONS, 0x18, DMA);
 
-    VDP_setWindowVPos(FALSE, 4);
+    VDP_setWindowVPos(FALSE, 10);
     TRM_clearTextArea(0, 0, 40, 10);
     TRM_drawText("Initializing system...", 1, 0, PAL1);
 
@@ -67,11 +77,19 @@ int main(bool hardReset)
 
     Input_Init();
 
-    print_charXY_WP(ICO_KB_UNKNOWN, STATUS_KB_POS, CHAR_WHITE);
-    print_charXY_WP(ICO_NET_IDLE_RECV, STATUS_NET_RECV_POS, CHAR_WHITE);
-    print_charXY_WP(ICO_NET_IDLE_SEND, STATUS_NET_SEND_POS, CHAR_WHITE);
+    TRM_SetStatusIcon(ICO_ID_UNKNOWN, STATUS_ID_POS, CHAR_WHITE);
+    TRM_SetStatusIcon(ICO_NET_IDLE_RECV, STATUS_NET_RECV_POS, CHAR_WHITE);
+    TRM_SetStatusIcon(ICO_NET_IDLE_SEND, STATUS_NET_SEND_POS, CHAR_WHITE);
 
-    TRM_drawText("Configuring devices...", 1, 1, PAL1);
+    TRM_drawText("Loading config...", 1, 1, PAL1);
+    if (SRAM_LoadData()) 
+    {
+        TRM_drawText("Failed to load config from SRAM...", 1, 2, PAL1);
+        SRAM_SaveData();
+    }
+    else TRM_drawText("Successfully loaded config from SRAM", 1, 2, PAL1);
+    
+    TRM_drawText("Configuring devices...", 1, 3, PAL1);
     ConfigureDevices();
 
     bShowHexView = FALSE;
@@ -82,8 +100,10 @@ int main(bool hardReset)
     SYS_doVBlankProcess();
 
     // Show "boot" screen for a second
-    waitMs(1000);
-
+    #ifndef EMU_BUILD
+    waitMs(2000);
+    #endif
+    
     //ChangeState(PS_Debug, 0, NULL);
     //ChangeState(PS_Telnet, 0, NULL);
     ChangeState(PS_Entry, 0, NULL);

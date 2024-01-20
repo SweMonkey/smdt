@@ -10,12 +10,11 @@
 extern SM_Device DEV_KBPS2;
 extern SM_Device DEV_UART;
 SM_Device DEV_Joypad;    // Joypad
-SM_Device DEV_MousePS2;  // Test dummy
 
 SM_Device *DevList[DEV_MAX];
 u8 DevSeq = 0;
 
-char FStringTemp[64];
+DevPort DEV_UART_PORT = DP_Port2;   // Default UART port - Read only!
 
 
 void SetDevicePort(SM_Device *d, DevPort p)
@@ -55,8 +54,9 @@ void SetDevicePort(SM_Device *d, DevPort p)
 
 void DetectDevices()
 {
+    char FStringTemp[32];
     u8 bNoKeyboard = FALSE;
-    u8 ret;
+    u8 ret = 0;
 
     // -- PS/2 Keyboard setup --------------------------
     DEV_KBPS2.Id.sName = "PS/2 KEYBOARD";
@@ -103,14 +103,16 @@ void DetectDevices()
             break;
         }
         
+        #ifndef EMU_BUILD
         KB_SendCommand(0xEE);
         waitMs(1);
         KB_Poll(&ret);
+        #endif
 
         if ((ret == 0xFE) || (ret == 0xEE)) // FE = Fail+Resend, EE = Successfull echo back
         {
             sprintf(FStringTemp, "Found KB @ slot %u:%u (r=$%X)", DEV_FULL(DEV_KBPS2), ret);
-            print_charXY_WP(ICO_KB_OK, STATUS_KB_POS, CHAR_GREEN);
+            TRM_SetStatusIcon(ICO_KB_OK, STATUS_ID_POS, CHAR_GREEN);
 
             DevList[DevSeq++] = &DEV_KBPS2;
             
@@ -126,7 +128,7 @@ void DetectDevices()
         }
     }
 
-    TRM_drawText(FStringTemp, 1, 2, PAL1);
+    TRM_drawText(FStringTemp, 1, 4, PAL1);
 
     // -- Joypad setup --------------------------
     if (bNoKeyboard || (DEV_KBPS2.PAssign == DP_Port2))
@@ -145,10 +147,11 @@ void DetectDevices()
         UnsetDevData(DEV_Joypad);
         OrDevData(DEV_Joypad, 0x40);
 
-
         JOY_setSupport(PORT_1, JOY_SUPPORT_6BTN);
         JOY_setEventHandler(Input_JP);
         kprintf("No KB found - Press F1 to continue");
+
+        if (bNoKeyboard) TRM_SetStatusIcon(ICO_JP_OK, STATUS_ID_POS, CHAR_GREEN);
     }
 
     // -- UART setup --------------------------
@@ -158,7 +161,7 @@ void DetectDevices()
     DEV_UART.Id.Mode = DEVMODE_SERIAL;
     
     DevList[DevSeq++] = &DEV_UART;
-    SetDevicePort(&DEV_UART, DP_Port2);
+    SetDevicePort(&DEV_UART, DEV_UART_PORT);
     vu8 *SCtrl;
     SCtrl = (vu8 *)DEV_UART.SCtrl;
     *SCtrl = 0x38;

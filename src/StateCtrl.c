@@ -10,6 +10,7 @@ extern PRG_State TelnetState;
 extern PRG_State IRCState;
 extern PRG_State EntryState;
 extern PRG_State DebugState;
+extern PRG_State TerminalState;
 
 static PRG_State *CurrentState = &DummyState;
 static PRG_State *PrevState = &DummyState;
@@ -21,7 +22,9 @@ bool bWindowActive = FALSE;
 
 void VBlank()
 {
-    if (is_KeyDown(KEY_RWIN) && (CurrentStateEnum != PS_Entry)) QMenu_Toggle();   // Global quick menu
+    //if (CurrentState->VBlank) CurrentState->VBlank();
+
+    if (is_KeyDown(KEY_RWIN) && (CurrentStateEnum != PS_Entry) && (!bShowHexView)) QMenu_Toggle();   // Global quick menu
 
     if (CurrentState->Input != NULL) CurrentState->Input(); // Current PRG
 
@@ -73,6 +76,12 @@ void ChangeState(State new_state, u8 argc, const char *argv[])
         CurrentState = &IRCState;
         break;
     }
+
+    case PS_Terminal:
+    {
+        CurrentState = &TerminalState;
+        break;        
+    }
     
     default:
     {
@@ -84,7 +93,11 @@ void ChangeState(State new_state, u8 argc, const char *argv[])
     CurrentStateEnum = new_state;
 
     CurrentState->Enter(argc, argv);
+    
+    SetupQItemTags();
+
     SYS_setVBlankCallback(VBlank);
+    SYS_setHIntCallback(CurrentState->HBlank);
     SYS_enableInts();
 }
 
