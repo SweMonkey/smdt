@@ -244,9 +244,9 @@ void KB_Interpret_Scancode(u8 scancode)
     if (bAlt) mod = 2;
     else if (bShift) mod = 1;
 
-    u8 key = SCTablePtr[vKBLayout][mod][scancode]; //SCTable_US[mod][scancode];
+    u8 key = SCTablePtr[vKBLayout][mod][scancode];
 
-    if (isPrintable(key) && !bWindowActive)//((key >= 0x20) && (key <= 0x7E) && (!bWindowActive))
+    if (isPrintable(key) && !bWindowActive)
     {
         if (bCtrl)
         {
@@ -260,11 +260,12 @@ void KB_Interpret_Scancode(u8 scancode)
 }
 
 //https://www.burtonsys.com/ps2_chapweske.htm
-void KB_SendCommand(u8 cmd) // bits: xxxxx0dd ddddddp1 - where d= data, p= parity
+void KB_SendCommand(u8 cmd)
 {
     u8 p, c, b = 7;
     u8 bc[11];
 
+    // bits: xxxxx0dd ddddddp1 - where d= data, p= parity
     bc[0] = 0;  // Start
     for (u8 i = 1; i < 9; i++)
     {
@@ -310,12 +311,12 @@ void KB_SendCommand(u8 cmd) // bits: xxxxx0dd ddddddp1 - where d= data, p= parit
     for (u8 b = 0; b < 11; b++)  // Recieve byte
     {
         timeout = 0;
-        while (GetDevData(DEV_KBPS2, 0x1)){if (timeout++ >= 128)goto timedout;}//{if (timeout >= 3200)goto timedout;else timeout++;}; // (4) Wait for clock to go low
+        while (GetDevData(DEV_KBPS2, 0x1)){if (timeout++ >= 128)goto timedout;}  // (4) Wait for clock to go low
 
         UnsetDevData(DEV_KBPS2);
         OrDevData(DEV_KBPS2, bc[b]);
 
-        while (!GetDevData(DEV_KBPS2, 0x1)){if (timeout++ >= 128)goto timedout;}//{if (timeout >= 3200)goto timedout;else timeout++;}; // (6) Wait for clock to go high
+        while (!GetDevData(DEV_KBPS2, 0x1)){if (timeout++ >= 128)goto timedout;} // (6) Wait for clock to go high
     }
 
     UnsetDevCtrl(DEV_KBPS2);    // (9) Set data(2) and clock(1) as input

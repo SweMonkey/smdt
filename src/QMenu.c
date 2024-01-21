@@ -42,13 +42,12 @@ static struct s_menu
     char text[8][20];               // Entry text
 } MainMenu[] =
 {{//0
-    6,
+    5,
     0, 255, 0,
     NULL, NULL, NULL,
     "QUICK MENU",
-    {1, 2, 3, 4, 13, 255},
+    {1, 3, 4, 13, 255},
     {"RESET",
-     "SESSION SETTINGS",
      "TERMINAL SETTINGS",
      "MEGA DRIVE SETTINGS",
      "DEBUG",
@@ -329,10 +328,14 @@ void QMenu_Input()
 void SetupQItemTags()
 {
     MainMenu[ 5].tagged_entry = vNewlineConv;
+    MainMenu[ 9].tagged_entry = vTermType;
+    MainMenu[11].tagged_entry = FontSize;
+    MainMenu[12].tagged_entry = vKBLayout;
+    MainMenu[16].tagged_entry = DEV_UART_PORT;
+    MainMenu[17].tagged_entry = QSelected_BGCL;
+    MainMenu[18].tagged_entry = QSelected_FGCL;
     MainMenu[21].tagged_entry = vDoEcho;
     MainMenu[22].tagged_entry = vLineMode>1?0:vLineMode;
-    MainMenu[ 9].tagged_entry = vTermType;
-    MainMenu[12].tagged_entry = vKBLayout;
 
     switch (vSpeed[0])
     {
@@ -353,12 +356,6 @@ void SetupQItemTags()
         MainMenu[10].tagged_entry = 255;
         break;
     }
-
-    MainMenu[11].tagged_entry = FontSize;
-    MainMenu[16].tagged_entry = DEV_UART_PORT;
-    MainMenu[17].tagged_entry = QSelected_BGCL;
-    MainMenu[18].tagged_entry = QSelected_FGCL;
-
     
     switch (D_HSCROLL)
     {

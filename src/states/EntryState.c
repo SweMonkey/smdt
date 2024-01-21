@@ -125,16 +125,16 @@ static const char * const FeaturesSubPage[27] =
 
 static struct s_menu
 {
-    const u8 num_entries;                 // Number of entries in menu
+    const u8 num_entries;           // Number of entries in menu
     u8 selected_entry;              // Saved selected entry (automatic, leave at 0)
     u8 prev_menu;                   // Previous menu to return to when going back (automatic, leave at 0)
     VoidCallback *entry_function;   // Function callback which is called when entering entry
     VoidCallback *activate_function;// Function callback which is called when trying to enter an entry without submenu (next_menu=255)
     VoidCallback *exit_function;    // Function callback which is called when exiting entry
-    const u8 next_menu[8];                // Menu number selected entry leads to (255 = Do nothing)
-    const char * const *page[8];           // Sidepanel text
-    const u8 type[8];                     // 0=Normal entry - 1=Submenu
-    const char * const text[8];            // Entry text
+    const u8 next_menu[8];          // Menu number selected entry leads to (255 = Do nothing)
+    const char * const *page[8];    // Sidepanel text
+    const u8 type[8];               // 0=Normal entry - 1=Submenu
+    const char * const text[8];     // Entry text
 } MainMenu[] =
 {{//0
     5,
@@ -218,7 +218,7 @@ static struct s_submenu
     u8 selected_entry;          // Saved selected entry (automatic, leave at 0)
     const u8 type[16];
     void *ptr[16];
-    const char * const text[16];        // Entry text
+    const char * const text[16];// Entry text
 } SubMenu[] =
 {{//0
     3, 0,

@@ -15,6 +15,7 @@ PS2KB: Added timeout code when in the middle of reading a bitstream. May cause d
 PS2KB: Added Swedish keyboard layout.
 Fixed some tables that was supposed to be in ROM but instead got placed in RAM (type const * const varname)
 Various bugfixes, most related to mIRC colour fuckery.
+Added some extra Rx buffer statistics
 
 v0.26:
 DevMgr: Device manager created. Devices can now be mapped to pin 1+2 or pin 3+4 on any port. 2 PS/2 devices can be on the same port as a UART device.

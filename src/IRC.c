@@ -113,7 +113,6 @@ void PrintTextLine(const u8 *str)
     {
         if (str[px] == 0)
         {
-
             VDP_loadTileData(GFX_ASCII_MENU.tiles, TTS_VRAMIDX+px, 1, CPU);
         }
         else 
