@@ -25,7 +25,7 @@ void Input_JP(u16 joy, u16 changed, u16 state)
 
 void Input_Init()
 {
-    for (u16 i = 0; i < KM_SZ; i++) KeyMap[i] = KEYSTATE_NONE;
+    memset(KeyMap, KEYSTATE_NONE, KM_SZ);
 
     #ifdef EMU_BUILD
         JOY_setSupport(PORT_1, JOY_SUPPORT_6BTN);

@@ -3,3 +3,4 @@ tmp/
 .directory
 .vscode
 build.sh
+res/*.h
