@@ -15,6 +15,8 @@
 
 int main(bool hardReset)
 {
+    u8 NextLine = 0;
+
     SYS_disableInts();
 
     Z80_unloadDriver();
@@ -60,9 +62,9 @@ int main(bool hardReset)
     VDP_loadTileSet(&GFX_ASCII_MENU, 0x220, DMA);
     VDP_loadTileSet(&GFX_ICONS, 0x18, DMA);
 
-    VDP_setWindowVPos(FALSE, 10);
-    TRM_clearTextArea(0, 0, 40, 10);
-    TRM_drawText("Initializing system...", 1, 0, PAL1);
+    VDP_setWindowVPos(FALSE, 13);
+    TRM_clearTextArea(0, 0, 40, 13);
+    TRM_drawText("Initializing system...", 1, NextLine++, PAL1);
 
     bPALSystem = IS_PAL_SYSTEM;
 
@@ -81,19 +83,45 @@ int main(bool hardReset)
     TRM_SetStatusIcon(ICO_NET_IDLE_RECV, STATUS_NET_RECV_POS, CHAR_WHITE);
     TRM_SetStatusIcon(ICO_NET_IDLE_SEND, STATUS_NET_SEND_POS, CHAR_WHITE);
 
-    TRM_drawText("Loading config...", 1, 1, PAL1);
+    TRM_drawText("Loading config...", 1, NextLine++, PAL1);
     if (SRAM_LoadData()) 
     {
-        TRM_drawText("Failed to load config from SRAM...", 1, 2, PAL1);
+        TRM_drawText("Failed to load config from SRAM...", 1, NextLine++, PAL1);
         SRAM_SaveData();
     }
-    else TRM_drawText("Successfully loaded config from SRAM", 1, 2, PAL1);
+    else TRM_drawText("Successfully loaded config from SRAM", 1, NextLine++, PAL1);
     
-    TRM_drawText("Configuring devices...", 1, 3, PAL1);
+    TRM_drawText("Configuring devices...", 1, NextLine++, PAL1);
     ConfigureDevices();
+    NextLine++;
 
     bShowHexView = FALSE;
     bShowQMenu = FALSE;
+
+
+    #if (HALT_Z80_ON_IO != 0)
+    NextLine++;
+    TRM_drawText("Warning: HALT_Z80_ON_IO is enabled", 1, NextLine++, PAL1);
+    TRM_drawText("in SGDK! This may cause issues!", 1, NextLine++, PAL1);
+    #endif 
+    #if (HALT_Z80_ON_DMA != 0)
+    NextLine++;
+    TRM_drawText("Warning: HALT_Z80_ON_DMA is enabled", 1, NextLine++, PAL1);
+    TRM_drawText("in SGDK! This may cause issues!", 1, NextLine++, PAL1);
+    #endif
+
+    #if ((HALT_Z80_ON_DMA != 0) || (HALT_Z80_ON_IO != 0))
+    NextLine++;
+    char cntbuf[16];
+    for (u8 i = 0; i < 10; i++)
+    {
+        sprintf(cntbuf, "Resuming boot in %u seconds", 9-i);
+        TRM_drawText(cntbuf, 1, NextLine, PAL1);
+        
+        waitMs(1000);
+    }
+    NextLine++;
+    #endif
 
     SYS_enableInts();
 
