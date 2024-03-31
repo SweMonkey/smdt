@@ -15,8 +15,9 @@ static u8 kbdata;
 static u8 bOnce = FALSE;
 
 #ifdef EMU_BUILD
-asm(".global telnetdump\ntelnetdump:\n.incbin \"tmp/streams/telnetdump.log\"");
+asm(".global telnetdump\ntelnetdump:\n.incbin \"tmp/streams/rx_nethack6.log\"");
 extern const unsigned char telnetdump[];
+u32 StreamPos = 0;
 #endif
 
 
@@ -47,9 +48,12 @@ void Enter_Telnet(u8 argc, const char *argv[])
     // rx_abbs2.log 24208
     // putty_abbs.log 19370
     // logo.log 1055
+    // rx_absinthebbs.log 53692
     u8 data; 
-    u32 p = 0;
-    u32 s = 14020;
+    u32 p = 0;//0xA1E4+0x97E;//0x20D6;//34282;
+    u32 s = 0x8C8F;//719624;//168040;//0xB3D6;//35728;//0x8446;//0x211E;//0x84AD;//34676;//609;//
+    StreamPos = p;
+
     while (p < s)
     {
         while(Buffer_Push(&RxBuffer, telnetdump[p]) != 0xFF)
@@ -67,14 +71,20 @@ void Enter_Telnet(u8 argc, const char *argv[])
         while (Buffer_Pop(&RxBuffer, &data) != 0xFF)
         {
             TELNET_ParseRX(data);
+            //kprintf("StreamPos: $%X (%lu)", StreamPos, StreamPos);
+            //waitMs(16);
             
             if (!bOnce)
             {
                 TRM_SetStatusIcon(ICO_NET_IDLE_RECV, STATUS_NET_RECV_POS, CHAR_WHITE);
                 bOnce = !bOnce;
             }
+
+            StreamPos++;
         }
     }
+
+    kprintf("Stream replay ended.");
     #endif
 }
 
@@ -88,6 +98,7 @@ void Exit_Telnet()
 
 void Reset_Telnet()
 {
+    TRM_SetStatusText(STATUS_TEXT);
     TTY_Reset(TRUE);
 }
 
@@ -195,6 +206,16 @@ void Input_Telnet()
             NET_SendChar(0x1B, TXF_NOBUFFER);    // ESC
             NET_SendChar(0x5B, TXF_NOBUFFER);    // [
             NET_SendChar(0x7F, TXF_NOBUFFER);    // DEL
+        }
+
+        if (is_KeyDown(KEY_F11))
+        {
+            NET_SendChar(0x03, TXF_NOBUFFER);    // ^C
+        }
+
+        if (is_KeyDown(KEY_F12))
+        {
+            NET_SendChar(0x18, TXF_NOBUFFER);    // ^X
         }
 
         if (is_KeyDown(KEY_RETURN))

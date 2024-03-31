@@ -17,6 +17,7 @@
 //#define EMU_BUILD
 #define NO_LOGGING
 //#define IAC_LOGGING
+//#define ESC_LOGGING
 //#define KB_DEBUG
 
 // Check if a character is printable

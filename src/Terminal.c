@@ -146,7 +146,7 @@ void TTY_SetFontSize(u8 size)
         *plctrl = VDP_WRITE_VRAM_ADDR(0xAC04);
         *pwdata = 0x21FB;
 
-        EvenOdd = 0;
+        EvenOdd = 1;
         LastPlane = 0;
 
         if (TermColumns == D_COLUMNS_80) C_XMAX = 254;   // this is a test, remove me if fucky
@@ -168,7 +168,7 @@ void TTY_SetFontSize(u8 size)
         *plctrl = VDP_WRITE_VRAM_ADDR(0xAC04);
         *pwdata = 0x21FB;
 
-        EvenOdd = 0;
+        EvenOdd = 1;
         LastPlane = 0;
 
         if (TermColumns == D_COLUMNS_80) C_XMAX = 254;   // this is a test, remove me if fucky
@@ -224,6 +224,8 @@ inline void TTY_PrintChar(u8 c)
     {
         addr = ((((sx >> 1) & (planeWidth - 1)) + ((sy & (planeHeight - 1)) << planeWidthSft)) * 2);
 
+        //kprintf("TTY_PrintChar(%c): addr: $%X - sx: %ld - sy: %ld - EvenOdd: %u", c, addr, sx, sy, EvenOdd);
+
         switch (EvenOdd)
         {
             case 0: // Plane A
@@ -242,7 +244,7 @@ inline void TTY_PrintChar(u8 c)
             break;
         }
 
-        *pwdata = 0x2000 + c + (bInverse ? 0x2020 : 0x2120);    // Hmm - should be 0x4000 + c + (bInverse ? 0x20 : 0x120)
+        *pwdata = 0x4000 + c + (bInverse ? 0x20 : 0x120);
         EvenOdd = (sx % 2);
     }
     else
@@ -299,7 +301,6 @@ inline void TTY_ClearLine(u16 y, u16 line_count)
     }
 }
 
-// This function may not behave correctly when using 4x8 fonts
 inline void TTY_ClearPartialLine(u16 y, u16 from_x, u16 to_x)
 {
     vu32 *plctrl = (u32 *) VDP_CTRL_PORT;
@@ -308,21 +309,38 @@ inline void TTY_ClearPartialLine(u16 y, u16 from_x, u16 to_x)
 
     VDP_setAutoInc(2);
 
-    *plctrl = VDP_WRITE_VRAM_ADDR((u32) VDP_BG_B + (((from_x & 127) + ((y & 31) << 7)) << 1));
-
-    j = (to_x - from_x) >> 3;   // NumChar / 8 --> Below sends 2 bytes * 4 (8 bytes every loop)
-    while (j--)
-    {
-        *pldata = 0;
-        *pldata = 0;
-        *pldata = 0;
-        *pldata = 0;
-    }
-
-    // Clear BGA too if using 4x8 font
+    // This part may still be very iffy
     if (FontSize)
     {
-        *plctrl = VDP_WRITE_VRAM_ADDR((u32) VDP_BG_A + (((from_x & 127) + ((y & 31) << 7)) << 1));
+        u16 from_x_ = from_x >> 1;
+        u16 to_x_ = to_x >> 1;
+        u16 num = (to_x_ - from_x_) >> 3;
+
+        //kprintf("4x8 Erase from %u to %u at line %u", from_x_, to_x_, y);
+
+        *plctrl = VDP_WRITE_VRAM_ADDR((u32) VDP_BG_A + ((( (from_x_) & 127) + ((y & 31) << 7)) << 1));        
+        j = num;    // NumChar / 8 --> Below sends 2 bytes * 4 (8 bytes every loop)
+        while (j--)
+        {
+            *pldata = 0;
+            *pldata = 0;
+            *pldata = 0;
+            *pldata = 0;
+        }
+        
+        *plctrl = VDP_WRITE_VRAM_ADDR((u32) VDP_BG_B + ((( (from_x_ + !EvenOdd ) & 127) + ((y & 31) << 7)) << 1));
+        j = num;    // NumChar / 8 --> Below sends 2 bytes * 4 (8 bytes every loop)
+        while (j--)
+        {
+            *pldata = 0;
+            *pldata = 0;
+            *pldata = 0;
+            *pldata = 0;
+        }
+    }
+    else
+    {
+        *plctrl = VDP_WRITE_VRAM_ADDR((u32) VDP_BG_B + (((from_x & 127) + ((y & 31) << 7)) << 1));
 
         j = (to_x - from_x) >> 3;   // NumChar / 8 --> Below sends 2 bytes * 4 (8 bytes every loop)
         while (j--)

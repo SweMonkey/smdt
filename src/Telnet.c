@@ -99,6 +99,14 @@ u8 ESC_QBuffer[6];
 u8 ESC_QSeq = 0;
 u16 QSeqNumber = 0; // atoi'd ESC_QBuffer
 
+// Nasty hack
+u8 bOSC = FALSE;
+char ESC_OSCBuffer[2] = {0xFF,'\0'};
+u8 ESC_OSCSeq = 0;
+u8 bTitle = FALSE;
+char ESC_TitleBuffer[32] = {'\0'};
+u8 ESC_TitleSeq = 0;
+
 // IAC
 u8 bIAC = FALSE;                        // TRUE = Currently in a "Intercept As Command" stream
 u8 IAC_Command = 0;                     // Current TC_xxx command (0 = none set)
@@ -109,6 +117,10 @@ u8 IAC_SNSeq = 0;                       // Counter - where in "IAC_SubNegotiatio
 u8 IAC_SubNegotiationBytes[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};   // Recieved byte stream in a subnegotiation block
 
 extern const char *TermTypeList[];
+
+#ifdef EMU_BUILD
+extern u32 StreamPos;   // Stream replay position
+#endif
 
 
 void TELNET_Init()
@@ -152,6 +164,15 @@ void TELNET_Init()
     vLineMode = 0;
     vNewlineConv = 0;
     bWrapAround = TRUE;
+
+    // ...
+    bOSC = FALSE;
+    ESC_OSCBuffer[0] = 0xFF;
+    ESC_OSCBuffer[1] = '\0';
+    ESC_OSCSeq = 0;
+    bTitle = FALSE;
+    ESC_TitleBuffer[0] = '\0';
+    ESC_TitleSeq = 0;
 }
 
 inline void TELNET_ParseRX(u8 dummy)
@@ -268,6 +289,10 @@ inline void TELNET_ParseRX(u8 dummy)
             ESC_QBuffer[4] = 0;
             ESC_QBuffer[5] = 0;
             ESC_QSeq = 0;
+            
+            ESC_OSCBuffer[0] = 0xFF;
+            ESC_OSCBuffer[1] = '\0';
+            ESC_OSCSeq = 0;
 
             return;
         break;
@@ -282,7 +307,7 @@ inline void TELNET_ParseRX(u8 dummy)
         break;
 
         default:
-        //if ((*PRX < 0x20) || (*PRX > 0x7E)) kprintf("TTY_ParseRX: Caught unhandled byte: $%X", *PRX);
+            //if ((*PRX < 0x20) || (*PRX > 0x7E)) kprintf("TTY_ParseRX: Caught unhandled byte: $%X", *PRX);
         break;
     }
 
@@ -301,8 +326,21 @@ inline void TELNET_ParseRX(u8 dummy)
     }
 }
 
+void ChangeTitle()
+{
+    char TitleBuf[40];
+
+    sprintf(TitleBuf, "%s - %-21s", STATUS_TEXT, ESC_TitleBuffer);
+    TRM_SetStatusText(TitleBuf);
+}
+
 // https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797
 // https://en.wikipedia.org/wiki/ANSI_escape_code#CSIsection
+// -------------------------------------------------------------------------------------------------
+// Please ignore this hacky escape handling function...
+// It will need to be rewritten in the future as it was never meant to handle all the stuff it does
+// and therefore has ended up as one big giant hack
+// -------------------------------------------------------------------------------------------------
 static inline void DoEscape(u8 dummy)
 {
     vu8 *PRX = &dummy;
@@ -312,6 +350,103 @@ static inline void DoEscape(u8 dummy)
     if (ESC_Seq == 1)
     {
         ESC_Type = *PRX;    // '[' or ' '
+        
+        #ifdef ESC_LOGGING
+        kprintf("ESC_Type: $%X (%c)", ESC_Type, (char)ESC_Type);
+        #endif
+
+        switch (ESC_Type)
+        {        
+            case ']':   // Operating System Command (OSC  is 0x9d)
+                bOSC = TRUE;
+            return;
+
+            case '(':   // ESC ( C   Designate G0 Character Set, VT100, ISO 2022.
+                goto EndEscape;
+            break;
+
+            case '=':   // ESC =     Application Keypad (DECKPAM).
+                goto EndEscape;
+            break;
+
+            case '>':   // ESC >     Normal Keypad (DECKPNM), VT100.
+                goto EndEscape;
+            break;
+
+            case 'M':   // ESC M     Reverse Index (RI) https://terminalguide.namepad.de/seq/a_esc_cm/  (Old note: Moves cursor one line up, scrolling if needed)
+                // Not quite right, but eh
+                TTY_MoveCursor(TTY_CURSOR_UP, 1);
+                goto EndEscape;
+            break;
+        
+            default:
+            break;
+        }
+
+        return;
+    }
+
+    // Ugly hack to handle ESC]xy<text>;
+    if (bOSC)
+    {
+        switch (atoi(ESC_OSCBuffer))
+        {
+            case 2:
+                #ifdef ESC_LOGGING
+                kprintf("OSC: Change Window Title");
+                #endif
+
+                bTitle = TRUE;
+            break;
+        
+            default:
+            break;
+        }
+
+        switch (*PRX)
+        {
+            case ';':
+                bOSC = FALSE;
+                
+                #ifdef ESC_LOGGING
+                kprintf("OSC: $%X", atoi(ESC_OSCBuffer));
+                #endif
+
+                ESC_OSCBuffer[0] = 0xFF;
+                ESC_OSCBuffer[1] = '\0';
+                ESC_OSCSeq = 0;
+
+                //goto EndEscape;
+            break;
+        
+            default:
+                if (ESC_OSCSeq < 2)
+                {
+                    ESC_OSCBuffer[ESC_OSCSeq++] = *PRX;
+                }
+            break;
+        }
+
+        return;
+    }
+    else if (bTitle)
+    {
+        if (*PRX == 7)
+        {
+            #ifdef ESC_LOGGING
+            kprintf("OSC: Change Window Title to %s", ESC_TitleBuffer);
+            #endif 
+
+            ChangeTitle();
+            bTitle = FALSE;
+            goto EndEscape;
+        }
+
+        if (ESC_TitleSeq < 32)
+        {
+            ESC_TitleBuffer[ESC_TitleSeq++] = *PRX;
+        }
+
         return;
     }
 
@@ -336,17 +471,23 @@ static inline void DoEscape(u8 dummy)
                 bWrapAround = TRUE;
                 break;
             
-                case 25:   // Shows the cursor, from the VT220. (DECTCEM)
-                break;
+                //case 25:   // Shows the cursor, from the VT220. (DECTCEM)
+                //break;
 
-                case 2004:   // Turn on bracketed paste mode. In bracketed paste mode, text pasted into the terminal will be surrounded by ESC [200~ and ESC [201~; programs running in the terminal should not treat characters bracketed by those sequences as commands (Vim, for example, does not treat them as commands). From xterm
-                break;
+                //case 2004:   // Turn on bracketed paste mode. In bracketed paste mode, text pasted into the terminal will be surrounded by ESC [200~ and ESC [201~; programs running in the terminal should not treat characters bracketed by those sequences as commands (Vim, for example, does not treat them as commands). From xterm
+                //break;
 
                 // 1000h = Send Mouse X & Y on button press and release.  See the section Mouse Tracking.  This is the X11 xterm mouse protocol.
                 // 1006h = Enable SGR Mouse Mode, xterm.
 
+                // Missing QEsq:
+                // ?2004h
+                // ?1049h
+                // ?1h
+                // ?25h
+
                 default:
-                //kprintf("Got an unknown ?%ch", (char)ESC_QBuffer[0]);
+                //kprintf("Got an unknown ?%uh", QSeqNumber);//?%ch", (char)ESC_QBuffer[0]);
                 break;
             }
 
@@ -367,15 +508,16 @@ static inline void DoEscape(u8 dummy)
                 bWrapAround = FALSE;
                 break;
             
-                case 25:   // Hides the cursor. (DECTCEM)
-                break;
+                //case 25:   // Hides the cursor. (DECTCEM)
+                //break;
 
-                case 2004:   // Turn off bracketed paste mode. 
-                break;
+                //case 2004:   // Turn off bracketed paste mode. 
+                //break;
 
 
                 default:
                 //kprintf("Got an unknown ?%cl", (char)ESC_QBuffer[0]);
+                //kprintf("Got an unknown ?%ul", QSeqNumber);//?%ch", (char)ESC_QBuffer[0]);
                 break;
             }
 
@@ -413,43 +555,9 @@ static inline void DoEscape(u8 dummy)
             return;
         }
 
-        /*
-        case '7':   // Save cursor position (DEC)
-        {
-            if (ESC_Type == ' ')
-            {
-                SavedCX = sx;
-                SavedCY = sy;
-                kprintf("Hit a '7' ($%X)", atoi(ESC_Buffer));
-                goto EndEscape;
-            }
-        }
-
-        case '8':   // Restores the cursor to the last saved position (DEC)
-        {
-            if (ESC_Type == ' ')
-            {
-                sx = SavedCX;
-                sy = SavedCY;
-                kprintf("Hit a '8' ($%X)", atoi(ESC_Buffer));
-                goto EndEscape;
-            }
-        }
-
-        case 'M':   // Moves cursor one line up, scrolling if needed
-        {
-            if (ESC_Type == ' ')
-            {
-                TTY_MoveCursor(TTY_CURSOR_UP, 1);
-                kprintf("Hit a 'M' ($%X)", atoi(ESC_Buffer));
-                goto EndEscape;
-            }
-        }
-        */
-
         case 'c':
         {
-            if (ESC_Type == ' ')    //RIS: Reset to initial state - Resets the device to its state after being powered on. 
+            if (ESC_Type == ' ')    // RIS: Reset to initial state - Resets the device to its state after being powered on. 
             {
                 TTY_Reset(TRUE);
                 goto EndEscape;
@@ -542,7 +650,14 @@ static inline void DoEscape(u8 dummy)
 
         case 'B':
         {
-            TTY_SetSY_A(TTY_GetSY_A() + atoi(ESC_Buffer));
+            if (ESC_Type == '(') 
+            {
+                #ifdef ESC_LOGGING
+                kprintf("(B: United States (USASCII), VT100");
+                #endif
+            }
+            else TTY_SetSY_A(TTY_GetSY_A() + atoi(ESC_Buffer));
+            
             goto EndEscape;
         }
 
@@ -582,7 +697,7 @@ static inline void DoEscape(u8 dummy)
                 }
 
                 TTY_SetSY_A(ESC_Param[0]-1);
-            }            
+            }
 
             TTY_MoveCursor(TTY_CURSOR_DUMMY);   // Dummy
 
@@ -641,14 +756,51 @@ static inline void DoEscape(u8 dummy)
             goto EndEscape;
         }
 
+        case 'd':   // Line Position Absolute [Row] (VPA)
+        {
+            u8 n = atoi(ESC_Buffer);
+
+            TTY_SetSY_A(n);
+
+            goto EndEscape;
+        }
+
+        case 'e':   // Line Position Relative [rows] (VPR)
+        {
+            u8 n = atoi(ESC_Buffer);
+
+            TTY_SetSY_A(TTY_GetSY_A() + n);
+
+            goto EndEscape;
+        }
+
         case 'm':
         {
             ESC_Param[ESC_ParamSeq++] = atoi(ESC_Buffer);
 
-            if (ESC_Param[0] != 255) TTY_SetAttribute(ESC_Param[0]);
-            if (ESC_Param[1] != 255) TTY_SetAttribute(ESC_Param[1]);
-            if (ESC_Param[2] != 255) TTY_SetAttribute(ESC_Param[2]);
-            if (ESC_Param[3] != 255) TTY_SetAttribute(ESC_Param[3]);
+            if ((ESC_Param[0] == 38) && (ESC_Param[1] == 5))
+            {
+                if ((ESC_Param[2] >= 0) && (ESC_Param[2] <= 7)) TTY_SetAttribute(ESC_Param[2]+30);          //   0-  7:  standard colors (as in ESC [ 30–37 m)
+                else if ((ESC_Param[2] >= 8) && (ESC_Param[2] <= 15)) TTY_SetAttribute(ESC_Param[2]+90);    //   8- 15:  high intensity colors (as in ESC [ 90–97 m)
+                                                                                                            //  16-231:  6 × 6 × 6 cube (216 colors): 16 + 36 × r + 6 × g + b (0 ≤ r, g, b ≤ 5)
+                                                                                                            // 232-255:  grayscale from dark to light in 24 steps
+            }
+            else if ((ESC_Param[0] == 48) && (ESC_Param[1] == 5))
+            {
+                if ((ESC_Param[2] >= 0) && (ESC_Param[2] <= 7)) TTY_SetAttribute(ESC_Param[2]+40);          //   0-  7:  standard colors (as in ESC [ 40–47 m)
+                else if ((ESC_Param[2] >= 8) && (ESC_Param[2] <= 15)) TTY_SetAttribute(ESC_Param[2]+100);   //   8- 15:  high intensity colors (as in ESC [ 100–107 m)
+                                                                                                            //  16-231:  6 × 6 × 6 cube (216 colors): 16 + 36 × r + 6 × g + b (0 ≤ r, g, b ≤ 5)
+                                                                                                            // 232-255:  grayscale from dark to light in 24 steps
+            }
+            else
+            {
+                if (ESC_Param[0] != 255) TTY_SetAttribute(ESC_Param[0]);
+                if (ESC_Param[1] != 255) TTY_SetAttribute(ESC_Param[1]);
+                if (ESC_Param[2] != 255) TTY_SetAttribute(ESC_Param[2]);
+                if (ESC_Param[3] != 255) TTY_SetAttribute(ESC_Param[3]);
+            }
+
+            //kprintf("TTY_SetAttribute: 0:<%u> 1:<%u> 2:<%u> 3:<%u>", ESC_Param[0], ESC_Param[1], ESC_Param[2], ESC_Param[3]);
 
             goto EndEscape;
         }
@@ -696,6 +848,13 @@ static inline void DoEscape(u8 dummy)
         }
 
         default:
+            if ((*PRX >= 65) && (*PRX <= 122)) 
+            {
+                #ifdef EMU_BUILD
+                kprintf("Unhandled $%X  -  u8: %u  -  char: '%c'  -  EscType: %c (EscSeq: %u  -  StreamPos: $%X)", *PRX, *PRX, (char)*PRX, (char)ESC_Type, ESC_BufferSeq, StreamPos);
+                #endif
+                goto EndEscape;
+            }
         break;
     }
 
@@ -954,6 +1113,17 @@ static inline void DoIAC(u8 dummy)
                     kprintf("Server: IAC WILL SUPPRESS_GO_AHEAD - Client response: IAC WILL SUPPRESS_GO_AHEAD");
                     #endif
                 break;
+
+                // https://datatracker.ietf.org/doc/html/rfc859
+                case TO_STATUS:
+                    NET_SendChar(TC_IAC, TXF_NOBUFFER);
+                    NET_SendChar(TC_DONT, TXF_NOBUFFER);
+                    NET_SendChar(TO_STATUS, TXF_NOBUFFER);
+
+                    #ifdef IAC_LOGGING
+                    kprintf("Server: IAC WILL STATUS - Client response: IAC DONT STATUS");
+                    #endif
+                break;
                 
                 default:
                     #ifdef IAC_LOGGING
@@ -1074,6 +1244,19 @@ static inline void DoIAC(u8 dummy)
                     break;
                 }
 
+                // https://datatracker.ietf.org/doc/html/rfc1080
+                case TO_RFLOW_CTRL:
+                {            
+                    NET_SendChar(TC_IAC, TXF_NOBUFFER);
+                    NET_SendChar(TC_WONT, TXF_NOBUFFER);
+                    NET_SendChar(TO_RFLOW_CTRL, TXF_NOBUFFER);
+
+                    #ifdef IAC_LOGGING
+                    kprintf("Response: IAC WONT RFLOW_CTRL");
+                    #endif
+                    break;
+                }
+
                 // https://datatracker.ietf.org/doc/html/rfc779
                 case TO_SEND_LOCATION:
                 {            
@@ -1136,7 +1319,21 @@ static inline void DoIAC(u8 dummy)
                     #endif
 
                     break;
-                }                
+                }
+
+                case TO_XDISP:
+                {
+                    NET_SendChar(TC_IAC, TXF_NOBUFFER);
+                    NET_SendChar(TC_WONT, TXF_NOBUFFER);
+                    NET_SendChar(TO_XDISP, TXF_NOBUFFER);
+                    
+                    #ifdef IAC_LOGGING
+                    kprintf("Response: IAC WONT XDISP");
+                    #endif
+
+                    break;
+                }
+                     
                 
                 default:
                     #ifdef IAC_LOGGING

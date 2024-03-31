@@ -11,8 +11,15 @@
 #ifndef EMU_BUILD
 static u8 rxdata;
 static u8 kbdata;
-static u8 bOnce = FALSE;
 #endif
+
+#ifdef EMU_BUILD
+asm(".global logdump\nlogdump:\n.incbin \"tmp/streams/nano.log\"");
+extern const unsigned char logdump[];
+#endif
+
+static u8 bOnce = FALSE;
+
 
 void Enter_Terminal(u8 argc, const char *argv[])
 {
@@ -24,6 +31,40 @@ void Enter_Terminal(u8 argc, const char *argv[])
     vLineMode = 0;
     vNewlineConv = 0;
     bWrapAround = TRUE;
+
+
+    #ifdef EMU_BUILD
+    // nano.log 2835
+    u8 data; 
+    u32 p = 0;
+    u32 s = 2835;
+    while (p < s)
+    {
+        while(Buffer_Push(&RxBuffer, logdump[p]) != 0xFF)
+        {
+            p++;
+            if (bOnce)
+            {
+                TRM_SetStatusIcon(ICO_NET_RECV, STATUS_NET_RECV_POS, CHAR_GREEN);
+                bOnce = !bOnce;
+            }
+
+            if (p >= s) break;
+        }
+        
+        while (Buffer_Pop(&RxBuffer, &data) != 0xFF)
+        {
+            TELNET_ParseRX(data);
+            waitMs(10);
+            
+            if (!bOnce)
+            {
+                TRM_SetStatusIcon(ICO_NET_IDLE_RECV, STATUS_NET_RECV_POS, CHAR_WHITE);
+                bOnce = !bOnce;
+            }
+        }
+    }
+    #endif
 }
 
 void ReEnter_Terminal()
@@ -145,12 +186,12 @@ void Input_Terminal()
             NET_SendChar(0x7F, TXF_NOBUFFER);    // DEL
         }
 
-        if (is_KeyDown(KEY_KP7_HOME))
+        if (is_KeyDown(KEY_F11))
         {
             NET_SendChar(0x03, TXF_NOBUFFER);    // ^C
         }
 
-        if (is_KeyDown(KEY_KP9_PGUP))
+        if (is_KeyDown(KEY_F12))
         {
             NET_SendChar(0x18, TXF_NOBUFFER);    // ^X
         }
