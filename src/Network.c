@@ -10,15 +10,15 @@
 u32 RXBytes = 0;
 u32 TXBytes = 0;
 
-
 Buffer RxBuffer, TxBuffer;
 SM_Device DEV_UART;
+
 
 // Rx IRQ
 void Ext_IRQ()
 {
     vu8 *PSCTRL = (u8*)DEV_UART.SCtrl;
-    if (((*PSCTRL >> 2) & 1) || !((*PSCTRL >> 1) & 1)) return;   // if (Error=1 || Ready=0)
+    if ((*PSCTRL & 6) != 2) return;
 
     SYS_setInterruptMaskLevel(7);
 

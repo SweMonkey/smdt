@@ -51,6 +51,7 @@ extern u16 Custom_FG1CL;   // Custom text antialiasing colour for 4x8 font
 // Font
 extern u8 FontSize;
 extern u8 EvenOdd;
+extern u8 bHighCL;
 
 // Statistics
 extern u32 RXBytes;
@@ -59,6 +60,7 @@ extern u32 TXBytes;
 void TTY_Init(u8 bHardReset);
 void TTY_Reset(u8 bClearScreen);
 void TTY_SetColumns(u8 col);
+void TTY_ReloadPalette();
 void TTY_SetFontSize(u8 size);
 
 void TTY_PrintChar(u8 c);

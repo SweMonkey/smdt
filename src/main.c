@@ -51,8 +51,9 @@ int main(bool hardReset)
     
     PAL_setColor( 1, 0x00e);    // Icon Red
     PAL_setColor( 3, 0x0e0);    // Icon Green
-    PAL_setColor(14, 0x000);    // Icon BG
-    PAL_setColor(15, 0xeee);    // Icon Normal
+    PAL_setColor( 4, 0x000);    // Cursor (Blink)
+    PAL_setColor( 5, 0x000);    // Icon BG
+    PAL_setColor( 6, 0xeee);    // Icon Normal
     PAL_setColor(17, 0x000);    // Window text BG Normal / Terminal text BG
     PAL_setColor(18, 0xeee);    // Window text FG Normal
     PAL_setColor(49, 0xeee);    // Window text BG Inverted / Terminal text FG? Was used for something there...
@@ -61,6 +62,7 @@ int main(bool hardReset)
     VDP_loadTileSet(&GFX_BGBLOCKS, 0, DMA);
     VDP_loadTileSet(&GFX_ASCII_MENU, 0x220, DMA);
     VDP_loadTileSet(&GFX_ICONS, 0x18, DMA);
+    VDP_loadTileSet(&GFX_CURSOR, 0x10, DMA);
 
     VDP_setWindowVPos(FALSE, 13);
     TRM_clearTextArea(0, 0, 40, 13);

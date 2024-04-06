@@ -52,9 +52,13 @@ char PG_UserList[512][16];
 u16 PG_UserNum = 0;
 u16 UserIterator = 0;
 
+extern u16 Cursor_CL;
+
 
 void IRC_Init()
 {
+    if (FontSize) FontSize = 2;  // Temporary until IRC supports FontSize = 1 (8 colour @ 80 columns)
+
     TTY_Init(TRUE);
     UTF8_Init();
 
@@ -71,6 +75,8 @@ void IRC_Reset()
     vDoEcho = 1;
     vLineMode = 1;
     bFirstRun = TRUE;
+
+    Cursor_CL = 0x0E0;
 
     for (u8 ch = 0; ch < MAX_CHANNELS; ch++)
     {
@@ -102,7 +108,7 @@ void IRC_Reset()
 
     // Cursor tile
     *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(0xAC04);
-    *((vu16*) VDP_DATA_PORT) = 0x2;
+    *((vu16*) VDP_DATA_PORT) = 0x12;
 }
 
 // Text input at bottom of screen

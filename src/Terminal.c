@@ -18,7 +18,7 @@ u8 vLineMode = 0;
 char vSpeed[5] = "4800";
 
 // Font
-u8 FontSize = 0;    // 0=8x8 - 1=4x8 - 2=4x8 AA
+u8 FontSize = 1;    // 0=8x8 16 colour - 1=4x8 8 colour AA - 2=4x8 monochrome AA
 u8 EvenOdd = 0;
 static u8 LastPlane = 0;
 
@@ -36,14 +36,21 @@ u8 bInverse = FALSE;                    // Text BG/FG reversed
 u8 bWrapAround = TRUE;                  // Force wrap around at column 40/80
 u8 TermColumns = D_COLUMNS_80;
 
+u16 LastCursor = 0x13;
+extern u8 bDoCursorBlink;
 extern u16 Cursor_CL;
 u16 Custom_BGCL = 0;
 u16 Custom_FG0CL = 0xEEE;   // Custom text colour for 4x8 font
-u16 Custom_FG1CL = 0x666;   // Custom text antialiasing colour for 4x8 font 
+u16 Custom_FG1CL = 0x666;   // Custom text antialiasing colour for 4x8 font
+u8 bHighCL = TRUE;         // Use the upper 8 colours instead when using FontSize=1
 static const u16 pColors[16] =
 {
     0x000, 0x00c, 0x0c0, 0x0cc, 0xc00, 0xc0c, 0xcc0, 0xccc,   // Normal
     0x444, 0x66e, 0x6e6, 0x6ee, 0xe66, 0xe6e, 0xee6, 0xeee,   // Highlighted
+};
+static const u16 pColorsHalf[8] =
+{
+    0x000, 0x006, 0x060, 0x066, 0x600, 0x606, 0x660, 0x666,   // Shadowed (For AA)
 };
 
 const char * const TermTypeList[] =
@@ -61,7 +68,7 @@ void TTY_Init(u8 bHardReset)
         TXBytes = 0;
     }
     
-    TTY_Reset(FALSE);
+    TTY_Reset(TRUE);
     TTY_Initialized = TRUE;
 }
 
@@ -76,9 +83,7 @@ void TTY_Reset(u8 bClearScreen)
     ColorFG = CL_FG;
     bIntense = FALSE;
     bInverse = FALSE;
-
-    PAL_setPalette(PAL2, pColors, DMA);
-    PAL_setColor(2, 0x0E0);
+    bDoCursorBlink = TRUE;
 
     TTY_SetFontSize(FontSize);
 
@@ -124,6 +129,52 @@ void TTY_SetColumns(u8 col)
     }
 }
 
+void TTY_ReloadPalette()
+{
+    if (FontSize == 1)   // 4x8
+    {
+        // Font glyph set 0 (Colours 0-3)
+        PAL_setColor(0x0C, pColorsHalf[0]);
+        PAL_setColor(0x0D, pColors[(bHighCL ?  8 : 0)]);
+
+        PAL_setColor(0x1C, pColorsHalf[1]);
+        PAL_setColor(0x1D, pColors[(bHighCL ?  9 : 1)]);
+
+        PAL_setColor(0x2C, pColorsHalf[2]);
+        PAL_setColor(0x2D, pColors[(bHighCL ? 10 : 2)]);
+
+        PAL_setColor(0x3C, pColorsHalf[3]);
+        PAL_setColor(0x3D, pColors[(bHighCL ? 11 : 3)]);
+
+        // Font glyph set 1 (Colours 4-7)
+        PAL_setColor(0x0E, pColorsHalf[4]);
+        PAL_setColor(0x0F, pColors[(bHighCL ? 12 : 4)]);
+
+        PAL_setColor(0x1E, pColorsHalf[5]);
+        PAL_setColor(0x1F, pColors[(bHighCL ? 13 : 5)]);
+
+        PAL_setColor(0x2E, pColorsHalf[6]);
+        PAL_setColor(0x2F, pColors[(bHighCL ? 14 : 6)]);
+
+        PAL_setColor(0x3E, pColorsHalf[7]);
+        PAL_setColor(0x3F, pColors[(bHighCL ? 15 : 7)]);
+
+        Cursor_CL = 0x0E0;
+    }
+    else if (FontSize == 2)   // 4x8 AA
+    {
+        PAL_setColor(47, Custom_FG0CL);    // FG colour
+        PAL_setColor(46, Custom_FG1CL);    // AA colour
+
+        Cursor_CL = Custom_FG0CL;
+    }
+    else        // 8x8
+    {
+        PAL_setPalette(PAL2, pColors, DMA);
+        Cursor_CL = 0x0E0;
+    }
+}
+
 // Todo: Clean up plane A/B when switching
 void TTY_SetFontSize(u8 size)
 {
@@ -131,20 +182,17 @@ void TTY_SetFontSize(u8 size)
     vu16 *pwdata = (u16 *)VDP_DATA_PORT;
     FontSize = size;
 
+    TTY_ReloadPalette();
+
     if (FontSize == 1)   // 4x8
     {
-        VDP_loadTileSet(&GFX_ASCII_TERM_SMALL, 0x20, DMA);
+        VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA, 0x20, DMA);
+        VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA_ALT, 0x320, DMA);
 
         VDP_setHorizontalScroll(BG_A, HScroll+4);   // -4
         VDP_setHorizontalScroll(BG_B, HScroll  );   // -8
 
-        PAL_setColor(47, Custom_FG0CL);    // FG colour
-        Cursor_CL = Custom_FG0CL;
-        PAL_setColor(31, Cursor_CL);
-
-        // Cursor tile
-        *plctrl = VDP_WRITE_VRAM_ADDR(0xAC04);
-        *pwdata = 0x21FB;
+        LastCursor = 0x13;
 
         EvenOdd = 1;
         LastPlane = 0;
@@ -159,14 +207,7 @@ void TTY_SetFontSize(u8 size)
         VDP_setHorizontalScroll(BG_A, HScroll+4);   // -4
         VDP_setHorizontalScroll(BG_B, HScroll  );   // -8
 
-        PAL_setColor(47, Custom_FG0CL);    // FG colour
-        PAL_setColor(46, Custom_FG1CL);    // AA colour
-        Cursor_CL = Custom_FG0CL;
-        PAL_setColor(31, Cursor_CL);
-
-        // Cursor tile
-        *plctrl = VDP_WRITE_VRAM_ADDR(0xAC04);
-        *pwdata = 0x21FB;
+        LastCursor = 0x13;
 
         EvenOdd = 1;
         LastPlane = 0;
@@ -181,12 +222,8 @@ void TTY_SetFontSize(u8 size)
         VDP_setHorizontalScroll(BG_A, HScroll);
         VDP_setHorizontalScroll(BG_B, HScroll);
 
-        Cursor_CL = 0x0E0;
+        LastCursor = 0x10;
         
-        // Cursor tile
-        *plctrl = VDP_WRITE_VRAM_ADDR(0xAC04);
-        *pwdata = 0x2;
-
         if (TermColumns == D_COLUMNS_80) C_XMAX = 126;   // this is a test, remove me if fucky
         else C_XMAX = 62;
     }
@@ -212,6 +249,10 @@ void TTY_SetFontSize(u8 size)
     // Cursor link
     *plctrl = VDP_WRITE_VRAM_ADDR(0xAC03);
     *pwdata = 0;
+
+    // Cursor tile
+    *plctrl = VDP_WRITE_VRAM_ADDR(0xAC04);
+    *pwdata = LastCursor;
 }
 
 inline void TTY_PrintChar(u8 c)
@@ -220,11 +261,63 @@ inline void TTY_PrintChar(u8 c)
     vu16 *pwdata = (u16 *)VDP_DATA_PORT;
     u16 addr = 0;
 
-    if (FontSize)
+    if (FontSize == 1)
     {
         addr = ((((sx >> 1) & (planeWidth - 1)) + ((sy & (planeHeight - 1)) << planeWidthSft)) * 2);
 
-        //kprintf("TTY_PrintChar(%c): addr: $%X - sx: %ld - sy: %ld - EvenOdd: %u", c, addr, sx, sy, EvenOdd);
+        switch (EvenOdd)
+        {
+            case 0: // Plane A
+            {
+                *plctrl = VDP_WRITE_VRAM_ADDR(VDP_BG_A + addr);
+                break;
+            }
+
+            case 1: // Plane B
+            {
+                *plctrl = VDP_WRITE_VRAM_ADDR(VDP_BG_B + addr);
+                break;
+            }
+            
+            default:
+            break;
+        }
+
+        u16 data = 0;
+        u8 colour =  (ColorFG > 7 ? ColorFG - 8 : ColorFG); // Change colour range from 0-15 to 0-7
+
+        if (colour < 4) data |= 0x300;  // Use second font glyph set
+
+        // Set palette to use depending on colour
+        switch (colour)
+        {
+            case 1:
+            case 5:
+                data |= 0x2000;
+            break;
+
+            case 2:
+            case 6:
+                data |= 0x4000;
+            break;
+
+            case 3:
+            case 7:
+                data |= 0x6000;
+            break;
+        
+            case 0:
+            case 4:
+            default:
+            break;
+        }
+
+        *pwdata = data + c + (bInverse ? 0x20 : 0x120);
+        EvenOdd = (sx % 2);
+    }
+    else if (FontSize == 2)
+    {
+        addr = ((((sx >> 1) & (planeWidth - 1)) + ((sy & (planeHeight - 1)) << planeWidthSft)) * 2);
 
         switch (EvenOdd)
         {

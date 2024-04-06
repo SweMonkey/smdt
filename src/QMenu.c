@@ -27,6 +27,7 @@ void WINFN_DEVLISTENTRY();
 void WINFN_HSCOFF();
 void WINFN_Echo();
 void WINFN_LineMode();
+void WINFN_CUSTOM_FGCL();
 
 static struct s_menu
 {
@@ -129,13 +130,14 @@ static struct s_menu
      "P3:1= <?>"}
 },
 {//8
-    2,
+    3,
     0, 255, 0,
     NULL, NULL, NULL,
     "COLOUR",
-    {17, 18},
+    {17, 18, 24},
     {"BG COLOUR",
-     "FG COLOUR(4x8 ONLY)"}
+     "4x8 MONO COLOUR",
+     "4x8 8 COLOUR SET"}
 },
 {//9
     5,
@@ -166,8 +168,8 @@ static struct s_menu
     NULL, WINFN_FONTSIZE, NULL,
     "FONT SIZE",
     {254, 254, 254},
-    {"8x8 COLOUR",
-     "4x8 MONO",
+    {"8x8 16 COLOUR",
+     "4x8 8 COLOUR + AA",
      "4x8 MONO ANTIALIAS"}
 },
 {//12
@@ -231,7 +233,7 @@ static struct s_menu
     5,
     0, 255, 0,
     NULL, WINFN_FGColor, NULL,
-    "FG COLOUR",
+    "4x8 MONO COLOUR",
     {254, 254, 254, 254, 254},
     {"BLACK",
      "WHITE",
@@ -287,6 +289,16 @@ static struct s_menu
     {"HEAD: 0",
      "TAIL: 0",
      "FREE: 0"}
+},
+{//24
+    3,
+    0, 255, 0,
+    NULL, WINFN_CUSTOM_FGCL, NULL,
+    "4x8 8 COLOUR SET",
+    {254, 254, 254},
+    {"NORMAL",
+     "HIGHLIGHTED",
+     "CUSTOM"}
 }};
 
 static const u8 QFrame[3][24] = 
@@ -336,6 +348,7 @@ void SetupQItemTags()
     MainMenu[18].tagged_entry = QSelected_FGCL;
     MainMenu[21].tagged_entry = vDoEcho;
     MainMenu[22].tagged_entry = vLineMode>1?0:vLineMode;
+    MainMenu[24].tagged_entry = bHighCL;
 
     switch (vSpeed[0])
     {
@@ -562,7 +575,7 @@ extern u16 Cursor_CL;
 
 void WINFN_FGColor()
 {
-    if (FontSize == 0) return;
+    if (FontSize != 2) return;
     u16 r = random();
 
     switch (SelectedIdx)
@@ -780,4 +793,24 @@ void WINFN_Echo()
 void WINFN_LineMode()
 {    
     vLineMode = SelectedIdx;
+}
+
+void WINFN_CUSTOM_FGCL()
+{
+    switch (SelectedIdx)
+    {
+        case 0: // Normal
+            bHighCL = FALSE;
+        break;
+        case 1: // Highlighted
+            bHighCL = TRUE;
+        break;
+        case 2: // Custom
+        break;
+    
+        default:
+        break;
+    }
+
+    TTY_ReloadPalette();
 }

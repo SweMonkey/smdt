@@ -24,7 +24,7 @@ u32 StreamPos = 0;
 void Enter_Telnet(u8 argc, const char *argv[])
 {
     TELNET_Init();
-    TRM_SetStatusText(STATUS_TEXT);
+    TRM_SetStatusText(STATUS_TEXT);  
 
     #ifdef EMU_BUILD
     // out.log 7357
@@ -50,8 +50,8 @@ void Enter_Telnet(u8 argc, const char *argv[])
     // logo.log 1055
     // rx_absinthebbs.log 53692
     u8 data; 
-    u32 p = 0;//0xA1E4+0x97E;//0x20D6;//34282;
-    u32 s = 0x8C8F;//719624;//168040;//0xB3D6;//35728;//0x8446;//0x211E;//0x84AD;//34676;//609;//
+    u32 p = 0;
+    u32 s = 0x8C8F;
     StreamPos = p;
 
     while (p < s)
@@ -71,7 +71,7 @@ void Enter_Telnet(u8 argc, const char *argv[])
         while (Buffer_Pop(&RxBuffer, &data) != 0xFF)
         {
             TELNET_ParseRX(data);
-            //kprintf("StreamPos: $%X (%lu)", StreamPos, StreamPos);
+            //kprintf("StreamPos: $%lX (%lu)", StreamPos, StreamPos);
             //waitMs(16);
             
             if (!bOnce)
@@ -84,7 +84,7 @@ void Enter_Telnet(u8 argc, const char *argv[])
         }
     }
 
-    kprintf("Stream replay ended.");
+    kprintf("Stream replay ended.");    
     #endif
 }
 

@@ -13,9 +13,13 @@ TRM: Some windowing cleanup. (TRM = Window plane UI backend)
 NET: Moved Networking stuff out of the terminal emulator (Rx/Tx etc) into a new unit 'NET'.
 PS2KB: Added timeout code when in the middle of reading a bitstream. May cause dropped key input when the MD is very busy with network traffic. This blocking bug has existed at least since v0.20.
 PS2KB: Added Swedish keyboard layout.
+Terminal: Added colour support for 4x8 fonts.
+Terminal: You can now select to use normal or highlighted colours when using 4x8 fonts with colour. (TODO: Custom colours)
+Terminal: Added a lot of new escape codes; window ops, 256 colour handling and a lot of other minor but obscure escape codes.
 Fixed some tables that was supposed to be in ROM but instead got placed in RAM (type const * const varname)
-Various bugfixes, most related to mIRC colour fuckery.
+Various bugfixes, most related to mIRC colour fuckery and 4x8 fonts (clearing and printing).
 Added some extra Rx buffer statistics
+Cursor tile can now change shapes; block, underline, bar, invisible. Blinking can now also be toggled.
 
 v0.26:
 DevMgr: Device manager created. Devices can now be mapped to pin 1+2 or pin 3+4 on any port. 2 PS/2 devices can be on the same port as a UART device.

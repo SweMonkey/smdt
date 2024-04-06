@@ -39,6 +39,7 @@ static const struct s_varlist
     {ST_BYTE, &vKBLayout},
     {ST_SARR, &vQuitStr},
     {ST_SARR, vUsername},
+    {ST_BYTE, &bHighCL},
     {0, 0}  // Terminator
 };
 

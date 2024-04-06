@@ -99,6 +99,8 @@ u8 ESC_QBuffer[6];
 u8 ESC_QSeq = 0;
 u16 QSeqNumber = 0; // atoi'd ESC_QBuffer
 
+char LastPrintedChar = ' ';
+
 // Nasty hack
 u8 bOSC = FALSE;
 char ESC_OSCBuffer[2] = {0xFF,'\0'};
@@ -116,7 +118,12 @@ u8 IAC_SubNegotiationOption = 0xFF;     // Current TO_xxx option to operate in a
 u8 IAC_SNSeq = 0;                       // Counter - where in "IAC_SubNegotiationBytes" we are
 u8 IAC_SubNegotiationBytes[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};   // Recieved byte stream in a subnegotiation block
 
+s32 Saved_sx = 0, Saved_sy = C_YSTART;
+
 extern const char *TermTypeList[];
+extern u8 bDoCursorBlink;
+extern u16 Cursor_CL;
+extern u16 LastCursor;
 
 #ifdef EMU_BUILD
 extern u32 StreamPos;   // Stream replay position
@@ -158,6 +165,8 @@ void TELNET_Init()
 
     DMarginTop = 0;
     DMarginBottom = bPALSystem?0x1D:0x1B;
+
+    LastPrintedChar = ' ';
 
     // Variable overrides
     vDoEcho = 0;
@@ -320,6 +329,7 @@ inline void TELNET_ParseRX(u8 dummy)
     */
     if ((*PRX >= 0x20) && (*PRX <= 0x7E)) // <= 0x7E
     {
+        LastPrintedChar = *PRX;
         TTY_PrintChar(*PRX);
         
         return;
@@ -349,10 +359,10 @@ static inline void DoEscape(u8 dummy)
 
     if (ESC_Seq == 1)
     {
-        ESC_Type = *PRX;    // '[' or ' '
+        ESC_Type = *PRX;
         
         #ifdef ESC_LOGGING
-        kprintf("ESC_Type: $%X (%c)", ESC_Type, (char)ESC_Type);
+        //kprintf("ESC_Type: $%X ( %c )", ESC_Type, (char)ESC_Type);
         #endif
 
         switch (ESC_Type)
@@ -361,8 +371,8 @@ static inline void DoEscape(u8 dummy)
                 bOSC = TRUE;
             return;
 
-            case '(':   // ESC ( C   Designate G0 Character Set, VT100, ISO 2022.
-                goto EndEscape;
+            case '(':   // ESC ( C Ⓝ    Setup G0 charset with 94 characters
+                // Ignore this case, its handled later. Do not go to EndEscape here
             break;
 
             case '=':   // ESC =     Application Keypad (DECKPAM).
@@ -378,6 +388,20 @@ static inline void DoEscape(u8 dummy)
                 TTY_MoveCursor(TTY_CURSOR_UP, 1);
                 goto EndEscape;
             break;
+            
+            case '7':   // Save Cursor (DECSC) (ESC 7)
+            {
+                Saved_sx = TTY_GetSX();
+                Saved_sy = TTY_GetSY();
+                goto EndEscape;
+            }
+
+            case '8':   // Restore Cursor (DECRC) (ESC 8)
+            {
+                TTY_SetSX(Saved_sx);
+                TTY_SetSY(Saved_sy);
+                goto EndEscape;
+            }
         
             default:
             break;
@@ -386,7 +410,7 @@ static inline void DoEscape(u8 dummy)
         return;
     }
 
-    // Ugly hack to handle ESC]xy<text>;
+    // Ugly hack to handle ESC]xy<text>; - this will break if it does not recieve a 2 to change title
     if (bOSC)
     {
         switch (atoi(ESC_OSCBuffer))
@@ -415,8 +439,6 @@ static inline void DoEscape(u8 dummy)
                 ESC_OSCBuffer[0] = 0xFF;
                 ESC_OSCBuffer[1] = '\0';
                 ESC_OSCSeq = 0;
-
-                //goto EndEscape;
             break;
         
             default:
@@ -464,15 +486,17 @@ static inline void DoEscape(u8 dummy)
             switch (QSeqNumber)
             {
                 case 6:   // Origin Mode (DECOM), VT100.
-                vDECOM = TRUE;
+                    vDECOM = TRUE;
                 break;
             
                 case 7:   // Auto-Wrap Mode (DECAWM), VT100.
-                bWrapAround = TRUE;
+                    bWrapAround = TRUE;
                 break;
             
-                //case 25:   // Shows the cursor, from the VT220. (DECTCEM)
-                //break;
+                case 25:   // Shows the cursor, from the VT220. (DECTCEM)
+                    *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(0xAC04);  // Cursor sprite tile address
+                    *((vu16*) VDP_DATA_PORT) = LastCursor;
+                break;
 
                 //case 2004:   // Turn on bracketed paste mode. In bracketed paste mode, text pasted into the terminal will be surrounded by ESC [200~ and ESC [201~; programs running in the terminal should not treat characters bracketed by those sequences as commands (Vim, for example, does not treat them as commands). From xterm
                 //break;
@@ -493,6 +517,7 @@ static inline void DoEscape(u8 dummy)
 
             goto EndEscape;
         }
+
         if (*PRX == 'l')
         {
             QSeqNumber = atoi16((char*)ESC_QBuffer);
@@ -501,15 +526,17 @@ static inline void DoEscape(u8 dummy)
             switch (QSeqNumber)
             {
                 case 6:   // Normal Cursor Mode (DECOM), VT100.
-                vDECOM = FALSE;
+                    vDECOM = FALSE;
                 break;
             
                 case 7:   // No Auto-Wrap Mode (DECAWM), VT100.
-                bWrapAround = FALSE;
+                    bWrapAround = FALSE;
                 break;
             
-                //case 25:   // Hides the cursor. (DECTCEM)
-                //break;
+                case 25:   // Hides the cursor. (DECTCEM)
+                    *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(0xAC04);  // Cursor sprite tile address
+                    *((vu16*) VDP_DATA_PORT) = 0x2016;
+                break;
 
                 //case 2004:   // Turn off bracketed paste mode. 
                 //break;
@@ -535,6 +562,37 @@ static inline void DoEscape(u8 dummy)
         return;
     }
 
+
+    if (ESC_Type == '(')
+    {
+        switch (*PRX)
+        {
+            case '0':   // DEC Special Character and Line Drawing Set
+            {
+                #ifdef ESC_LOGGING
+                kprintf("ESC(0: DEC Special Character and Line Drawing Set");
+                #endif
+                break;
+            }
+            
+            case 'B':
+            {
+                #ifdef ESC_LOGGING
+                kprintf("ESC(B: United States (USASCII), VT100");
+                #endif
+                break;
+            }
+
+            default:
+            {
+                #ifdef ESC_LOGGING
+                kprintf("Unknown ESC( sequence - $%X ( %c )", *PRX, (char)*PRX);
+                #endif
+            }
+        }
+
+        goto EndEscape;
+    }
 
     switch (*PRX)
     {
@@ -595,7 +653,8 @@ static inline void DoEscape(u8 dummy)
 
                 case 0x19:
                 case 0xF5: // Make cursor visible   ($F5 is actually ESC[?25h )
-                    //PAL_setColor(2, 0x0e0);
+                    *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(0xAC04);  // Cursor sprite tile address
+                    *((vu16*) VDP_DATA_PORT) = LastCursor;
                 break;
 
                 case 0x21:
@@ -631,7 +690,8 @@ static inline void DoEscape(u8 dummy)
 
                 case 0x19:
                 case 0xF5: // Make cursor invisible   ($F5 is actually ESC[?25l )
-                    //PAL_setColor(2, 0x000); // This does not actually hide the cursor, on non black bg it will still be visible
+                    *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(0xAC04);  // Cursor sprite tile address
+                    *((vu16*) VDP_DATA_PORT) = 0x16;
                 break;
 
                 default:
@@ -650,14 +710,7 @@ static inline void DoEscape(u8 dummy)
 
         case 'B':
         {
-            if (ESC_Type == '(') 
-            {
-                #ifdef ESC_LOGGING
-                kprintf("(B: United States (USASCII), VT100");
-                #endif
-            }
-            else TTY_SetSY_A(TTY_GetSY_A() + atoi(ESC_Buffer));
-            
+            TTY_SetSY_A(TTY_GetSY_A() + atoi(ESC_Buffer));            
             goto EndEscape;
         }
 
@@ -670,6 +723,107 @@ static inline void DoEscape(u8 dummy)
         case 'D':
         {
             TTY_SetSX(TTY_GetSX() - atoi(ESC_Buffer));
+            goto EndEscape;
+        }
+
+        case 'b':   // Repeat last printed character n times
+        {
+            u8 n = atoi(ESC_Buffer);
+
+            for (u8 i = 0; i < n; i++) TTY_PrintChar(LastPrintedChar);
+            
+            goto EndEscape;
+        }
+
+        case 's':   // Save Cursor [variant] (ansi.sys) - Same as Save Cursor (DECSC) (ESC 7)
+        {
+            Saved_sx = TTY_GetSX();
+            Saved_sy = TTY_GetSY();
+            goto EndEscape;
+        }
+
+        case 't':   // Window operations [DISPATCH] - https://terminalguide.namepad.de/seq/csi_st/
+        {
+            u8 n = atoi(ESC_Buffer);
+            char str[16] = {'\0'};
+            //kprintf("Got ESC[%ut", n);
+
+            switch (n)
+            {
+                case 7:     // Refresh/Redraw Terminal Window ( Needs testing! CMD = "ESC [ 7 t" )
+                break;
+
+                case 8:     // Set Terminal Window Size ( Needs testing! CMD = "ESC [ 8 ; Ⓝ ; Ⓝ t"  Ⓝ = H/W in rows/columns )
+                    //C_YMAX = H;
+                    //C_XMAX = W;
+                break;
+
+                case 11:    // Report Terminal Window State (1 = non minimized - 2 = minimized)
+                    NET_SendString("[1t");
+                break;
+
+                case 13:    // Report Terminal Window Position ( Needs testing! CMD = "ESC [ 13 ; Ⓝ t"  Ⓝ = 0/2 )
+                    NET_SendString("[3;0;0t");
+                break;
+
+                case 14:    // Report Terminal Window Size in Pixels ( Needs testing! CMD = "ESC [ 14 ; Ⓝ t"  Ⓝ = 0/2 )
+                    sprintf(str, "[4;%d;%dt", (bPALSystem?232:216), (FontSize==0?320:640));
+                    NET_SendString(str);
+                break;
+
+                case 15:    // Report Screen Size in Pixels ( Needs testing! CMD = "ESC [ 15 t" )
+                    sprintf(str, "[5;%d;%dt", (bPALSystem?232:216), (FontSize==0?320:640));
+                    NET_SendString(str);
+                break;
+
+                case 16:    // Report Cell Size in Pixels ( Needs testing! CMD = "ESC [ 16 t" )
+                    NET_SendString("[6;8;8t");
+                break;
+
+                case 18:    // Report Terminal Size ( Needs testing! CMD = "ESC [ 18 t" )
+                    sprintf(str, "[8;%d;%dt", (bPALSystem?0x1D:0x1B), (FontSize==0?0x28:0x50));
+                    NET_SendString(str);
+                break;
+
+                case 19:    // Report Screen Size ( Needs testing! CMD = "ESC [ 19 t" )
+                    sprintf(str, "[9;%d;%dt", (bPALSystem?0x1D:0x1B), (FontSize==0?0x28:0x50));
+                    NET_SendString(str);
+                break;
+
+                case 20:    // Get Icon Title ( Needs testing! CMD = "ESC [ 20 t" )
+                    NET_SendString("]LNoIcon\\");
+                break;
+
+                case 21:    // Get Terminal Title ( Needs testing! CMD = "ESC [ 21 t" )
+                    NET_SendString("]lNoTitle\\");
+                break;
+
+                case 22:    // Push Terminal Title ( Needs testing! CMD = "ESC [ 22 ; Ⓝ t" Ⓝ = 0/1/2)
+                break;
+
+                case 23:    // Pop Terminal Title ( Needs testing! CMD = "ESC [ 23 ; Ⓝ t" Ⓝ = 0/1/2)
+                break;
+
+                default:
+                break;
+            }
+            
+            goto EndEscape;
+        }
+
+        case 'u':   // Restore Cursor [variant] (ansi.sys) - Same as Restore Cursor (DECRC) (ESC 8)
+        {
+            TTY_SetSX(Saved_sx);
+            TTY_SetSY(Saved_sy);
+            goto EndEscape;
+        }
+
+        case 'G':   // Alias: Cursor Horizontal Position Absolute
+        {
+            u8 n = atoi(ESC_Buffer);
+
+            TTY_SetSX(n);
+
             goto EndEscape;
         }
 
@@ -715,13 +869,13 @@ static inline void DoEscape(u8 dummy)
                 break;
 
                 case 2: // Clear screen (move cursor to top left only if emulating ANSI.SYS otherwise keep cursor position)
-                    VDP_clearPlane(BG_A, TRUE);
                     VDP_clearPlane(BG_B, TRUE);
+                    VDP_clearPlane(BG_A, TRUE);
                 break;
 
                 case 3: // Clear screen and delete all lines saved in the scrollback buffer (Keep cursor position)
-                    VDP_clearPlane(BG_A, TRUE);
                     VDP_clearPlane(BG_B, TRUE);
+                    VDP_clearPlane(BG_A, TRUE);
                 break;
             
                 case 0: // Clear screen from cursor down (Keep cursor position)
@@ -755,12 +909,36 @@ static inline void DoEscape(u8 dummy)
 
             goto EndEscape;
         }
+        
+        case 'X':   // Erase Character (ECH) -- ESC[ Ⓝ X
+        {
+            u8 n = atoi(ESC_Buffer);
+
+            n = n == 0 ? 1 : n;
+
+            s32 oldsx = TTY_GetSX();
+            s32 oldsy = TTY_GetSY();
+            
+            TTY_MoveCursor(TTY_CURSOR_LEFT, 1);
+
+            for (u16 i = 0; i < n; i++)
+            {
+                TTY_PrintChar(' ');
+            }
+
+            TTY_SetSX(oldsx);
+            TTY_SetSY(oldsy);
+
+            TTY_MoveCursor(TTY_CURSOR_DUMMY);
+
+            goto EndEscape;
+        }
 
         case 'd':   // Line Position Absolute [Row] (VPA)
         {
             u8 n = atoi(ESC_Buffer);
 
-            TTY_SetSY_A(n);
+            TTY_SetSY_A(n-1);
 
             goto EndEscape;
         }
@@ -769,7 +947,7 @@ static inline void DoEscape(u8 dummy)
         {
             u8 n = atoi(ESC_Buffer);
 
-            TTY_SetSY_A(TTY_GetSY_A() + n);
+            TTY_SetSY_A((TTY_GetSY_A() + n) -1);
 
             goto EndEscape;
         }
@@ -780,14 +958,14 @@ static inline void DoEscape(u8 dummy)
 
             if ((ESC_Param[0] == 38) && (ESC_Param[1] == 5))
             {
-                if ((ESC_Param[2] >= 0) && (ESC_Param[2] <= 7)) TTY_SetAttribute(ESC_Param[2]+30);          //   0-  7:  standard colors (as in ESC [ 30–37 m)
+                if (ESC_Param[2] <= 7) TTY_SetAttribute(ESC_Param[2]+30);                                   //   0-  7:  standard colors (as in ESC [ 30–37 m)
                 else if ((ESC_Param[2] >= 8) && (ESC_Param[2] <= 15)) TTY_SetAttribute(ESC_Param[2]+90);    //   8- 15:  high intensity colors (as in ESC [ 90–97 m)
                                                                                                             //  16-231:  6 × 6 × 6 cube (216 colors): 16 + 36 × r + 6 × g + b (0 ≤ r, g, b ≤ 5)
                                                                                                             // 232-255:  grayscale from dark to light in 24 steps
             }
             else if ((ESC_Param[0] == 48) && (ESC_Param[1] == 5))
             {
-                if ((ESC_Param[2] >= 0) && (ESC_Param[2] <= 7)) TTY_SetAttribute(ESC_Param[2]+40);          //   0-  7:  standard colors (as in ESC [ 40–47 m)
+                if (ESC_Param[2] <= 7) TTY_SetAttribute(ESC_Param[2]+40);                                   //   0-  7:  standard colors (as in ESC [ 40–47 m)
                 else if ((ESC_Param[2] >= 8) && (ESC_Param[2] <= 15)) TTY_SetAttribute(ESC_Param[2]+100);   //   8- 15:  high intensity colors (as in ESC [ 100–107 m)
                                                                                                             //  16-231:  6 × 6 × 6 cube (216 colors): 16 + 36 × r + 6 × g + b (0 ≤ r, g, b ≤ 5)
                                                                                                             // 232-255:  grayscale from dark to light in 24 steps
@@ -800,26 +978,113 @@ static inline void DoEscape(u8 dummy)
                 if (ESC_Param[3] != 255) TTY_SetAttribute(ESC_Param[3]);
             }
 
-            //kprintf("TTY_SetAttribute: 0:<%u> 1:<%u> 2:<%u> 3:<%u>", ESC_Param[0], ESC_Param[1], ESC_Param[2], ESC_Param[3]);
+            #ifdef ESC_LOGGING
+            kprintf("TTY_SetAttribute: 0:<%u> 1:<%u> 2:<%u> 3:<%u>", ESC_Param[0], ESC_Param[1], ESC_Param[2], ESC_Param[3]);
+            #endif
 
             goto EndEscape;
         }
 
-        case 'n':   // Report cursor position
+        case 'n':   // Device Status Report [Dispatch] (DSR)
         {            
             u8 n = atoi(ESC_Buffer);
             char str[16] = {'\0'};
 
             switch (n)
             {
-                case 6:
+                case 5: // Report Operating Status
+                    NET_SendString("[0n");
+                break;
+
+                case 6: // Cursor Position Report (CPR)
                     sprintf(str, "[%ld;%ldR", TTY_GetSY_A(), TTY_GetSX());
                     NET_SendString(str);
+                break;
+
+                case 8: // Set Title to Terminal Name and Version.
+                    // This could easily be set here, however current versions of SMDTC prefixes all titles with this information already
                 break;
 
                 default:
                 break;
             }
+
+            goto EndEscape;
+        }
+
+        case 'p':   // Soft Reset (DECSTR)
+        {            
+            u8 n = atoi(ESC_Buffer);
+
+            switch (n)
+            {
+                case '!': // Soft Reset.
+                    TELNET_Init();
+                    //TTY_Reset(TRUE);
+                break;
+
+                default:
+                break;
+            }
+
+            goto EndEscape;
+        }
+
+        case 'q':   // Select Cursor Style (DECSCUSR) - "ESC [ Ⓝ ␣ q" - (␣ = Space)
+        {            
+            u8 n = atoi(ESC_Buffer);
+
+            switch (n)
+            {
+                case 0:
+                case 1: // Select Cursor Style Blinking Block
+                default:
+                    bDoCursorBlink = TRUE;
+
+                    if (FontSize) LastCursor = 0x13;
+                    else          LastCursor = 0x10;
+                break;
+                
+                case 2: // Select Cursor Style Steady Block
+                    bDoCursorBlink = FALSE;
+                    
+                    if (FontSize) LastCursor = 0x13;
+                    else          LastCursor = 0x10;
+                break;
+                
+                case 3: // Select Cursor Style Blinking Underline
+                    bDoCursorBlink = TRUE;
+
+                    if (FontSize) LastCursor = 0x14;
+                    else          LastCursor = 0x11;
+                break;
+                
+                case 4: // Select Cursor Style Steady Underline
+                    bDoCursorBlink = FALSE;
+                    
+                    if (FontSize) LastCursor = 0x14;
+                    else          LastCursor = 0x11;
+                break;
+                
+                case 5: // Select Cursor Style Blinking Bar
+                    bDoCursorBlink = TRUE;
+
+                    if (FontSize) LastCursor = 0x15;
+                    else          LastCursor = 0x12;
+                break;
+                
+                case 6: // Select Cursor Style Steady Bar
+                    bDoCursorBlink = FALSE;
+                    
+                    if (FontSize) LastCursor = 0x15;
+                    else          LastCursor = 0x12;
+                break;
+            }
+
+            *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(0xAC04);  // Cursor sprite tile address
+            *((vu16*) VDP_DATA_PORT) = LastCursor;
+            *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_CRAM_ADDR((u32)8); // 62 Cursor CRAM colour address
+            *((vu16*) VDP_DATA_PORT) = Cursor_CL;
 
             goto EndEscape;
         }
@@ -851,7 +1116,7 @@ static inline void DoEscape(u8 dummy)
             if ((*PRX >= 65) && (*PRX <= 122)) 
             {
                 #ifdef EMU_BUILD
-                kprintf("Unhandled $%X  -  u8: %u  -  char: '%c'  -  EscType: %c (EscSeq: %u  -  StreamPos: $%X)", *PRX, *PRX, (char)*PRX, (char)ESC_Type, ESC_BufferSeq, StreamPos);
+                kprintf("Unhandled $%X  -  u8: %u  -  char: '%c'  -  EscType: %c (EscSeq: %u  -  StreamPos: $%lX)", *PRX, *PRX, (char)*PRX, (char)ESC_Type, ESC_BufferSeq, StreamPos);
                 #endif
                 goto EndEscape;
             }
