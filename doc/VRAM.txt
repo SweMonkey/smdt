@@ -8,7 +8,7 @@ $17             Free (1 tile)
 $18  - $1F      Icons
 $20  - $21F     Terminal ASCII font
 $220 - $31F     Menu ASCII font
-$320 - $4FF     Free (480 tiles)
+$320 - $4FF     Terminal ASCII font duplicate used for 80 column colour support otherwise free (480 tiles)
 $500 - $55F     HScroll table
 $560 - $57F     SAT
 $580 - $5FF     Window table

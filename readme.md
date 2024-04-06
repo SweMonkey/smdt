@@ -3,8 +3,9 @@
 A telnet, IRC and terminal client for the Sega Mega Drive/Genesis with support for PS/2 keyboards and RS-232 communication.<br>
 ![Screenshot of the telnet client](https://deceptsoft.com/smdtc_extra_git/telnet_small.png)
 ![Screenshot of the IRC client](https://deceptsoft.com/smdtc_extra_git/irc_small.png)
-![Screenshot of the terminal emulator showing nano](https://deceptsoft.com/smdtc_extra_git/terminal_nano_small.png)
+![Screenshot of the terminal emulator showing nano](https://deceptsoft.com/smdtc_extra_git/blastem_20240401_104314.png)
 ![Screenshot of a debugging utility to inspect streams](https://deceptsoft.com/smdtc_extra_git/hexview_small.png)
+![Screenshot of the telnet client in 80 column + 8 colour mode](https://deceptsoft.com/smdtc_extra_git/blastem_20240401_203819.png)
 
 Extra hardware:<br>
 1. PS/2 keyboard (not required but preferred).<br>
