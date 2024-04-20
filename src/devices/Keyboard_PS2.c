@@ -1,4 +1,3 @@
-
 #include "Keyboard_PS2.h"
 #include "StateCtrl.h"  // bWindowActive
 #include "QMenu.h"      // ChangeText() when KB is detected
@@ -16,11 +15,13 @@
 // Using set 2
 
 u8 KB_Initialized = FALSE;
+bool bBATStatus = FALSE;
 static u8 bExtKey = FALSE;
 static u8 bBreak = FALSE;
 static u8 bShift = FALSE;
 static u8 bAlt = FALSE;
 static u8 bCtrl = FALSE;
+u8 vKBLayout = 0;
 
 SM_Device DEV_KBPS2;
 
@@ -103,8 +104,6 @@ u8 const * const SCTablePtr[2][3] =
     {SCTable_US[0], SCTable_US[1], SCTable_US[2]}, 
     {SCTable_SV[0], SCTable_SV[1], SCTable_SV[2]}
 };
-
-u8 vKBLayout = 0;
 
 
 void KB_Init()
@@ -205,6 +204,7 @@ void KB_Interpret_Scancode(u8 scancode)
     switch (scancode)
     {
         case 0xAA:  // BAT OK
+            bBATStatus = TRUE;
         break;
         case 0xE0:
             bExtKey = TRUE;
@@ -213,6 +213,8 @@ void KB_Interpret_Scancode(u8 scancode)
             bBreak = TRUE;
         break;
         case 0xFC: // BAT FAIL
+            bBATStatus = FALSE;
+            TRM_SetStatusIcon(ICO_ID_ERROR, ICO_POS_0);
         break;
 
         // Hopefully temporary shitcode

@@ -1,4 +1,3 @@
-
 #include "HexView.h"
 #include "Input.h"
 #include "UI.h"
@@ -8,7 +7,8 @@
 static u32 FileOffset = 0;
 static s16 ScrollY = 0;
 bool bShowHexView = FALSE;
-SM_Window HexWindow;
+static SM_Window HexWindow;
+
 
 void DrawDataLine(u8 Line)
 {
@@ -107,9 +107,9 @@ void HexView_Input()
 
 void DrawHexView()
 {
-    VDP_setWindowVPos(FALSE, 30);
-    TRM_clearTextArea(0, 0, 35, 1);
-    TRM_clearTextArea(0, 1, 40, 29);
+    TRM_SetWinHeight(30);
+    TRM_ClearTextArea(0, 0, 35, 1);
+    TRM_ClearTextArea(0, 1, 40, 29);
 
     UI_CreateWindow(&HexWindow, "HexView - Rx Buffer", UC_NONE);
 
@@ -123,9 +123,9 @@ void HexView_Toggle()
 {
     if (bShowHexView)
     {
-        VDP_setWindowVPos(FALSE, 1);
-        TRM_clearTextArea(0, 0, 36, 1);
-        TRM_drawText(STATUS_TEXT, 1, 0, PAL1);
+        TRM_SetWinHeight(1);
+        TRM_ClearTextArea(0, 0, 36, 1);
+        TRM_SetStatusText(STATUS_TEXT);
     }
     else
     {

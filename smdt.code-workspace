@@ -31,7 +31,14 @@
 			"system.h": "c",
 			"devmgr.h": "c",
 			"main.h": "c",
-			"sstream": "c"
+			"sstream": "c",
+			"network.h": "c",
+			"utils.h": "c",
+			"buffer.h": "c",
+			"numbers": "c",
+			"screensaver.h": "c",
+			"rl_network.h": "c",
+			"utf8.h": "c"
 		}
 	}
 }

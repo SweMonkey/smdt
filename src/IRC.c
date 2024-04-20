@@ -1,11 +1,10 @@
-
 #include "IRC.h"
 #include "Terminal.h"
 #include "UTF8.h"
 #include "Utils.h"
 #include "Buffer.h"
-#include "TMBuffer.h"
 #include "Network.h"
+#include "IRQ.h"
 #include "../res/system.h"
 
 #define B_PRINTSTR_LEN 512
@@ -15,7 +14,7 @@
 #define B_COMMAND_LEN 64
 #define B_PARAM_LEN 512
 
-#define TTS_VRAMIDX 0x320
+#define TTS_VRAMIDX 0x240    //0x320 - TODO: find a spot for all the tiles. It requires at least 38 continous tiles in VRAM
 
 static struct s_linebuf
 {
@@ -52,13 +51,9 @@ char PG_UserList[512][16];
 u16 PG_UserNum = 0;
 u16 UserIterator = 0;
 
-extern u16 Cursor_CL;
-
 
 void IRC_Init()
 {
-    if (FontSize) FontSize = 2;  // Temporary until IRC supports FontSize = 1 (8 colour @ 80 columns)
-
     TTY_Init(TRUE);
     UTF8_Init();
 
@@ -92,23 +87,27 @@ void IRC_Reset()
     PG_OpenPages = 1;
 
     // Setup the cursor for the typing input box at the bottom of the screen
-    s16 spr_x = 8, spr_y = (bPALSystem?232:216);
-    u8 spr_pal = PAL1;
-    u8 spr_pr = 0;
+    s16 spr_x = 8 + 128, spr_y = (bPALSystem?232:216) + 128;
 
-    for (u8 i = 0; i < 9; i++) VDP_setSpriteFull(i+1, spr_x+(i*32), spr_y, SPRITE_SIZE(4, 1), TILE_ATTR_FULL(spr_pal, spr_pr, 0, 0, TTS_VRAMIDX+(i*4)), i+2);
+    // First 9 textboxes
+    for (u8 i = 0; i < 9; i++)
+    {
+        SetSprite_Y(i+1, spr_y);
+        SetSprite_SIZELINK(i+1, SPR_WIDTH_4x1, i+2);
+        SetSprite_TILE(i+1, 0x2000+TTS_VRAMIDX+(i*4));
+        SetSprite_X(i+1, spr_x+(i*32));
+    }
 
-    VDP_setSpriteFull(10, spr_x+288, spr_y, SPRITE_SIZE(3, 1), TILE_ATTR_FULL(spr_pal, spr_pr, 0, 0, TTS_VRAMIDX+36), 0);
-    VDP_setSpriteLink(0, 1);
-    VDP_updateSprites(11, CPU);
+    // Final 10th textbox
+    SetSprite_Y(10, spr_y);
+    SetSprite_SIZELINK(10, SPR_WIDTH_3x1, 0);
+    SetSprite_TILE(10, 0x2000+TTS_VRAMIDX+36);
+    SetSprite_X(10, spr_x+288);
 
-    // Cursor Y
-    *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(0xAC00);
-    *((vu16*) VDP_DATA_PORT) = spr_y+128;
-
-    // Cursor tile
-    *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(0xAC04);
-    *((vu16*) VDP_DATA_PORT) = 0x12;
+    // Setup cursor sprite y position and tile
+    SetSprite_Y(0, spr_y);
+    SetSprite_TILE(0, 0x12);
+    SetSprite_SIZELINK(0, 0, 1);
 }
 
 // Text input at bottom of screen
@@ -129,8 +128,7 @@ void PrintTextLine(const u8 *str)
     }
 
     // Update cursor X position
-    *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(0xAC06);
-    *((vu16*) VDP_DATA_PORT) = (spr_x*8)+136;
+    SetSprite_X(0, (spr_x*8)+136);
 
     return;
 }
@@ -261,7 +259,6 @@ void IRC_PrintChar(u8 c)
         break;
     }
 
-    //if (isPrintable(c))
     if ((c >= 0x20) && (c <= 0x7E))
     {
         TMB_PrintChar(c);
@@ -515,7 +512,9 @@ void IRC_DoCommand()
             }
         
             default:
+                #ifdef IRC_LOGGING
                 kprintf("Error: Unhandled IRC CMD: %u", cmd);
+                #endif
                 return;
             break;
         }     
@@ -626,7 +625,7 @@ void IRC_ParseString()
         it++;
     }
 
-    #ifndef NO_LOGGING
+    #ifdef IRC_LOGGING
     kprintf("Prefix: \"%s\"", LineBuf.prefix);
     kprintf("Command: \"%s\"", LineBuf.command);
     for (u8 i = 0; i < 16; i++) if (strlen(LineBuf.param[i]) > 0) kprintf("Param[%u]: \"%s\"", i, LineBuf.param[i]);

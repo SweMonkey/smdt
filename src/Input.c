@@ -1,13 +1,14 @@
-
 #include "Input.h"
-#include "Keyboard_PS2.h"
+#include "devices/Keyboard_PS2.h"
 #include "Utils.h"
+#include "Screensaver.h"
 
 #define KM_SZ 0x1FF
-static u8 KeyMap[KM_SZ];
 
+static u8 KeyMap[KM_SZ];
 void QMenu_Input();
 void HexView_Input();
+
 
 void Input_JP(u16 joy, u16 changed, u16 state)
 {
@@ -56,6 +57,8 @@ u16 get_KeyPress(u8 KeyState)
 void set_KeyPress(u16 key, u8 KeyState)
 {
     KeyMap[key & KM_SZ] = KeyState;
+
+    InactiveCounter = 0;
 }
 
 void InputTick()

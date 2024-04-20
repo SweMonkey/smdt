@@ -1,9 +1,11 @@
-
 #include "StateCtrl.h"
 #include "Input.h"
 #include "QMenu.h"
 #include "HexView.h"
 #include "IRQ.h"
+#include "devices/RL_Network.h"
+#include "Screensaver.h"
+#include "DevMgr.h"             // bRLNetwork
 
 extern PRG_State DummyState;
 extern PRG_State TelnetState;
@@ -22,6 +24,11 @@ bool bWindowActive = FALSE;
 
 void VBlank()
 {
+    if (bRLNetwork)
+    {
+        RLN_Update();
+    }
+
     //if (CurrentState->VBlank) CurrentState->VBlank();
 
     if (is_KeyDown(KEY_RWIN) && (CurrentStateEnum != PS_Entry) && (!bShowHexView)) QMenu_Toggle();   // Global quick menu
@@ -32,9 +39,11 @@ void VBlank()
     VB_IRQ();       // Old cursor blink
 
     bWindowActive = (bShowQMenu || bShowHexView);
+    
+    ScreensaverTick();
 }
 
-void ChangeState(State new_state, u8 argc, const char *argv[])
+void ChangeState(State new_state, u8 argc, char *argv[])
 {
     PrevState = CurrentState;
     PrevStateEnum = CurrentStateEnum;
@@ -93,7 +102,8 @@ void ChangeState(State new_state, u8 argc, const char *argv[])
     CurrentStateEnum = new_state;
 
     CurrentState->Enter(argc, argv);
-    
+
+    ScreensaverInit();    
     SetupQItemTags();
 
     SYS_setVBlankCallback(VBlank);

@@ -1,11 +1,10 @@
-
 #include "TMBuffer.h"
 #include "Terminal.h"
 
 TMBuffer *TMB_Ptr = NULL;   // Work buffer
 
-#define TMBATTR_BGA (FontSize?0x4120:0x2120)
-#define TMBATTR_BGB (FontSize?0x4120:0x4000)
+#define TMBATTR_BGA (FontSize?0x4140:0x2140)
+#define TMBATTR_BGB (FontSize?0x4140:0x4000)
 
 
 void TMB_UploadBuffer(TMBuffer *tptr)

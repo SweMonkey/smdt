@@ -1,14 +1,10 @@
-
 #include "IRQ.h"
-#include "DevMgr.h"   // Port definitions
-#include "Buffer.h"
+#include "Utils.h"  // bPALSystem
 
 static u8 CursorBlink = 0; // Cursor blink counter
 u8 bDoCursorBlink = TRUE;
-extern SM_Device DEV_UART;
-extern u8 FontSize;
-extern bool bPALSystem;
 u16 Cursor_CL = 0x0E0;
+
 
 void VB_IRQ()
 {

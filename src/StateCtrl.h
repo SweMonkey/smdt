@@ -5,7 +5,7 @@
 
 typedef enum e_state {PS_Dummy = 0, PS_Telnet = 1, PS_Entry = 2, PS_Debug = 3, PS_IRC = 4, PS_Terminal} State;
 
-typedef void StateArg_CB(u8 argc, const char *argv[]);
+typedef void StateArg_CB(u8 argc, char *argv[]);
 
 typedef struct s_state
 {
@@ -22,7 +22,7 @@ typedef struct s_state
 
 extern bool bWindowActive;
 
-void ChangeState(State new_state, u8 argc, const char *argv[]);
+void ChangeState(State new_state, u8 argc, char *argv[]);
 void RevertState();
 bool isCurrentState(State this);
 State getState();

@@ -1,10 +1,11 @@
-
 #include "Terminal.h"
 #include "Buffer.h"
 #include "Telnet.h"
 #include "../res/system.h"
 #include "Utils.h"
 #include "Network.h"
+#include "IRQ.h"
+#include "Screensaver.h"
 
 #ifdef EMU_BUILD
 #include "StateCtrl.h"
@@ -23,7 +24,6 @@ u8 EvenOdd = 0;
 static u8 LastPlane = 0;
 
 // TTY
-u8 TTY_Initialized = FALSE;
 s32 sx = 0, sy = C_YSTART;              // Character x and y output position
 s8 D_HSCROLL = 0;                       // Default HScroll offset
 s16 HScroll = 0;                        // VDP horizontal scroll position
@@ -36,18 +36,21 @@ u8 bInverse = FALSE;                    // Text BG/FG reversed
 u8 bWrapAround = TRUE;                  // Force wrap around at column 40/80
 u8 TermColumns = D_COLUMNS_80;
 
+// Cursor stuff
 u16 LastCursor = 0x13;
-extern u8 bDoCursorBlink;
-extern u16 Cursor_CL;
+
+// Colours
 u16 Custom_BGCL = 0;
 u16 Custom_FG0CL = 0xEEE;   // Custom text colour for 4x8 font
 u16 Custom_FG1CL = 0x666;   // Custom text antialiasing colour for 4x8 font
 u8 bHighCL = TRUE;         // Use the upper 8 colours instead when using FontSize=1
+
 static const u16 pColors[16] =
 {
     0x000, 0x00c, 0x0c0, 0x0cc, 0xc00, 0xc0c, 0xcc0, 0xccc,   // Normal
     0x444, 0x66e, 0x6e6, 0x6ee, 0xe66, 0xe6e, 0xee6, 0xeee,   // Highlighted
 };
+
 static const u16 pColorsHalf[8] =
 {
     0x000, 0x006, 0x060, 0x066, 0x600, 0x606, 0x660, 0x666,   // Shadowed (For AA)
@@ -69,7 +72,6 @@ void TTY_Init(u8 bHardReset)
     }
     
     TTY_Reset(TRUE);
-    TTY_Initialized = TRUE;
 }
 
 void TTY_Reset(u8 bClearScreen)
@@ -90,8 +92,8 @@ void TTY_Reset(u8 bClearScreen)
     VDP_setVerticalScroll(BG_A, VScroll);
     VDP_setVerticalScroll(BG_B, VScroll);
 
-    TRM_SetStatusIcon(ICO_NET_IDLE_RECV, STATUS_NET_RECV_POS, CHAR_WHITE);
-    TRM_SetStatusIcon(ICO_NET_IDLE_SEND, STATUS_NET_SEND_POS, CHAR_WHITE);
+    TRM_SetStatusIcon(ICO_NET_IDLE_RECV, ICO_POS_1);
+    TRM_SetStatusIcon(ICO_NET_IDLE_SEND, ICO_POS_2);
 
     if (bClearScreen)
     {
@@ -100,6 +102,8 @@ void TTY_Reset(u8 bClearScreen)
     }
 
     TTY_MoveCursor(TTY_CURSOR_DUMMY);
+
+    InactiveCounter = 0;
 }
 
 void TTY_SetColumns(u8 col)
@@ -135,7 +139,7 @@ void TTY_ReloadPalette()
     {
         // Font glyph set 0 (Colours 0-3)
         PAL_setColor(0x0C, pColorsHalf[0]);
-        PAL_setColor(0x0D, pColors[(bHighCL ?  8 : 0)]);
+        PAL_setColor(0x0D, pColors[(bHighCL ?  8 : 8)]);    // Always use the brigth colour here
 
         PAL_setColor(0x1C, pColorsHalf[1]);
         PAL_setColor(0x1D, pColors[(bHighCL ?  9 : 1)]);
@@ -178,16 +182,14 @@ void TTY_ReloadPalette()
 // Todo: Clean up plane A/B when switching
 void TTY_SetFontSize(u8 size)
 {
-    vu32 *plctrl = (u32 *)VDP_CTRL_PORT;
-    vu16 *pwdata = (u16 *)VDP_DATA_PORT;
     FontSize = size;
 
     TTY_ReloadPalette();
 
     if (FontSize == 1)   // 4x8
     {
-        VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA, 0x20, DMA);
-        VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA_ALT, 0x320, DMA);
+        VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA, AVR_FONT0, DMA);       // 0x20
+        VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA_ALT, AVR_FONT1, DMA);  // 0x320
 
         VDP_setHorizontalScroll(BG_A, HScroll+4);   // -4
         VDP_setHorizontalScroll(BG_B, HScroll  );   // -8
@@ -202,7 +204,7 @@ void TTY_SetFontSize(u8 size)
     }
     else if (FontSize == 2)   // 4x8 AA
     {
-        VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA, 0x20, DMA);
+        VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA, AVR_FONT0, DMA);   // 0x20
 
         VDP_setHorizontalScroll(BG_A, HScroll+4);   // -4
         VDP_setHorizontalScroll(BG_B, HScroll  );   // -8
@@ -217,7 +219,7 @@ void TTY_SetFontSize(u8 size)
     }
     else        // 8x8
     {
-        VDP_loadTileSet(&GFX_ASCII_TERM, 0x20, DMA);
+        VDP_loadTileSet(&GFX_ASCII_TERM, AVR_FONT0, DMA);    // 0x20
 
         VDP_setHorizontalScroll(BG_A, HScroll);
         VDP_setHorizontalScroll(BG_B, HScroll);
@@ -236,23 +238,11 @@ void TTY_SetFontSize(u8 size)
     sprx = sprx >= 504 ? 504 : sprx;
     spry = spry >= 504 ? 504 : spry;
 
-    // Cursor position
-    *plctrl = VDP_WRITE_VRAM_ADDR(0xAC00);
-    *pwdata = spry;
-    *plctrl = VDP_WRITE_VRAM_ADDR(0xAC06);
-    *pwdata = sprx;
-
-    // Cursor size
-    *plctrl = VDP_WRITE_VRAM_ADDR(0xAC02);
-    *pwdata = 0;
-
-    // Cursor link
-    *plctrl = VDP_WRITE_VRAM_ADDR(0xAC03);
-    *pwdata = 0;
-
-    // Cursor tile
-    *plctrl = VDP_WRITE_VRAM_ADDR(0xAC04);
-    *pwdata = LastCursor;
+    // Setup cursor sprite
+    SetSprite_Y(0, spry);
+    SetSprite_X(0, sprx);
+    SetSprite_SIZELINK(0, SPR_SIZE_1x1, 0);
+    SetSprite_TILE(0, LastCursor);
 }
 
 inline void TTY_PrintChar(u8 c)
@@ -283,10 +273,10 @@ inline void TTY_PrintChar(u8 c)
             break;
         }
 
-        u16 data = 0;
+        u16 data = AVR_FONT0;
         u8 colour =  (ColorFG > 7 ? ColorFG - 8 : ColorFG); // Change colour range from 0-15 to 0-7
 
-        if (colour < 4) data |= 0x300;  // Use second font glyph set
+        if (colour < 4) data = AVR_FONT1;  // Use second font glyph set
 
         // Set palette to use depending on colour
         switch (colour)
@@ -312,7 +302,7 @@ inline void TTY_PrintChar(u8 c)
             break;
         }
 
-        *pwdata = data + c + (bInverse ? 0x20 : 0x120);
+        *pwdata = data + c + (bInverse ? 0 : 0x100); // 0x40 : 0x140
         EvenOdd = (sx % 2);
     }
     else if (FontSize == 2)
@@ -337,7 +327,7 @@ inline void TTY_PrintChar(u8 c)
             break;
         }
 
-        *pwdata = 0x4000 + c + (bInverse ? 0x20 : 0x120);
+        *pwdata = AVR_FONT0 + c + (bInverse ? 0x4000 : 0x4100);   // 0x40 : 0x140
         EvenOdd = (sx % 2);
     }
     else
@@ -345,13 +335,21 @@ inline void TTY_PrintChar(u8 c)
         addr = (((sx & (planeWidth - 1)) + ((sy & (planeHeight - 1)) << planeWidthSft)) * 2);
 
         *plctrl = VDP_WRITE_VRAM_ADDR(VDP_BG_A + addr);
-        *pwdata = c + (bInverse ? 0x2020 : 0x2120);
+        *pwdata = AVR_FONT0 + c + (bInverse ? 0x2000 : 0x2100); // 2040 : 2140
 
         *plctrl = VDP_WRITE_VRAM_ADDR(VDP_BG_B + addr);
         *pwdata = 0x4000 + ColorFG;
     }
 
     TTY_MoveCursor(TTY_CURSOR_RIGHT, 1);
+}
+
+inline void TTY_PrintString(const char *str)
+{
+    for (u16 c = 0; c < strlen(str); c++)
+    {
+        TTY_PrintChar(str[c]);
+    }
 }
 
 inline void TTY_ClearLine(u16 y, u16 line_count)
@@ -455,7 +453,7 @@ inline void TTY_SetAttribute(u8 v)
 
         if (bIntense) ColorFG += 8;
 
-        #ifndef NO_LOGGING
+        #ifdef ATT_LOGGING
         kprintf("N ColorFG: $%X", ColorFG);
         #endif
         return;
@@ -467,7 +465,7 @@ inline void TTY_SetAttribute(u8 v)
 
         if (bIntense) ColorBG += 8; // Should this exist?
 
-        #ifndef NO_LOGGING
+        #ifdef ATT_LOGGING
         kprintf("N ColorBG: $%X", ColorBG);
         #endif
         return;
@@ -478,7 +476,7 @@ inline void TTY_SetAttribute(u8 v)
     {
         ColorFG = v - 82;
 
-        #ifndef NO_LOGGING
+        #ifdef ATT_LOGGING
         kprintf("L ColorFG: $%X", ColorFG);
         #endif
         return;
@@ -488,7 +486,7 @@ inline void TTY_SetAttribute(u8 v)
     {
         ColorBG = v - 92;
 
-        #ifndef NO_LOGGING
+        #ifdef ATT_LOGGING
         kprintf("L ColorBG: $%X", ColorBG);
         #endif
         return;
@@ -503,7 +501,7 @@ inline void TTY_SetAttribute(u8 v)
             bIntense = FALSE;
             bInverse = FALSE;
 
-            #ifndef NO_LOGGING
+            #ifdef ATT_LOGGING
             kprintf("Text reset");
             #endif
         break;
@@ -513,7 +511,7 @@ inline void TTY_SetAttribute(u8 v)
 
             bIntense = TRUE;
 
-            #ifndef NO_LOGGING
+            #ifdef ATT_LOGGING
             kprintf("Text increased intensity");
             #endif
         break;
@@ -523,7 +521,7 @@ inline void TTY_SetAttribute(u8 v)
 
             bIntense = FALSE;
 
-            #ifndef NO_LOGGING
+            #ifdef ATT_LOGGING
             kprintf("Text decreased intensity");
             #endif
         break;
@@ -531,7 +529,7 @@ inline void TTY_SetAttribute(u8 v)
         case 7:     // Inverse on
             bInverse = TRUE;
 
-            #ifndef NO_LOGGING
+            #ifdef ATT_LOGGING
             kprintf("Text inverse on");
             #endif
         break;
@@ -541,7 +539,7 @@ inline void TTY_SetAttribute(u8 v)
 
             bIntense = FALSE;
 
-            #ifndef NO_LOGGING
+            #ifdef ATT_LOGGING
             kprintf("Text Normal intensity");
             #endif
         break;
@@ -549,13 +547,13 @@ inline void TTY_SetAttribute(u8 v)
         case 27:    // Inverse off
             bInverse = FALSE;
 
-            #ifndef NO_LOGGING
+            #ifdef ATT_LOGGING
             kprintf("Text inverse off");
             #endif
         break;
 
         case 38:    // Set foreground color
-            #ifndef NO_LOGGING
+            #ifdef ATT_LOGGING
             kprintf("Text set foreground color");
             #endif
         break;
@@ -563,7 +561,7 @@ inline void TTY_SetAttribute(u8 v)
         case 39:    // Reset FG color
             ColorFG = CL_FG;
 
-            #ifndef NO_LOGGING
+            #ifdef ATT_LOGGING
             kprintf("Text FG color reset");
             #endif
         break;
@@ -571,7 +569,7 @@ inline void TTY_SetAttribute(u8 v)
         case 49:    // Reset BG color
             ColorBG = CL_BG;
 
-            #ifndef NO_LOGGING
+            #ifdef ATT_LOGGING
             kprintf("Text BG color reset");
             #endif
         break;
@@ -696,9 +694,10 @@ inline void TTY_MoveCursor(u8 dir, u8 num)
     sprx = sprx >= 504 ? 504 : sprx;
     spry = spry >= 504 ? 504 : spry;
 
-    // Sprite position
-    *plctrl = VDP_WRITE_VRAM_ADDR(0xAC00);
-    *pwdata = spry;
-    *plctrl = VDP_WRITE_VRAM_ADDR(0xAC06);
-    *pwdata = sprx;
+    // Update sprite position
+    SetSprite_Y(0, spry);
+    SetSprite_X(0, sprx);
+
+    // Reset screensaver activation counter
+    InactiveCounter = 0;
 }

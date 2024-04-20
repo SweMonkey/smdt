@@ -11,10 +11,10 @@ typedef struct s_window
     u8 Flags;
 } SM_Window;
 
-#define UC_VLINE_SINGLE 0xB3
-#define UC_VLINE_DOUBLE 0xBA
-#define UC_HLINE_SINGLE 0xC4
-#define UC_HLINE_DOUBLE 0xCD
+#define UC_VLINE_SINGLE 0x93
+#define UC_VLINE_DOUBLE 0x9A
+#define UC_HLINE_SINGLE 0xA4
+#define UC_HLINE_DOUBLE 0xAD
 #define UC_PANEL_SINGLE 0x1
 #define UC_PANEL_DOUBLE 0x2
 
@@ -23,6 +23,7 @@ typedef struct s_window
 
 void UI_Begin(SM_Window *w);
 void UI_End();
+void UI_EndNoPaint();
 void UI_SetVisible(SM_Window *w, bool v);
 void UI_ToggleVisible(SM_Window *w);
 bool UI_GetVisible(SM_Window *w);
@@ -35,7 +36,9 @@ void UI_FillRect(u8 x, u8 y, u8 width, u8 height, u8 fillbyte);
 void UI_DrawVLine(u8 x, u8 y, u8 height, u8 linechar);
 void UI_DrawHLine(u8 x, u8 y, u8 width, u8 linechar);
 void UI_DrawPanel(u8 x, u8 y, u8 width, u8 height, u8 linetype);
+void UI_DrawPanelSimple(u8 x, u8 y, u8 width, u8 height);
 void UI_DrawVScrollbar(u8 x, u8 y, u8 height, u16 min, u16 max, u16 pos);
 void UI_DrawItemList(u8 x, u8 y, u8 width, u8 height, const char *caption, char list[][16], u16 item_count, u16 scroll);
+void UI_DrawTextInput(u8 x, u8 y, u8 width, const char *caption, char str[], bool bShowCaret);
 
 #endif // UI_H_INCLUDED

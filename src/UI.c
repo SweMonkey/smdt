@@ -1,41 +1,41 @@
-
 #include "UI.h"
-#include "Utils.h" // TRM_drawChar()
+#include "Utils.h"      // TRM_DrawChar()
+#include "Network.h"    // TxBuffer
 
 // -- Window --
 static const u8 Frame[28][40] = 
 {
-    {201, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 187},
-    {186, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 186},
-    {204, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 202, 205, 205, 205, 187},
-    {186, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 186},
-    {186, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 186},
-    {186, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 186},
-    {186, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 186},
-    {186, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 186},
-    {186, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 186},
-    {186, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 186},
-    {186, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 186},
-    {186, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 186},
-    {186, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 186},
-    {186, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 186},
-    {186, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 186},
-    {186, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 186},
-    {186, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 186},
-    {186, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 186},
-    {186, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 186},
-    {186, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 186},
-    {186, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 186},
-    {186, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 186},
-    {186, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 186},
-    {186, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 186},
-    {186, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 186},
-    {186, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 186},
-    {186, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 186},
-    {200, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 188},
+    {0xA9, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0x9B},
+    {0x9A, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 0x9A},
+    {0xAC, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAA, 0xAD, 0xAD, 0xAD, 0x9B},
+    {0x9A, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 0x9A},
+    {0x9A, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 0x9A},
+    {0x9A, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 0x9A},
+    {0x9A, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 0x9A},
+    {0x9A, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 0x9A},
+    {0x9A, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 0x9A},
+    {0x9A, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 0x9A},
+    {0x9A, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 0x9A},
+    {0x9A, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 0x9A},
+    {0x9A, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 0x9A},
+    {0x9A, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 0x9A},
+    {0x9A, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 0x9A},
+    {0x9A, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 0x9A},
+    {0x9A, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 0x9A},
+    {0x9A, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 0x9A},
+    {0x9A, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 0x9A},
+    {0x9A, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 0x9A},
+    {0x9A, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 0x9A},
+    {0x9A, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 0x9A},
+    {0x9A, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 0x9A},
+    {0x9A, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 0x9A},
+    {0x9A, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 0x9A},
+    {0x9A, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 0x9A},
+    {0x9A, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 0x9A},
+    {0xA8, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0x9C},
 };
 
-SM_Window *Target = NULL;
+static SM_Window *Target = NULL;
 
 
 void UI_Begin(SM_Window *w)
@@ -46,6 +46,11 @@ void UI_Begin(SM_Window *w)
 void UI_End()
 {
     UI_RepaintWindow();
+    Target = NULL;
+}
+
+void UI_EndNoPaint()
+{
     Target = NULL;
 }
 
@@ -68,13 +73,6 @@ void UI_RepaintWindow()
 {
     if (Target == NULL) return;
 
-    if (!(Target->Flags & UC_NOBORDER))
-    {
-        const char *c = Target->Title;
-        u8 x = 1;
-        while (*c) Target->WinBuffer[1][x++] = *c++;
-    }
-
     for (u8 y = (Target->Flags & UC_NOBORDER)?1:0; y < 28; y++)
     {
     for (u8 x = 0; x < 40; x++)
@@ -82,7 +80,7 @@ void UI_RepaintWindow()
         if ((y == 0) && (x > 35)) continue; // Don't clear status icons area
         if (Target->WinBuffer[y][x] == 0) continue;
 
-        TRM_drawChar(Target->WinBuffer[y][x], x, y, PAL1);
+        TRM_DrawChar(Target->WinBuffer[y][x], x, y, PAL1);
     }
     }
 }
@@ -90,11 +88,17 @@ void UI_RepaintWindow()
 void UI_SetWindowTitle(const char *title)
 {
     if (Target == NULL) return;
+    
+    u8 x = 1;
 
     memcpy(Target->Title, title, 34);
     Target->Title[34] = '\0';
 
-    // Redraw title here?
+    if (!(Target->Flags & UC_NOBORDER))
+    {
+        const char *c = Target->Title;
+        while (*c) Target->WinBuffer[1][x++] = *c++;
+    }
 }
 
 void UI_CreateWindow(SM_Window *w, const char *title, u8 flags)
@@ -115,6 +119,7 @@ void UI_CreateWindow(SM_Window *w, const char *title, u8 flags)
         u8 x = 1;
         while (*c) w->WinBuffer[1][x++] = *c++;
     }
+
 }
 
 // -- Clear / Print text --
@@ -167,22 +172,22 @@ void UI_DrawVLine(u8 x, u8 y, u8 height, u8 linechar)
         {
             if (linechar == UC_VLINE_SINGLE)
             {
-                Target->WinBuffer[y+i+3][x+1] = 0xC5;
+                Target->WinBuffer[y+i+3][x+1] = 0xA5;
             }
             else if (linechar == UC_VLINE_DOUBLE)
             {
-                Target->WinBuffer[y+i+3][x+1] = 0xD7;
+                Target->WinBuffer[y+i+3][x+1] = 0xB7;
             }
         }
         else if (Target->WinBuffer[y+i+3][x+1] == UC_HLINE_DOUBLE)
         {
             if (linechar == UC_VLINE_SINGLE)
             {
-                Target->WinBuffer[y+i+3][x+1] = 0xD8;
+                Target->WinBuffer[y+i+3][x+1] = 0xB8;
             }
             else if (linechar == UC_VLINE_DOUBLE)
             {
-                Target->WinBuffer[y+i+3][x+1] = 0xCE;
+                Target->WinBuffer[y+i+3][x+1] = 0xAE;
             }
         }
         else Target->WinBuffer[y+i+3][x+1] = linechar;
@@ -192,11 +197,11 @@ void UI_DrawVLine(u8 x, u8 y, u8 height, u8 linechar)
     {
         if (linechar == UC_VLINE_SINGLE)
         {
-            Target->WinBuffer[2][x+1] = 0xD1;
+            Target->WinBuffer[2][x+1] = 0xB1;
         }
         else if (linechar == UC_VLINE_DOUBLE)
         {
-            Target->WinBuffer[2][x+1] = 0xCB;
+            Target->WinBuffer[2][x+1] = 0xAB;
         }
     }
 
@@ -204,11 +209,11 @@ void UI_DrawVLine(u8 x, u8 y, u8 height, u8 linechar)
     {
         if (linechar == UC_VLINE_SINGLE)
         {
-            Target->WinBuffer[27][x+1] = 0xCF;
+            Target->WinBuffer[27][x+1] = 0xAF;
         }
         else if (linechar == UC_VLINE_DOUBLE)
         {
-            Target->WinBuffer[27][x+1] = 0xCA;
+            Target->WinBuffer[27][x+1] = 0xAA;
         }
     }
 }
@@ -225,22 +230,22 @@ void UI_DrawHLine(u8 x, u8 y, u8 width, u8 linechar)
         {
             if (linechar == UC_HLINE_SINGLE)
             {
-                Target->WinBuffer[y+3][x+i+1] = 0xC5;
+                Target->WinBuffer[y+3][x+i+1] = 0xA5;
             }
             else if (linechar == UC_HLINE_DOUBLE)
             {
-                Target->WinBuffer[y+3][x+i+1] = 0xD8;
+                Target->WinBuffer[y+3][x+i+1] = 0xB8;
             }
         }
         else if (Target->WinBuffer[y+3][x+i+1] == UC_VLINE_DOUBLE)
         {
             if (linechar == UC_HLINE_SINGLE)
             {
-                Target->WinBuffer[y+3][x+i+1] = 0xD7;
+                Target->WinBuffer[y+3][x+i+1] = 0xB7;
             }
             else if (linechar == UC_HLINE_DOUBLE)
             {
-                Target->WinBuffer[y+3][x+i+1] = 0xCE;
+                Target->WinBuffer[y+3][x+i+1] = 0xAE;
             }
         }
         else Target->WinBuffer[y+3][x+i+1] = linechar;
@@ -250,11 +255,11 @@ void UI_DrawHLine(u8 x, u8 y, u8 width, u8 linechar)
     {
         if (linechar == UC_HLINE_SINGLE)
         {
-            Target->WinBuffer[y+3][0] = 0xC7;
+            Target->WinBuffer[y+3][0] = 0xA7;
         }
         else if (linechar == UC_HLINE_DOUBLE)
         {
-            Target->WinBuffer[y+3][0] = 0xCC;
+            Target->WinBuffer[y+3][0] = 0xAC;
         }
     }
 
@@ -262,11 +267,11 @@ void UI_DrawHLine(u8 x, u8 y, u8 width, u8 linechar)
     {
         if (linechar == UC_HLINE_SINGLE)
         {
-            Target->WinBuffer[y+3][39] = 0xB6;
+            Target->WinBuffer[y+3][39] = 0x96;
         }
         else if (linechar == UC_HLINE_DOUBLE)
         {
-            Target->WinBuffer[y+3][39] = 0xB9;
+            Target->WinBuffer[y+3][39] = 0x99;
         }
     }
 }
@@ -280,21 +285,21 @@ void UI_DrawPanel(u8 x, u8 y, u8 width, u8 height, u8 linetype)
 
     if (linetype == UC_PANEL_SINGLE)
     {
-        lt_w  = 0xC4;
-        lt_h  = 0xB3;
-        lt_ul = 0xDA;
-        lt_ur = 0xBF;
-        lt_bl = 0xC0;
-        lt_br = 0xD9;
+        lt_w  = 0xA4;
+        lt_h  = 0x93;
+        lt_ul = 0xBA;
+        lt_ur = 0x9F;
+        lt_bl = 0xA0;
+        lt_br = 0xB9;
     }
     else if (linetype == UC_PANEL_DOUBLE)
     {
-        lt_w  = 0xCD;
-        lt_h  = 0xBA;
-        lt_ul = 0xC9;
-        lt_ur = 0xBB;
-        lt_bl = 0xC8;
-        lt_br = 0xBC;
+        lt_w  = 0xAD;
+        lt_h  = 0x9A;
+        lt_ul = 0xA9;
+        lt_ur = 0x9B;
+        lt_bl = 0xA8;
+        lt_br = 0x9C;
     }
     else
     {
@@ -323,133 +328,32 @@ void UI_DrawPanel(u8 x, u8 y, u8 width, u8 height, u8 linetype)
     Target->WinBuffer[y+3+height-1][x+1] = lt_bl;
     Target->WinBuffer[y+3+height-1][x+1+width-1] = lt_br;
 
-    /*for (u8 i = 0; i < width-2; i++)
+    UI_ClearRect(x+1, y+1, width-2, height-2);
+}
+void UI_DrawPanelSimple(u8 x, u8 y, u8 width, u8 height)
+{
+    if (Target == NULL) return;
+
+    for (u8 i = 0; i < width-2; i++)
     {
-        if (linetype == UC_PANEL_SINGLE) 
-        {
-            if (Target->WinBuffer[y+3][x+2+i] == UC_VLINE_SINGLE) Target->WinBuffer[y+3][x+2+i] = 0xC1;
-            else if (Target->WinBuffer[y+3][x+2+i] == UC_VLINE_DOUBLE) Target->WinBuffer[y+3][x+2+i] = 0xD0;
-            else Target->WinBuffer[y+3][x+2+i] = lt_w;
-
-
-            if (Target->WinBuffer[y+3+height-1][x+2+i] == UC_VLINE_SINGLE) Target->WinBuffer[y+3+height-1][x+2+i] = 0xC2;
-            else if (Target->WinBuffer[y+3+height-1][x+2+i] == UC_VLINE_DOUBLE) Target->WinBuffer[y+3+height-1][x+2+i] = 0xD2;
-            else Target->WinBuffer[y+3+height-1][x+2+i] = lt_w;
-        }
-        else if (linetype == UC_PANEL_DOUBLE) 
-        {
-
-        }
-        else 
-        {
-            Target->WinBuffer[y+3][x+2+i] = lt_w;
-            Target->WinBuffer[y+3+height-1][x+2+i] = lt_w;
-        }
+        Target->WinBuffer[y+3][x+2+i] = 0xA4;
+        Target->WinBuffer[y+3+height-1][x+2+i] = 0xA4;
+        
+        Target->WinBuffer[y+4][x+2+i] = 0x20;  // Clear a single line
     }
 
     for (u8 i = 0; i < height-2; i++)
     {
-        if (linetype == UC_PANEL_SINGLE) 
-        {
-            if (Target->WinBuffer[y+4+i][x+1] == UC_HLINE_SINGLE) Target->WinBuffer[y+4+i][x+1] = 0xB4;//
-            else if (Target->WinBuffer[y+4+i][x+1] == UC_HLINE_DOUBLE) Target->WinBuffer[y+4+i][x+1] = 0xB5;//
-            else if (Target->WinBuffer[y+4+i][x+1] == 0xD2) Target->WinBuffer[y+4+i][x+1] = 0xB4;//
-            else if (Target->WinBuffer[y+4+i][x+1] == 0xC1) Target->WinBuffer[y+4+i][x+1] = 0xB4;//
-            else Target->WinBuffer[y+4+i][x+1] = lt_h;
-
-
-            if (Target->WinBuffer[y+4+i][x+1+width-1] == UC_HLINE_SINGLE) Target->WinBuffer[y+4+i][x+1+width-1] = 0xC3;//
-            else if (Target->WinBuffer[y+4+i][x+1+width-1] == UC_HLINE_DOUBLE) Target->WinBuffer[y+4+i][x+1+width-1] = 0xC6;
-            else Target->WinBuffer[y+4+i][x+1+width-1] = lt_h;
-        }
-        else if (linetype == UC_PANEL_DOUBLE) 
-        {
-
-        }
-        else 
-        {
-            Target->WinBuffer[y+4+i][x+1] = lt_h;
-            Target->WinBuffer[y+4+i][x+1+width-1] = lt_h;
-        }
-
-        //Target->WinBuffer[y+4+i][x+1] = lt_h;
-        //Target->WinBuffer[y+4+i][x+1+width-1] = lt_h;
+        Target->WinBuffer[y+4+i][x+1] = 0x93;
+        Target->WinBuffer[y+4+i][x+1+width-1] = 0x93;
     }
 
+    Target->WinBuffer[y+3][x+1] = 0xBA;
+    Target->WinBuffer[y+3][x+1+width-1] = 0x9F;
+    Target->WinBuffer[y+3+height-1][x+1] = 0xA0;
+    Target->WinBuffer[y+3+height-1][x+1+width-1] = 0xB9;
 
-    / *if (linetype == UC_PANEL_SINGLE) 
-    {
-        if (Target->WinBuffer[y+3][x+1] == lt_ul) Target->WinBuffer[y+3][x+1] == 
-        else if (Target->WinBuffer[y+3][x+1+width-1] == lt_ur)
-        else if (Target->WinBuffer[y+3+height-1][x+1] == lt_bl)
-        else if (Target->WinBuffer[y+3+height-1][x+1+width-1] == lt_br)
-        else
-        {
-
-        }
-    }* /
-
-    // UL
-    switch (Target->WinBuffer[y+3][x+1])
-    {
-        case UC_HLINE_SINGLE:
-            Target->WinBuffer[y+3][x+1] = 0xC2;
-        break;
-        
-        case 0x20:
-        default:
-            Target->WinBuffer[y+3][x+1] = lt_ul;
-        break;
-    }
-
-    // UR
-    switch (Target->WinBuffer[y+3][x+1+width-1])
-    {
-        case UC_HLINE_SINGLE:
-            Target->WinBuffer[y+3][x+1+width-1] = 0xC2;
-        break;
-        
-        case 0x20:
-        default:
-            Target->WinBuffer[y+3][x+1+width-1] = lt_ur;
-        break;
-    }
-
-    // BL
-    switch (Target->WinBuffer[y+3+height-1][x+1])
-    {
-        case UC_HLINE_SINGLE:
-            Target->WinBuffer[y+3+height-1][x+1] = 0xC1;
-        break;
-
-        case 0xBF:
-            Target->WinBuffer[y+3+height-1][x+1] = 0xC5;
-        break;
-
-        case UC_VLINE_DOUBLE:
-            Target->WinBuffer[y+3+height-1][x+1] = lt_bl;
-        break;
-        
-        case 0x20:
-        default:
-            Target->WinBuffer[y+3+height-1][x+1] = lt_bl;
-        break;
-    }
-
-    // BR
-    switch (Target->WinBuffer[y+3+height-1][x+1+width-1])
-    {
-        case UC_HLINE_SINGLE:
-            Target->WinBuffer[y+3+height-1][x+1+width-1] = 0xC2;
-        break;
-        
-        case 0x20:
-        default:
-            Target->WinBuffer[y+3+height-1][x+1+width-1] = lt_br;
-        break;
-    }*/
-
-    UI_ClearRect(x+1, y+1, width-2, height-2);
+    //UI_ClearRect(x+1, y+1, width-2, height-2);
 }
 
 // -- Scrollbar --
@@ -465,7 +369,7 @@ void UI_DrawVScrollbar(u8 x, u8 y, u8 height, u16 min, u16 max, u16 pos)
 
     Target->WinBuffer[y+3][x+1] = 0x1E;         // Up arrow
     Target->WinBuffer[y+height+2][x+1] = 0x1F;  // Down arrow
-    Target->WinBuffer[y+pos_+4][x+1] = 0xDB;    // Slider
+    Target->WinBuffer[y+pos_+4][x+1] = 0xBB;    // Slider
 }
 
 // -- ItemList --
@@ -488,4 +392,17 @@ void UI_DrawItemList(u8 x, u8 y, u8 width, u8 height, const char *caption, char 
         strncpy(tmp, list[i+scroll_], width-3);
         UI_DrawText(x+1, y+2+i, tmp);
     }
+}
+
+// -- Text Input --
+void UI_DrawTextInput(u8 x, u8 y, u8 width, const char *caption, char str[], bool bShowCaret)
+{
+    if (Target == NULL) return;
+    
+    UI_DrawPanelSimple(x, y, width, 3);
+    UI_DrawText(x+1, y, caption);
+
+    UI_DrawText(x+1, y+1, str);
+
+    if (bShowCaret) Target->WinBuffer[y+4][x+2+strlen(str)] = 0xBD;
 }

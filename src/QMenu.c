@@ -1,4 +1,3 @@
-
 #include "QMenu.h"
 #include "HexView.h"
 #include "Terminal.h"
@@ -6,11 +5,11 @@
 #include "StateCtrl.h"
 #include "Utils.h"
 #include "SRAM.h"
-#include "Network.h"
+#include "Network.h"                // DEV_UART
+#include "devices/Keyboard_PS2.h"   // vKBLayout
+#include "Screensaver.h"            // bScreensaver
 
-extern SM_Device DEV_UART;
-extern u8 vKBLayout;        // Selected keyboard layout
-
+// Forward decl.
 void WINFN_Reset();
 void WINFN_Newline();
 void WINFN_BGColor();
@@ -28,6 +27,7 @@ void WINFN_HSCOFF();
 void WINFN_Echo();
 void WINFN_LineMode();
 void WINFN_CUSTOM_FGCL();
+void WINFN_SCREENSAVER();
 
 static struct s_menu
 {
@@ -55,12 +55,13 @@ static struct s_menu
      "ABOUT"}
 },
 {//1
-    4,
+    5,
     0, 255, 0,
     NULL, WINFN_Reset, NULL,
     "RESET",
-    {255, 255, 255, 255},
-    {"HARD RESET",
+    {255, 255, 255, 255, 255},
+    {"EXIT",
+     "HARD RESET",
      "SOFT RESET",
      "SAVE CONFIG TO SRAM",
      "ERASE SRAM"}
@@ -75,14 +76,15 @@ static struct s_menu
      "IRC"}
 },
 {//3
-    3,
+    4,
     0, 255, 0,
     NULL, NULL, NULL,
     "TERMINAL SETTINGS",
-    {6, 9, 11},
+    {6, 9, 11, 25},
     {"VARIABLES",
      "TERMINAL TYPE",
-     "FONT SIZE"}
+     "FONT SIZE",
+     "SCREENSAVER"}
 },
 {//4
     6,
@@ -299,13 +301,22 @@ static struct s_menu
     {"NORMAL",
      "HIGHLIGHTED",
      "CUSTOM"}
+},
+{//25
+    2,
+    0, 255, 0,
+    NULL, WINFN_SCREENSAVER, NULL,
+    "SCREENSAVER",
+    {254, 254},
+    {"OFF",
+     "ON"}
 }};
 
 static const u8 QFrame[3][24] = 
 {
-    {201, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 187},
-    {186, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 186},
-    {200, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 188},
+    {0xA9, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0x9B},
+    {0x9A, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 0x9A},
+    {0xA8, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0x9C},
 };
 
 static u8 SelectedIdx = 0;
@@ -314,6 +325,7 @@ static const u8 MenuPosX = 1, MenuPosY = 0;
 bool bShowQMenu = FALSE;
 u8 QSelected_BGCL = 0;
 u8 QSelected_FGCL = 1;
+
 
 void QMenu_Input()
 {
@@ -349,6 +361,7 @@ void SetupQItemTags()
     MainMenu[21].tagged_entry = vDoEcho;
     MainMenu[22].tagged_entry = vLineMode>1?0:vLineMode;
     MainMenu[24].tagged_entry = bHighCL;
+    MainMenu[25].tagged_entry = bScreensaver;
 
     switch (vSpeed[0])
     {
@@ -398,40 +411,40 @@ void DrawMenu(u8 idx)
 {
     char buf[32];
     
-    VDP_setWindowVPos(FALSE, MainMenu[idx].num_entries+4);
-    TRM_clearTextArea(0, 0, 36, MainMenu[idx].num_entries+4);
+    TRM_SetWinHeight(MainMenu[idx].num_entries+4);
+    TRM_ClearTextArea(0, 0, 36, MainMenu[idx].num_entries+4);
 
     MainMenu[MenuIdx].selected_entry = SelectedIdx;   // Mark previous menu selection entry
 
     MenuIdx = idx;
     SelectedIdx = MainMenu[MenuIdx].selected_entry;   // Get menu selection entry from new menu
 
-    TRM_drawText((char*)QFrame[0], 1, 0, PAL1);    // Draw the top of the border frame
+    TRM_DrawText((char*)QFrame[0], 1, 0, PAL1);    // Draw the top of the border frame
 
     // Insert the menu title into the top border frame
     sprintf(buf, " %s ", MainMenu[MenuIdx].title);
-    TRM_drawText(buf, 2, 0, PAL1);
+    TRM_DrawText(buf, 2, 0, PAL1);
 
-    TRM_drawText((char*)QFrame[2], 1, MainMenu[MenuIdx].num_entries+3, PAL1);
+    TRM_DrawText((char*)QFrame[2], 1, MainMenu[MenuIdx].num_entries+3, PAL1);
 
     for (u8 i = 0; i < MainMenu[MenuIdx].num_entries; i++)
     {
-        TRM_drawText((char*)QFrame[1], 1, MenuPosY+2+i, PAL1); // Draw left/right border around menu item text
-        TRM_drawText(MainMenu[MenuIdx].text[i], MenuPosX+2, MenuPosY+2+i, PAL1);    // Draw menu item text
+        TRM_DrawText((char*)QFrame[1], 1, MenuPosY+2+i, PAL1); // Draw left/right border around menu item text
+        TRM_DrawText(MainMenu[MenuIdx].text[i], MenuPosX+2, MenuPosY+2+i, PAL1);    // Draw menu item text
     }
 
     // Redraw selected menu item text (highlight)
-    TRM_drawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+2+SelectedIdx, PAL3);
+    TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+2+SelectedIdx, PAL3);
 
     // Draw left/right border above and below menu item text
-    TRM_drawText((char*)QFrame[1], 1, MenuPosY+1, PAL1);
-    TRM_drawText((char*)QFrame[1], 1, MenuPosY+2+MainMenu[MenuIdx].num_entries, PAL1);
+    TRM_DrawText((char*)QFrame[1], 1, MenuPosY+1, PAL1);
+    TRM_DrawText((char*)QFrame[1], 1, MenuPosY+2+MainMenu[MenuIdx].num_entries, PAL1);
 
     // Mark activated option
     if ((MainMenu[MenuIdx].tagged_entry < MainMenu[MenuIdx].num_entries) )//|| (MainMenu[MenuIdx].next_menu[SelectedIdx] < 254))
     {
-        TRM_drawChar('>', MenuPosX+1, MenuPosY+2+MainMenu[MenuIdx].tagged_entry, PAL1);
-        TRM_drawChar('<', MenuPosX+2+strlen(MainMenu[MenuIdx].text[MainMenu[MenuIdx].tagged_entry]), MenuPosY+2+MainMenu[MenuIdx].tagged_entry, PAL1);
+        TRM_DrawChar('>', MenuPosX+1, MenuPosY+2+MainMenu[MenuIdx].tagged_entry, PAL1);
+        TRM_DrawChar('<', MenuPosX+2+strlen(MainMenu[MenuIdx].text[MainMenu[MenuIdx].tagged_entry]), MenuPosY+2+MainMenu[MenuIdx].tagged_entry, PAL1);
     }
 }
 
@@ -473,16 +486,16 @@ void ExitMenu()
 
 void UpMenu()
 {
-    TRM_drawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+2+SelectedIdx, PAL1);
+    TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+2+SelectedIdx, PAL1);
     SelectedIdx = (SelectedIdx == 0 ? MainMenu[MenuIdx].num_entries-1 : SelectedIdx-1);
-    TRM_drawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+2+SelectedIdx, PAL3);
+    TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+2+SelectedIdx, PAL3);
 }
 
 void DownMenu()
 {
-    TRM_drawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+2+SelectedIdx, PAL1);
+    TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+2+SelectedIdx, PAL1);
     SelectedIdx = (SelectedIdx == MainMenu[MenuIdx].num_entries-1 ? 0 : SelectedIdx+1);
-    TRM_drawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+2+SelectedIdx, PAL3);
+    TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+2+SelectedIdx, PAL3);
 }
 
 void QMenu_Toggle()
@@ -491,21 +504,13 @@ void QMenu_Toggle()
     {
         TRM_SetWinHeight(1);
         TRM_ResetStatusText();
-        
-        #ifndef NO_LOGGING
-            KLog("Hiding window");
-        #endif
     }
     else
     {
         TRM_SetWinHeight(10);
-        TRM_clearTextArea(0, 0, 35, 1);
-        TRM_clearTextArea(0, 1, 40, 29);
+        TRM_ClearTextArea(0, 0, 35, 1);
+        TRM_ClearTextArea(0, 1, 40, 29);
         DrawMenu(0);
-        
-        #ifndef NO_LOGGING
-            KLog("Showing window");
-        #endif
     }
 
     bShowQMenu = !bShowQMenu;
@@ -524,17 +529,19 @@ void WINFN_Reset()
     switch (SelectedIdx)
     {
         case 0:
+            ChangeState(PS_Terminal, 0, NULL);
+        break;
+        case 1:
             ChangeState(PS_Dummy, 0, NULL);
             SYS_hardReset();
         break;
-        case 1:
-            ChangeState(getState(), 0, NULL);
-            //ResetSystem(FALSE);
-        break;
         case 2:
-            SRAM_SaveData();
+            ChangeState(getState(), 0, NULL);
         break;
         case 3:
+            SRAM_SaveData();
+        break;
+        case 4:
             SRAM_ClearSRAM();
         break;
     
@@ -654,7 +661,6 @@ void WINFN_SERIALSPEED()
 void WINFN_FONTSIZE()
 {
     TTY_SetFontSize(SelectedIdx);
-    ResetSystem(FALSE);
 }
 
 void WINFN_KBLayoutSel()
@@ -813,4 +819,9 @@ void WINFN_CUSTOM_FGCL()
     }
 
     TTY_ReloadPalette();
+}
+
+void WINFN_SCREENSAVER()
+{
+    bScreensaver = SelectedIdx;
 }

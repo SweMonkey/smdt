@@ -1,15 +1,16 @@
-
 #include "StateCtrl.h"
 #include "IRC.h"
 #include "Terminal.h"   // FontSize, HScroll
 #include "Buffer.h"
 #include "Input.h"
-#include "Keyboard_PS2.h"
+#include "devices/Keyboard_PS2.h"
 #include "Utils.h"
 #include "UI.h"
-#include "TMBuffer.h"
 #include "Network.h"
+#include "devices/RL_Network.h"
 #include "SRAM.h"
+#include "Screensaver.h"
+#include "HexView.h"
 
 #ifndef EMU_BUILD
 static u8 rxdata;
@@ -17,19 +18,11 @@ static u8 kbdata;
 #endif
 
 static u8 bOnce = FALSE;
-SM_Window UserWin;
-u16 UserListScroll = 0;
-u8 KBTxData[40];    // Buffer for the last 40 typed characters from the keyboard
-
-extern bool bShowQMenu;
-extern bool bShowHexView;
-extern u8 PG_CurrentIdx;
-extern u8 PG_OpenPages;
-extern TMBuffer PG_Buffer[];
-extern char PG_UserList[512][16];
-extern u16 PG_UserNum;
-extern char vUsername[];
-extern char vQuitStr[];
+static SM_Window UserWin;
+static u16 UserListScroll = 0;
+static u8 KBTxData[40];            // Buffer for the last 40 typed characters from the keyboard
+static bool bOldScrEnable = FALSE; // Backup for screensaver enabled variable
+static u8 OldFontSize = 0;         // Backup for fontsize variable
 
 #ifdef EMU_BUILD
 asm(".global ircdump\nircdump:\n.incbin \"tmp/streams/rx_hmm.log\"");
@@ -39,22 +32,28 @@ extern const unsigned char ircdump[];
 void IRC_PrintChar(u8 c);
 
 
-void Enter_IRC(u8 argc, const char *argv[])
+void Enter_IRC(u8 argc, char *argv[])
 {
+    bOldScrEnable = bScreensaver;     // Remember previous screensaver setting
+    bScreensaver = FALSE;   // Disable screensaver
+
+    OldFontSize = FontSize;
+    if (FontSize == 1)
+    {
+        FontSize = 2;
+    }
+
     IRC_Init();
 
     TRM_SetWinParam(FALSE, TRUE, 20, 1);
     TRM_SetStatusText(STATUS_TEXT);
 
     UI_CreateWindow(&UserWin, "", UC_NOBORDER);
-    TRM_clearTextArea(26, 1, 14, 2);    // Clear top 2 tile lines above Channel/User window - can contain leftovers from fullscreen windows
+    TRM_ClearTextArea(26, 1, 14, 2);    // Clear top 2 tile lines above Channel/User window - can contain leftovers from fullscreen windows
 
     memset(KBTxData, 0, 40);
 
     #ifdef EMU_BUILD
-    // rx_freenode.log 18403
-    // rx_freenode2.log 58037
-    // rx_freenode3.log 170665
     u8 data; 
     u32 p = 0;
     u32 s = 18853;
@@ -65,7 +64,7 @@ void Enter_IRC(u8 argc, const char *argv[])
             p++;
             if (bOnce)
             {
-                TRM_SetStatusIcon(ICO_NET_RECV, STATUS_NET_RECV_POS, CHAR_GREEN);
+                TRM_SetStatusIcon(ICO_NET_RECV, ICO_POS_1);
                 bOnce = !bOnce;
             }
 
@@ -78,7 +77,7 @@ void Enter_IRC(u8 argc, const char *argv[])
             
             if (!bOnce)
             {
-                TRM_SetStatusIcon(ICO_NET_IDLE_RECV, STATUS_NET_RECV_POS, CHAR_WHITE);
+                TRM_SetStatusIcon(ICO_NET_IDLE_RECV, ICO_POS_1);
                 bOnce = !bOnce;
             }
         }
@@ -86,6 +85,14 @@ void Enter_IRC(u8 argc, const char *argv[])
         TMB_UploadBuffer(&PG_Buffer[PG_CurrentIdx]);
     }
     #endif
+
+    Buffer_Flush(&TxBuffer);
+    Buffer_Flush(&RxBuffer);
+
+    if ((argc > 0) && (bRLNetwork))
+    {
+        RLN_Connect(argv[0]);
+    }
 }
 
 void ReEnter_IRC()
@@ -97,6 +104,9 @@ void Exit_IRC()
     char buf[64];
     sprintf(buf, "QUIT %s\n", vQuitStr);
     NET_SendString(buf);
+
+    bScreensaver = bOldScrEnable; // Revert screensaver setting
+    FontSize = OldFontSize;
 }
 
 void Reset_IRC()
@@ -110,11 +120,10 @@ void Run_IRC()
     while (Buffer_Pop(&RxBuffer, &rxdata) != 0xFF)
     {
         IRC_ParseRX(rxdata);
-        if (PrintDelay) waitMs(PrintDelay);
 
         if (bOnce)
         {
-            TRM_SetStatusIcon(ICO_NET_RECV, STATUS_NET_RECV_POS, CHAR_GREEN);
+            TRM_SetStatusIcon(ICO_NET_RECV, ICO_POS_1);
             bOnce = !bOnce;
         }
     }
@@ -126,7 +135,7 @@ void Run_IRC()
     
     if (!bOnce)
     {
-        TRM_SetStatusIcon(ICO_NET_IDLE_RECV, STATUS_NET_RECV_POS, CHAR_WHITE);
+        TRM_SetStatusIcon(ICO_NET_IDLE_RECV, ICO_POS_1);
         bOnce = !bOnce;
     }        
     #endif
@@ -138,7 +147,7 @@ void Run_IRC()
 
     if (UI_GetVisible(&UserWin) && !bShowHexView)
     {
-        TRM_clearTextArea(26, 1, 14, 2);
+        TRM_ClearTextArea(26, 1, 14, 2);
         UI_Begin(&UserWin);
         if (PG_UserNum > 0) UI_DrawItemList(25, 0, 14, 25, "User List", PG_UserList, PG_UserNum, UserListScroll);
         else 
@@ -196,6 +205,7 @@ u8 ParseTx()
         strncpy(param, (char*)inbuf+end_c, end_p-2);
 
         // do tolower() on command string here
+        tolower_string(command);
 
         if (strcmp(command, "privmsg") == 0)
         {

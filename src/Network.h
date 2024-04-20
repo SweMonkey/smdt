@@ -3,18 +3,20 @@
 
 #include <genesis.h>
 #include "Buffer.h"
+#include "DevMgr.h"
 
 // Tx flags
 #define TXF_NOBUFFER 1
 
-#define ICO_NET_SEND 0x1A       // Up arrow
-#define ICO_NET_RECV 0x1B       // Down arrow
+#define ICO_NET_SEND      0x1A  // Up arrow
+#define ICO_NET_RECV      0x1B  // Down arrow
 #define ICO_NET_IDLE_SEND 0x18
 #define ICO_NET_IDLE_RECV 0x19
-#define ICO_NET_ERROR 0x1D
+#define ICO_NET_ERROR     0x1D
 
 extern Buffer RxBuffer;
 extern Buffer TxBuffer;
+extern SM_Device DEV_UART;      // Built-in UART
 
 void Ext_IRQ();
 void NET_SendChar(const u8 c, u8 flags);

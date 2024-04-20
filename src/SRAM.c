@@ -1,7 +1,10 @@
-
 #include "SRAM.h"
 #include "Terminal.h"
-#include "Utils.h"  // For EMU_BUILD define
+#include "Utils.h"          // For EMU_BUILD define
+#include "QMenu.h"          // QSelected_BGCL & QSelected_FGCL
+#include "IRC.h"            // vUsername & vQuitStr
+#include "Screensaver.h"    // bScreensaver
+#include "devices/Keyboard_PS2.h"   // vKBLayout
 
 #define SAVE_VERSION 1
 #define ST_BYTE 1
@@ -12,15 +15,9 @@
 
 static u32 Offset = 0;
 
-extern u8 QSelected_BGCL;
-extern u8 QSelected_FGCL;
-extern char vUsername[];     // IRC username
-extern char vQuitStr[];      // IRC quit message
-extern u8 vKBLayout;         // Selected keyboard layout
-
 static const struct s_varlist
 {
-    u8 size;    // 8/9 = String type identifier, not string length
+    u8 size;
     void *ptr;
 } VarList[] =
 {
@@ -40,6 +37,7 @@ static const struct s_varlist
     {ST_SARR, &vQuitStr},
     {ST_SARR, vUsername},
     {ST_BYTE, &bHighCL},
+    {ST_BYTE, &bScreensaver},
     {0, 0}  // Terminator
 };
 

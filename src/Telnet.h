@@ -4,7 +4,7 @@
 #include <genesis.h>
 
 // Telnet Linemode submode commands
-#define LMSM_EDIT 1
+#define LMSM_EDIT    1
 #define LMSM_TRAPSIG 2
 #define LMSM_MODEACK 4
 

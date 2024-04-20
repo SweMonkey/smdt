@@ -80,6 +80,7 @@ typedef struct s_device
 
 extern SM_Device *DevList[DEV_MAX];
 extern DevPort DEV_UART_PORT;   // Default UART port - Read only!
+extern bool bRLNetwork;
 
 void SetDevicePort(SM_Device *d, DevPort p);
 void ConfigureDevices();

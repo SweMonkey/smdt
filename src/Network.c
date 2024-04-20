@@ -1,10 +1,10 @@
-
 #include "Network.h"
 #include "Buffer.h"
 #include "DevMgr.h"
 #include "Terminal.h"   // vLineMode
 #include "Telnet.h"     // LMSM define
 #include "Utils.h"      // EMU_BUILD define, TRM
+#include "devices/RL_Network.h"
 
 // Statistics
 u32 RXBytes = 0;
@@ -17,12 +17,12 @@ SM_Device DEV_UART;
 // Rx IRQ
 void Ext_IRQ()
 {
-    vu8 *PSCTRL = (u8*)DEV_UART.SCtrl;
+    vu8 *PSCTRL = (vu8*)DEV_UART.SCtrl;
     if ((*PSCTRL & 6) != 2) return;
 
     SYS_setInterruptMaskLevel(7);
 
-    vu8 *byte = (u8*)DEV_UART.RxData;
+    vu8 *byte = (vu8*)DEV_UART.RxData;
     Buffer_Push(&RxBuffer, *byte);
 
     SYS_setInterruptMaskLevel(0);
@@ -41,21 +41,28 @@ void NET_SendChar(const u8 c, u8 flags)
         return;
     }
 
-    vu8 *PTX = (vu8 *)DEV_UART.TxData;
-    vu8 *PSCTRL = (vu8 *)DEV_UART.SCtrl;
+    TRM_SetStatusIcon(ICO_NET_SEND, ICO_POS_2);
 
-    TRM_SetStatusIcon(ICO_NET_SEND, STATUS_NET_SEND_POS, CHAR_RED);
-
-    while (*PSCTRL & 1) // while Txd full = 1
+    if (bRLNetwork)
     {
-        PSCTRL = (vu8 *)DEV_UART.SCtrl;
+        RLN_SendByte(c);
     }
+    else
+    {
+        vu8 *PTX = (vu8 *)DEV_UART.TxData;
+        vu8 *PSCTRL = (vu8 *)DEV_UART.SCtrl;
 
-    *PTX = c;
+        while (*PSCTRL & 1) // while Txd full = 1
+        {
+            PSCTRL = (vu8 *)DEV_UART.SCtrl;
+        }
+
+        *PTX = c;
+    }
 
     TXBytes++;
 
-    TRM_SetStatusIcon(ICO_NET_IDLE_SEND, STATUS_NET_SEND_POS, CHAR_WHITE);
+    TRM_SetStatusIcon(ICO_NET_IDLE_SEND, ICO_POS_2);
 }
 
 // Pop and transmit data in TxBuffer
@@ -65,32 +72,44 @@ void NET_TransmitBuffer()
     return;
     #endif
 
-    vu8 *PTX = (vu8 *)DEV_UART.TxData;
-    vu8 *PSCTRL = (vu8 *)DEV_UART.SCtrl;
-    u8 data;
+    TRM_SetStatusIcon(ICO_NET_SEND, ICO_POS_2);
 
-    TRM_SetStatusIcon(ICO_NET_SEND, STATUS_NET_SEND_POS, CHAR_RED);
-
-    while (Buffer_Pop(&TxBuffer, &data) != 0xFF)
+    if (bRLNetwork)
     {
-        while (*PSCTRL & 1) // while Txd full = 1
+        u8 data;
+
+        while (Buffer_Pop(&TxBuffer, &data) != 0xFF)
         {
-            PSCTRL = (vu8 *)DEV_UART.SCtrl;
+            RLN_SendByte(data);
+
+            TXBytes++;
         }
+    }
+    else
+    {
+        vu8 *PTX = (vu8 *)DEV_UART.TxData;
+        vu8 *PSCTRL = (vu8 *)DEV_UART.SCtrl;
+        u8 data;
 
-        *PTX = data;
+        while (Buffer_Pop(&TxBuffer, &data) != 0xFF)
+        {
+            while (*PSCTRL & 1) // while Txd full = 1
+            {
+                PSCTRL = (vu8 *)DEV_UART.SCtrl;
+            }
 
-        TXBytes++;
+            *PTX = data;
+
+            TXBytes++;
+        }
     }
 
-    TRM_SetStatusIcon(ICO_NET_IDLE_SEND, STATUS_NET_SEND_POS, CHAR_WHITE);
+    TRM_SetStatusIcon(ICO_NET_IDLE_SEND, ICO_POS_2);
 }
 
 void NET_SendString(const char *str)
 {
-    u16 len = strlen(str);
-
-    for (u16 c = 0; c < len; c++)
+    for (u16 c = 0; c < strlen(str); c++)
     {
         NET_SendChar(str[c], TXF_NOBUFFER);
     }

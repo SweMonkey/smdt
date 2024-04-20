@@ -1,3 +1,17 @@
+v0.28:
+Added initial support for b1tsh1ft3r's network cartridge 'RetroLink', allowing much faster network speeds and a MD to be completely stand alone.
+Added a screensaver that will activate after 5 minutes of inactivity. Disabled by default.
+Buffer system can no longer drop a byte if it is full.
+SMDTC start menu has been revamped and simplified. It can now accept addresses to connect to if using retrolink.
+VRAM management; Hardcoded addresses all over the codebase has been replaced with common macros (defines). This makes it easy to move around various chunks in VRAM.
+Sprite macros; Make it easier to manipulate more than 1 hardcoded sprite.
+Logging macros changed around to make it easier to log specific parts.
+Old unused macros removed and lot of code clean ups (How much is now broken I wonder...).
+Fixed old bug with ESC[A / B / C / D; It didn't always move the cursor by at least 1. Margins only partially implemented.
+Terminal: Added "DEC Special Character and Line Drawing Set" character map.
+Terminal: Allow printing characters > $7E again; Fixes some issues with certain telnet servers using extended ascii.
+Terminal: The terminal state is now acting as a command interpreter, which can be used to type commands and launch sessions with arguments.
+
 v0.27:
 SRAM: Added the ability to save config to SRAM.
 IRC: Added "tabs" to have several channels/private messaging going at once. It uses 8-bit tilemap buffers in RAM, 

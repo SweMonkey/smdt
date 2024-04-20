@@ -1,12 +1,12 @@
-
 #include "StateCtrl.h"
 #include "Telnet.h"
 #include "Terminal.h"
 #include "Buffer.h"
 #include "Input.h"
-#include "Keyboard_PS2.h"
+#include "devices/Keyboard_PS2.h"
 #include "Utils.h"
 #include "Network.h"
+#include "devices/RL_Network.h"
 
 #ifndef EMU_BUILD
 static u8 rxdata;
@@ -21,7 +21,7 @@ u32 StreamPos = 0;
 #endif
 
 
-void Enter_Telnet(u8 argc, const char *argv[])
+void Enter_Telnet(u8 argc, char *argv[])
 {
     TELNET_Init();
     TRM_SetStatusText(STATUS_TEXT);  
@@ -51,7 +51,7 @@ void Enter_Telnet(u8 argc, const char *argv[])
     // rx_absinthebbs.log 53692
     u8 data; 
     u32 p = 0;
-    u32 s = 0x8C8F;
+    u32 s = 719624;
     StreamPos = p;
 
     while (p < s)
@@ -61,7 +61,7 @@ void Enter_Telnet(u8 argc, const char *argv[])
             p++;
             if (bOnce)
             {
-                TRM_SetStatusIcon(ICO_NET_RECV, STATUS_NET_RECV_POS, CHAR_GREEN);
+                TRM_SetStatusIcon(ICO_NET_RECV, ICO_POS_1);
                 bOnce = !bOnce;
             }
 
@@ -76,7 +76,7 @@ void Enter_Telnet(u8 argc, const char *argv[])
             
             if (!bOnce)
             {
-                TRM_SetStatusIcon(ICO_NET_IDLE_RECV, STATUS_NET_RECV_POS, CHAR_WHITE);
+                TRM_SetStatusIcon(ICO_NET_IDLE_RECV, ICO_POS_1);
                 bOnce = !bOnce;
             }
 
@@ -86,6 +86,15 @@ void Enter_Telnet(u8 argc, const char *argv[])
 
     kprintf("Stream replay ended.");    
     #endif
+
+    Buffer_Flush(&TxBuffer);
+    Buffer_Flush(&RxBuffer);
+
+    if ((argc > 0) && (bRLNetwork))
+    {
+        RLN_Connect(argv[0]);
+    }
+
 }
 
 void ReEnter_Telnet()
@@ -111,7 +120,7 @@ void Run_Telnet()
 
         if (bOnce)
         {
-            TRM_SetStatusIcon(ICO_NET_RECV, STATUS_NET_RECV_POS, CHAR_GREEN);
+            TRM_SetStatusIcon(ICO_NET_RECV, ICO_POS_1);
             bOnce = !bOnce;
         }
     }
@@ -123,7 +132,7 @@ void Run_Telnet()
     
     if (!bOnce)
     {
-        TRM_SetStatusIcon(ICO_NET_IDLE_RECV, STATUS_NET_RECV_POS, CHAR_WHITE);
+        TRM_SetStatusIcon(ICO_NET_IDLE_RECV, ICO_POS_1);
         bOnce = !bOnce;
     }
     #endif

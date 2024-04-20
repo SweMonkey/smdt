@@ -1,19 +1,17 @@
-
 // Note: This clusterfuck is a prototype and may be slightly rewritten in the future
 
 #include "DevMgr.h"
-#include "Keyboard_PS2.h"   // KB_SendCommand() and KB_Poll()
-#include "QMenu.h"      // ChangeText() when KB is detected
-#include "Utils.h"      // Definitions
-#include "Input.h"      // Input_JP
+#include "devices/Keyboard_PS2.h"   // KB_SendCommand() and KB_Poll()
+#include "devices/RL_Network.h"
+#include "Network.h"
+#include "QMenu.h"                  // ChangeText() when KB is detected
+#include "Utils.h"                  // Definitions
+#include "Input.h"                  // Input_JP
 
-extern SM_Device DEV_KBPS2;
-extern SM_Device DEV_UART;
-SM_Device DEV_Joypad;    // Joypad
-
-SM_Device *DevList[DEV_MAX];
-u8 DevSeq = 0;
-
+SM_Device DEV_Joypad;               // Joypad device
+SM_Device *DevList[DEV_MAX];        // Device list
+u8 DevSeq = 0;                      // Number of devices
+bool bRLNetwork = FALSE;            // Use RetroLink cartridge instead of built-in UART
 DevPort DEV_UART_PORT = DP_Port2;   // Default UART port - Read only!
 
 
@@ -112,7 +110,7 @@ void DetectDevices()
         if ((ret == 0xFE) || (ret == 0xEE)) // FE = Fail+Resend, EE = Successfull echo back
         {
             sprintf(FStringTemp, "Found KB @ slot %u:%u (r=$%X)", DEV_FULL(DEV_KBPS2), ret);
-            TRM_SetStatusIcon(ICO_KB_OK, STATUS_ID_POS, CHAR_GREEN);
+            TRM_SetStatusIcon(ICO_KB_OK, ICO_POS_0);
 
             DevList[DevSeq++] = &DEV_KBPS2;
             
@@ -128,7 +126,7 @@ void DetectDevices()
         }
     }
 
-    TRM_drawText(FStringTemp, 1, 4, PAL1);
+    TRM_DrawText(FStringTemp, 1, BootNextLine++, PAL1);
 
     // -- Joypad setup --------------------------
     if (bNoKeyboard || (DEV_KBPS2.PAssign == DP_Port2))
@@ -151,7 +149,7 @@ void DetectDevices()
         JOY_setEventHandler(Input_JP);
         kprintf("No KB found - Press F1 to continue");
 
-        if (bNoKeyboard) TRM_SetStatusIcon(ICO_JP_OK, STATUS_ID_POS, CHAR_GREEN);
+        if (bNoKeyboard) TRM_SetStatusIcon(ICO_JP_OK, ICO_POS_0);
     }
 
     // -- UART setup --------------------------
@@ -165,6 +163,27 @@ void DetectDevices()
     vu8 *SCtrl;
     SCtrl = (vu8 *)DEV_UART.SCtrl;
     *SCtrl = 0x38;
+
+    // RetroLink Network
+    if (RLN_Initialize())
+    {
+        bRLNetwork = TRUE;
+
+        VDP_setReg(0xB, 0);   // Disable VDP ext interrupt (Enable: 8 - Disable: 0)
+
+        TRM_DrawText("RetroLink IP: ", 1, BootNextLine++, PAL1);
+        RLN_PrintIP(1, BootNextLine++);
+        TRM_DrawText("RetroLink MAC: ", 1, BootNextLine++, PAL1);
+        RLN_PrintMAC(1, BootNextLine++);
+    }
+    else
+    {
+        bRLNetwork = FALSE;
+
+        TRM_DrawText("RetroLink Network Adapter not found", 1, BootNextLine++, PAL1);
+        TRM_DrawText("Defaulting to built in UART", 1, BootNextLine++, PAL1);
+    }
+
 }
 
 void ConfigureDevices()

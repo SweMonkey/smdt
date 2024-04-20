@@ -1,9 +1,6 @@
 # 8x8 Font glyps
 TILESET GFX_ASCII_TERM "ascii_n_i.png" NONE NONE
 
-# 4x8 Font glyps
-TILESET GFX_ASCII_TERM_SMALL "4x8_by_RKT_v2.png" NONE NONE
-
 # 4x8 Font glyps with antialiasing, using colour indices 15/16
 TILESET GFX_ASCII_TERM_SMALL_AA "4x8_by_RKT_v2_AA.png" NONE NONE
 

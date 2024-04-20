@@ -1,7 +1,7 @@
-
 #include "StateCtrl.h"
 
-void Enter_Dummy(u8 argc, const char *argv[])
+
+void Enter_Dummy(u8 argc, char *argv[])
 {
 }
 

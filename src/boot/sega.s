@@ -18,7 +18,7 @@
     .org    0x00000000
 
 _Start_Of_Rom:
-_Vecteurs_68K:
+_Vectors_68K:
         dc.l    __stack                 /* Stack address */
         dc.l    _Entry_Point            /* Program start address */
         dc.l    _Bus_Error

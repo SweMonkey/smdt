@@ -22,7 +22,7 @@ I (smds) will not take any responsibilities for any failure to read and understa
 <br>
 
 ## Credits
-b1tsh1ft3r - Testing and improvement ideas<br>
+b1tsh1ft3r - Testing, improvement ideas and RetroLink support<br>
 RKT - For creating a 4x8 extended ASCII font tileset<br>
 smds - Code<br>
 <br>

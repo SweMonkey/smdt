@@ -1,466 +1,75 @@
-
 #include "StateCtrl.h"
+#include "UI.h"
 #include "Input.h"
 #include "Terminal.h"
-#include "Keyboard_PS2.h"
+#include "devices/Keyboard_PS2.h"
 #include "Utils.h"
+#include "Buffer.h"
+#include "Network.h"
+#include "SRAM.h"
+#include "IRC.h"
 
-void MN_FUNC_TELNET();
-void MN_FUNC_IRC();
-void MN_FUNC_TERMINAL_SETTINGS();
-void MN_FUNC_DEVICES();
-void MN_FUNC_TERM_EMULATOR();
-
-static const char * const TelnetPage[27] =
-{
-    "Telnet session",
-    "4800 Baud - 8n1",
-    "",
-    "Press <RETURN> to launch",
-    "telnet session",
-    "","","","","","","","","","","","","","","","","","","","","",""
-};
-
-static const char * const IRCPage[27] =
-{
-    "IRC session",
-    "",
-    "Press <RETURN> to launch",
-    "IRC session",
-    "", "","","","","","","","","","","","","","","","","","","","","",""
-};
-
-static const char * const TerminalPage[27] =
-{
-    "Terminal emulator",
-    "",
-    "Press <RETURN> to launch",
-    "the terminal emulator",
-    "", "","","","","","","","","","","","","","","","","","","","","",""
-};
-
-static const char * const SessionPage[27] =
-{
-    "Select session type",
-    "","","","","","","","","","","","","","","","","","","","","","","","","",""
-};
-
-static const char * const TerminalSettingsPage[27] =
-{
-    "Options controlling the",
-    "terminal emulation",
-    "",
-    "",
-    "","","","","","","","","","","","","","","","","","","","","","",""
-};
-
-static const char * const ConnectionPage[27] =
-{
-    "Options controlling the",
-    "connection",
-    "",
-    "Not implemented.",
-    "","","","","","","","","","","","","","","","","","","","","","",""
-};
-
-static const char * const DevicePage[27] =
-{
-    "Options controlling the",
-    "devices connected to your",
-    "mega drive",
-    "",
-    "Not implemented.",
-    "Please use the quick menu",
-    "(Right win key) when in a",
-    "session.",
-    "","","","","","","","","","","","","","","","","","",""
-};
-
-static const char * const AboutPage[27] =
-{
-    "About SMDT",
-    "",
-    "Not implemented.",
-    "","","","","","","","","","","","","","","","","","","","","","","",""
-};
-
-/*static const char * const NopPage[27] =
-{
-    "Not implemented.",
-    "","","","","","","","","","","","","","","","","","","","","","","","","",""
-};*/
-
-
-static const char * const TerminalSubPage[27] =
-{
-    "Options controlling the",
-    "terminal emulation",
-    "",
-    "",
-    "","","","","","","","","","","","","","","","","","","","","","",""
-};
-
-static const char * const KeyboardSubPage[27] =
-{
-    "Options controlling the",
-    "effects of keys",
-    "",
-    "",
-    "","","","","","","","","","","","","","","","","","","","","","",""
-};
-
-static const char * const BellSubPage[27] =
-{
-    "Options controlling the",
-    "terminal bell",
-    "", "", "","","","","","","","","","","","","","","","","","","","","","",""
-};
-
-static const char * const FeaturesSubPage[27] =
-{
-    "Enabling and disabling",
-    "advanced terminal",
-    "features", "", "","","","","","","","","","","","","","","","","","","","","","",""
-};
-
-static struct s_menu
-{
-    const u8 num_entries;           // Number of entries in menu
-    u8 selected_entry;              // Saved selected entry (automatic, leave at 0)
-    u8 prev_menu;                   // Previous menu to return to when going back (automatic, leave at 0)
-    VoidCallback *entry_function;   // Function callback which is called when entering entry
-    VoidCallback *activate_function;// Function callback which is called when trying to enter an entry without submenu (next_menu=255)
-    VoidCallback *exit_function;    // Function callback which is called when exiting entry
-    const u8 next_menu[8];          // Menu number selected entry leads to (255 = Do nothing)
-    const char * const *page[8];    // Sidepanel text
-    const u8 type[8];               // 0=Normal entry - 1=Submenu
-    const char * const text[8];     // Entry text
-} MainMenu[] =
-{{//0
-    5,
-    0, 0,
-    NULL, NULL, NULL,
-    {1, 4, 255, 255, 255},
-    {SessionPage, TerminalSettingsPage, ConnectionPage, DevicePage, AboutPage},
-    {0},
-    {"Session",
-     "Terminal",
-     "Connection",
-     "Devices",
-     "About"}
-},
-{//1
-    3,
-    0, 0,
-    NULL, NULL, NULL,
-    {2, 3, 6},
-    {TelnetPage, IRCPage, TerminalPage},
-    {0},
-    {"Telnet",
-     "IRC",
-     "Terminal"}
-},
-{//2    - Launch telnet client
-    0,
-    0, 0,
-    MN_FUNC_TELNET, NULL, NULL,
-    {255},
-    {NULL},
-    {0},
-    {""}
-},
-{//3    - Launch IRC
-    0,
-    0, 0,
-    MN_FUNC_IRC, NULL, NULL,
-    {255},
-    {NULL},
-    {0},
-    {""}
-},
-{//4    - Terminal (settings menu)
-    4,
-    0, 0,
-    NULL, NULL, NULL,
-    {128, 255, 255, 255},
-    {TerminalSubPage, KeyboardSubPage, BellSubPage, FeaturesSubPage},
-    {1, 0, 0, 0},
-    {"Terminal",
-     "Keyboard",
-     "Bell",
-     "Features"}
-},
-{//5(128)    - Actual terminal this time (settings menu)
-    0,
-    0, 0,
-    MN_FUNC_TERMINAL_SETTINGS, NULL, NULL,
-    {255},
-    {NULL},
-    {0},
-    {""}
-},
-{//6    - Launch terminal emulator client
-    0,
-    0, 0,
-    MN_FUNC_TERM_EMULATOR, NULL, NULL,
-    {255},
-    {NULL},
-    {0},
-    {""}
-},};
-
-#define SM_CHECKBOX 1
-#define SM_TEXTBOX 2
-
-static struct s_submenu
-{
-    const u8 num_entries;       // Number of entries in menu
-    u8 selected_entry;          // Saved selected entry (automatic, leave at 0)
-    const u8 type[16];
-    void *ptr[16];
-    const char * const text[16];// Entry text
-} SubMenu[] =
-{{//0
-    3, 0,
-    {SM_CHECKBOX, SM_CHECKBOX, SM_CHECKBOX},
-    {&bWrapAround, &vNewlineConv, NULL},
-    {"Wrap mode initially on",
-     "Convert CR to CRLF",
-     "Local echo"}
-}};
-
-static const u8 Frame[5][40] = 
-{
-    {201, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 187},
-    {186, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 186},
-    {204, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 209, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 202, 205, 205, 205, 187},
-    {186, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 179, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 186},
-    {200, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 207, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 205, 188},
-};
-
-static const u8 MenuPosX = 1, MenuPosY = 1;
-static const u8 SubMenuPosX = 12, SubMenuPosY = 1;
+static SM_Window EntryWindow;
+static char IPSTR[32];
+static u8 pLineMode = 1;
 static u8 SelectedIdx = 0;
-static u8 MenuIdx = 0;
-
-static u8 SubSelectedIdx = 0;
 static u8 SubMenuIdx = 0;
-static u8 bInSubMenu = FALSE;
-
-static void DrawFrame()
-{
-    TRM_drawText((char*)Frame[0], 0, 0, PAL1);
-    TRM_drawText((char*)Frame[1], 0, 1, PAL1);
-    TRM_drawText((char*)Frame[2], 0, 2, PAL1);
-    for (u8 y = 3; y < 27; y++)
-    {
-        TRM_drawText((char*)Frame[3], 0, y, PAL1);
-    }
-    TRM_drawText((char*)Frame[4], 0, 27, PAL1);
-}
-
-static void DrawMenu(u8 idx)
-{
-    TRM_clearTextArea(MenuPosX, MenuPosY+2, 10, 22);
-
-    MainMenu[MenuIdx].selected_entry = SelectedIdx;   // Mark previous menu selection entry
-
-    MenuIdx = idx;
-    SelectedIdx = MainMenu[MenuIdx].selected_entry;   // Get menu selection entry from new menu
-
-    for (u8 i = 0; i < MainMenu[MenuIdx].num_entries; i++)
-    {
-        TRM_drawText(MainMenu[MenuIdx].text[i], MenuPosX, MenuPosY+2+i, PAL1);
-    }
-
-    TRM_drawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX, MenuPosY+2+SelectedIdx, PAL3);
-}
-
-static void DrawSubMenu(u8 idx)
-{
-    char buf[32];
-    u8 bv = 255;
-    TRM_clearTextArea(SubMenuPosX, SubMenuPosY+2, 10, 22);
-
-    SubMenu[SubMenuIdx].selected_entry = SubSelectedIdx;   // Mark previous menu selection entry
-
-    SubMenuIdx = idx;
-    SubSelectedIdx = SubMenu[SubMenuIdx].selected_entry;   // Get menu selection entry from new menu
-
-    for (u8 i = 0; i < SubMenu[SubMenuIdx].num_entries; i++)
-    {
-        switch (SubMenu[SubMenuIdx].type[i])
-        {
-            case SM_CHECKBOX:
-                bv = 0;//(u8)&SubMenu[SubMenuIdx].ptr[i];
-                //kprintf("bv = %u", bv);
-                sprintf(buf, "[%c]", (char)(bv==FALSE?' ':'X'));
-            break;
-
-            case SM_TEXTBOX:
-                sprintf(buf, " ");
-            break;
-        
-            default:
-                sprintf(buf, "NUL");
-            break;
-        }
-
-        TRM_drawText(buf, SubMenuPosX, SubMenuPosY+2+i, PAL1);
-        TRM_drawText(SubMenu[SubMenuIdx].text[i], SubMenuPosX+4, SubMenuPosY+2+i, PAL1);
-    }
-
-    TRM_drawText(SubMenu[SubMenuIdx].text[SubSelectedIdx], SubMenuPosX+4, SubMenuPosY+2+SubSelectedIdx, PAL3);
-}
-
-static void DrawPage(const char * const page[])
-{
-    if (page == NULL) return;
-
-    TRM_clearTextArea(12, 3, 27, 24);
-
-    for (u8 y = 0; y < 24; y++)
-    {
-        TRM_drawText(page[y], 12, y+3, PAL1);
-    }
-}
-
-static void EnterMenu()
-{
-    if (bInSubMenu) return;
-
-    if (MainMenu[MenuIdx].type[SelectedIdx] > 0)
-    {
-        TRM_clearTextArea(12, 3, 27, 24);
-        DrawSubMenu(MainMenu[MenuIdx].type[SelectedIdx]-1);
-        bInSubMenu = TRUE;
-        return;
-    }
-
-    u8 next = MainMenu[MenuIdx].next_menu[SelectedIdx];
-    if (next != 255) 
-    {
-        VoidCallback *func = MainMenu[next].entry_function;
-        if (func != NULL) func();
-
-        MainMenu[next].prev_menu = MenuIdx;    // Return menu, when going back
-        DrawMenu(next);
-
-        DrawPage(MainMenu[MenuIdx].page[SelectedIdx]);
-    }
-    else
-    {
-        VoidCallback *func = MainMenu[MenuIdx].activate_function;
-        if (func != NULL) func();
-    }
-}
-
-static void ExitMenu()
-{
-    if (bInSubMenu)
-    {
-        bInSubMenu = FALSE;
-        DrawPage(MainMenu[MenuIdx].page[SelectedIdx]);
-        return;
-    }
-
-    VoidCallback *func = MainMenu[MenuIdx].exit_function;
-    if (func != NULL) func();
-
-    DrawMenu(MainMenu[MenuIdx].prev_menu);
-}
-
-static void UpMenu()
-{
-    if (bInSubMenu)
-    {
-        TRM_drawText(SubMenu[SubMenuIdx].text[SubSelectedIdx], SubMenuPosX+4, SubMenuPosY+2+SubSelectedIdx, PAL1);
-        SubSelectedIdx = (SubSelectedIdx == 0 ? SubMenu[SubMenuIdx].num_entries-1 : SubSelectedIdx-1);
-        TRM_drawText(SubMenu[SubMenuIdx].text[SubSelectedIdx], SubMenuPosX+4, SubMenuPosY+2+SubSelectedIdx, PAL3);
-    }
-    else
-    {
-        TRM_drawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX, MenuPosY+2+SelectedIdx, PAL1);
-        SelectedIdx = (SelectedIdx == 0 ? MainMenu[MenuIdx].num_entries-1 : SelectedIdx-1);
-        TRM_drawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX, MenuPosY+2+SelectedIdx, PAL3);
-
-        DrawPage(MainMenu[MenuIdx].page[SelectedIdx]);
-    }
-}
-
-static void DownMenu()
-{
-    if (bInSubMenu)
-    {
-        TRM_drawText(SubMenu[SubMenuIdx].text[SubSelectedIdx], SubMenuPosX+4, SubMenuPosY+2+SubSelectedIdx, PAL1);
-        SubSelectedIdx = (SubSelectedIdx == SubMenu[SubMenuIdx].num_entries-1 ? 0 : SubSelectedIdx+1);
-        TRM_drawText(SubMenu[SubMenuIdx].text[SubSelectedIdx], SubMenuPosX+4, SubMenuPosY+2+SubSelectedIdx, PAL3);
-    }
-    else
-    {
-        TRM_drawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX, MenuPosY+2+SelectedIdx, PAL1);
-        SelectedIdx = (SelectedIdx == MainMenu[MenuIdx].num_entries-1 ? 0 : SelectedIdx+1);
-        TRM_drawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX, MenuPosY+2+SelectedIdx, PAL3);
-
-        DrawPage(MainMenu[MenuIdx].page[SelectedIdx]);
-    }
-}
-
-static void UpdateView()
-{
-    DrawMenu(0);
-}
-
-void MN_FUNC_TELNET()
-{
-    ChangeState(PS_Telnet, 0, NULL);
-}
-
-void MN_FUNC_IRC()
-{
-    ChangeState(PS_IRC, 0, NULL);
-}
-
-void MN_FUNC_TERMINAL_SETTINGS()
-{
-    DrawSubMenu(0);
-}
-
-void MN_FUNC_DEVICES()
-{
-
-}
-
-void MN_FUNC_TERM_EMULATOR()
-{
-    ChangeState(PS_Terminal, 0, NULL);
-}
-
-// -- State ------------------------------------------------------------------
 
 #ifndef EMU_BUILD
 static u8 kbdata;
 #endif
 
-void Enter_Entry(u8 argc, const char *argv[])
+
+void UpdateWindow()
+{
+    UI_Begin(&EntryWindow);
+
+    UI_DrawText( 1, 3 + SelectedIdx, ">");
+    UI_DrawText(36, 3 + SelectedIdx, "<");
+
+    switch (SubMenuIdx)
+    {
+        case 0:
+            UI_DrawTextInput(2, 2, 34, "Address", IPSTR, (SelectedIdx == 0));
+
+            UI_DrawText(2,  6, "Launch Telnet Session");
+            UI_DrawText(2,  8, "Launch IRC Session");
+            UI_DrawText(2, 10, "Launch Terminal Session");
+            UI_DrawText(2, 12, "IRC Settings");
+        break;
+
+        case 1:
+            UI_DrawTextInput(2, 2, 34, "IRC Nick", vUsername, (SelectedIdx == 0));
+            UI_DrawTextInput(2, 6, 34, "IRC Exit Message", vQuitStr, (SelectedIdx == 4));
+            UI_DrawText(2, 10, "Return");
+        break;
+    
+        default:
+        break;
+    }
+
+    UI_End();
+}
+
+void Enter_Entry(u8 argc, char *argv[])
 {
     VDP_setWindowVPos(FALSE, 30);
-    TRM_clearTextArea(0, 0, 35, 1);
-    TRM_clearTextArea(0, 1, 40, 29);
+    TRM_ClearTextArea(0, 0, 35, 1);
+    TRM_ClearTextArea(0, 1, 40, 29);
+    
+    UI_CreateWindow(&EntryWindow, "SMDTC - Startup Menu", UC_NONE);
+    
+    // Hack to draw window border only once
+    UI_Begin(&EntryWindow);
+    UI_End();
+    EntryWindow.Flags = UC_NOBORDER;
 
-    DrawFrame();
-    TRM_drawText("SMDT - Startup Menu", 1, 1, PAL1);
-    TRM_drawText("Welcome to SMDT!", 12, 8, PAL1);
+    memset(IPSTR, 0, 32);
 
-    TRM_drawText("Use Up/Down key to select", 12, 13, PAL1);
-    TRM_drawText("an entry", 12, 14, PAL1);
+    pLineMode = vLineMode;  // Save linemode setting
+    vLineMode = 1;          // Causes keyboard input to be buffered
 
-    TRM_drawText("Use Return/Escape key to", 12, 16, PAL1);
-    TRM_drawText("enter or leave an entry", 12, 17, PAL1);
-
-    TRM_drawText("-smds", 12, 24, PAL1);
-
-    UpdateView();
+    UpdateWindow();
 }
 
 void ReEnter_Entry()
@@ -470,7 +79,14 @@ void ReEnter_Entry()
 void Exit_Entry()
 {
     VDP_setWindowVPos(FALSE, 1);
-    TRM_clearTextArea(0, 0, 36, 1);
+    TRM_ClearTextArea(0, 0, 36, 1);
+
+    vLineMode = pLineMode;  // Revert linemode setting
+
+    Buffer_Flush(&TxBuffer);
+    Buffer_Flush(&RxBuffer);
+
+    SRAM_SaveData();
 }
 
 void Reset_Entry()
@@ -483,20 +99,151 @@ void Run_Entry()
     while (KB_Poll(&kbdata))
     {
         KB_Interpret_Scancode(kbdata);
+
+        if ((SelectedIdx == 0) && (SubMenuIdx == 0))        // Address
+        {
+            Buffer_PeekLast(&TxBuffer, 31, (u8*)IPSTR);
+            UI_Begin(&EntryWindow);
+            UI_DrawTextInput(2, 2, 34, "Address", IPSTR, (SelectedIdx == 0));
+            UI_End();
+        }
+        else if ((SelectedIdx == 0) && (SubMenuIdx == 1))   // Nick 
+        {
+            Buffer_PeekLast(&TxBuffer, 31, (u8*)vUsername);
+            UI_Begin(&EntryWindow);
+            UI_DrawTextInput(2, 2, 34, "IRC Nick", vUsername, (SelectedIdx == 0));
+            UI_End();
+        }
+        else if ((SelectedIdx == 4) && (SubMenuIdx == 1))   // Exit Message 
+        {
+            Buffer_PeekLast(&TxBuffer, 31, (u8*)vQuitStr);
+            UI_Begin(&EntryWindow);
+            UI_DrawTextInput(2, 6, 34, "IRC Exit Message", vQuitStr, (SelectedIdx == 4));
+            UI_End();
+        }
     }
     #endif
+}
+
+void VBlank_Entry()
+{
 }
 
 void Input_Entry()
 {
     if (is_KeyDown(KEY_UP))
     {
-        UpMenu();
+        UI_Begin(&EntryWindow);
+        UI_DrawText( 1, 3 + SelectedIdx, " ");
+        UI_DrawText(36, 3 + SelectedIdx, " ");
+
+        if (SubMenuIdx == 0)
+        {
+            switch (SelectedIdx)
+            {
+                case 0: // Address textinput
+                case 3: // Launch telnet
+                    SelectedIdx = 0;
+
+                    Buffer_Flush(&TxBuffer);                    
+                    for (u8 i = 0; i < strlen(IPSTR); i++) Buffer_Push(&TxBuffer, IPSTR[i]);
+                break;
+
+                case 5: // Launch IRC
+                    SelectedIdx = 3;
+                break;
+
+                case 7: // Launch terminal
+                    SelectedIdx = 5;
+                break;
+
+                case 9: // IRC Settings
+                    SelectedIdx = 7;
+                break;
+            
+                default:
+                break;
+            }
+        }
+        else if (SubMenuIdx == 1)
+        {
+            switch (SelectedIdx)
+            {
+                case 0: // Nick textinput
+                case 4: // Exit textinput
+                    SelectedIdx = 0;
+
+                    Buffer_Flush(&TxBuffer);
+                    for (u8 i = 0; i < strlen(vUsername); i++) Buffer_Push(&TxBuffer, vUsername[i]);
+                break;
+
+                case 7: // Return
+                    SelectedIdx = 4;
+                break;
+            
+                default:
+                break;
+            }
+        }
+
+        UI_EndNoPaint();
+        UpdateWindow();
     }
 
     if (is_KeyDown(KEY_DOWN))
     {
-        DownMenu();
+        UI_Begin(&EntryWindow);
+        UI_DrawText( 1, 3 + SelectedIdx, " ");
+        UI_DrawText(36, 3 + SelectedIdx, " ");
+
+        if (SubMenuIdx == 0)
+        {
+            switch (SelectedIdx)
+            {
+                case 0: // Address textinput
+                    SelectedIdx = 3;
+                break;
+
+                case 3: // Launch telnet
+                    SelectedIdx = 5;
+                break;
+
+                case 5: // Launch IRC
+                    SelectedIdx = 7;
+                break;
+
+                case 7: // Launch terminal
+                case 9: // IRC Settings
+                    SelectedIdx = 9;
+                break;
+            
+                default:
+                break;
+            }
+        }
+        else if (SubMenuIdx == 1)
+        {
+            switch (SelectedIdx)
+            {
+                case 0: // Nick textinput
+                    SelectedIdx = 4;
+
+                    Buffer_Flush(&TxBuffer);
+                    for (u8 i = 0; i < strlen(vQuitStr); i++) Buffer_Push(&TxBuffer, vQuitStr[i]);
+                break;
+
+                case 4: // Exit textinput
+                case 7: // Return
+                    SelectedIdx = 7;
+                break;
+            
+                default:
+                break;
+            }
+        }
+        
+        UI_EndNoPaint();
+        UpdateWindow();
     }
 
     if (is_KeyDown(KEY_LEFT))
@@ -509,17 +256,105 @@ void Input_Entry()
 
     if (is_KeyDown(KEY_ESCAPE))
     {
-        ExitMenu();
+        if (SubMenuIdx == 1)
+        {
+            SubMenuIdx = 0;
+            SelectedIdx = 0;
+
+            Buffer_Flush(&TxBuffer);
+            for (u8 i = 0; i < strlen(IPSTR); i++) Buffer_Push(&TxBuffer, IPSTR[i]);
+
+            UI_Begin(&EntryWindow);
+            UI_ClearRect(1, 1, 37, 23);
+            UI_EndNoPaint();
+
+            UpdateWindow();
+        }
     }
 
     if (is_KeyDown(KEY_RETURN))
     {
-        EnterMenu();
+        char *argv[1] =
+        {
+            IPSTR
+        };
+
+        if (SubMenuIdx == 0)
+        {
+            switch (SelectedIdx)
+            {
+                case 0: // Address textinput
+                break;
+
+                case 3: // Launch telnet
+                    ChangeState(PS_Telnet, 1, argv);
+                break;
+
+                case 5: // Launch IRC
+                    ChangeState(PS_IRC, 1, argv);
+                break;
+
+                case 7: // Launch terminal
+                    ChangeState(PS_Terminal, 1, argv);
+                break;
+
+                case 9: // IRC Settings
+                    SubMenuIdx = 1;
+                    SelectedIdx = 0;
+
+                    Buffer_Flush(&TxBuffer);                    
+                    for (u8 i = 0; i < strlen(vUsername); i++) Buffer_Push(&TxBuffer, vUsername[i]);
+
+                    UI_Begin(&EntryWindow);
+                    UI_ClearRect(1, 1, 37, 23);
+                    UI_EndNoPaint();
+                break;
+            
+                default:
+                break;
+            }
+        }
+        else if (SubMenuIdx == 1)
+        {
+            switch (SelectedIdx)
+            {
+                case 0: // Nick textinput
+                break;
+
+                case 4: // Exit textinput
+                break;
+
+                case 7: // Return
+                    SubMenuIdx = 0;
+                    SelectedIdx = 0;
+
+                    Buffer_Flush(&TxBuffer);
+                    for (u8 i = 0; i < strlen(IPSTR); i++) Buffer_Push(&TxBuffer, IPSTR[i]);
+
+                    UI_Begin(&EntryWindow);
+                    UI_ClearRect(1, 1, 37, 23);
+                    UI_EndNoPaint();
+                break;
+            
+                default:
+                break;
+            }
+        }
+
+        UpdateWindow();
+    }
+
+    if (is_KeyDown(KEY_BACKSPACE))
+    {
+        if ((SelectedIdx == 0) || ((SelectedIdx == 4) && (SubMenuIdx == 1))) 
+        {
+            Buffer_ReversePop(&TxBuffer);
+            UpdateWindow();
+        }
     }
 }
 
 const PRG_State EntryState = 
 {
-    Enter_Entry, ReEnter_Entry, Exit_Entry, Reset_Entry, Run_Entry, Input_Entry, NULL, NULL
+    Enter_Entry, ReEnter_Entry, Exit_Entry, Reset_Entry, Run_Entry, Input_Entry, NULL, VBlank_Entry
 };
-
