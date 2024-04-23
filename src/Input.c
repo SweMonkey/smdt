@@ -1,5 +1,5 @@
 #include "Input.h"
-#include "devices/Keyboard_PS2.h"
+#include "Keyboard.h"
 #include "Utils.h"
 #include "Screensaver.h"
 
@@ -33,10 +33,11 @@ void Input_Init()
         JOY_setEventHandler(Input_JP);
     #else
         JOY_setSupport(PORT_1, JOY_SUPPORT_OFF);
-        KB_Init();
     #endif
 
     JOY_setSupport(PORT_2, JOY_SUPPORT_OFF);
+
+    KB_Init();
 }
 
 bool is_KeyDown(u16 key)

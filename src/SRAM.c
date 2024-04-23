@@ -4,7 +4,7 @@
 #include "QMenu.h"          // QSelected_BGCL & QSelected_FGCL
 #include "IRC.h"            // vUsername & vQuitStr
 #include "Screensaver.h"    // bScreensaver
-#include "devices/Keyboard_PS2.h"   // vKBLayout
+#include "Keyboard.h"       // vKB_Layout
 
 #define SAVE_VERSION 1
 #define ST_BYTE 1
@@ -33,7 +33,7 @@ static const struct s_varlist
     {ST_BYTE, &FontSize},
     {ST_LONG, &DEV_UART_PORT},
     {ST_BYTE, &bWrapAround},
-    {ST_BYTE, &vKBLayout},
+    {ST_BYTE, &vKB_Layout},
     {ST_SARR, &vQuitStr},
     {ST_SARR, vUsername},
     {ST_BYTE, &bHighCL},

@@ -2,18 +2,80 @@
 
 #include "DevMgr.h"
 #include "devices/Keyboard_PS2.h"   // KB_SendCommand() and KB_Poll()
+#include "devices/Keyboard_Saturn.h"
 #include "devices/RL_Network.h"
 #include "Network.h"
 #include "QMenu.h"                  // ChangeText() when KB is detected
 #include "Utils.h"                  // Definitions
 #include "Input.h"                  // Input_JP
 
+/*
+ID	        Peripheral
+1111 ($0F)	(undetectable)
+1101 ($0D)	Mega Drive controller
+1100 ($0C)	Mega Drive controller (see note)
+1011 ($0B)	Saturn controller
+1010 ($0A)	Printer
+0111 ($07)	Sega multitap
+0101 ($05)	Other Saturn peripherals
+0011 ($03)	Mouse
+0001 ($01)	Justifier
+0000 ($00)	Menacer 
+*/
+
+#define DEVICE_UNKNOWN 0xF
+#define DEVICE_MD_CTRL0 0xD
+#define DEVICE_MD_CTRL1 0xC
+#define DEVICE_SATURN_CTRL 0xB
+#define DEVICE_PRINTER 0xA
+#define DEVICE_MULTITAP 0x7
+#define DEVICE_SATURN_PERIPHERAL 0x5
+#define DEVICE_MOUSE 0x3
+#define DEVICE_JUSTIFIER 0x1
+#define DEVICE_MENACER 0
+
 SM_Device DEV_Joypad;               // Joypad device
+SM_Device DEV_Detector;             // Detector device
 SM_Device *DevList[DEV_MAX];        // Device list
 u8 DevSeq = 0;                      // Number of devices
 bool bRLNetwork = FALSE;            // Use RetroLink cartridge instead of built-in UART
 DevPort DEV_UART_PORT = DP_Port2;   // Default UART port - Read only!
 
+
+u8 GetDeviceID(DevPort p)
+{
+    u8 r = 0;
+    u8 dH = 0;
+    u8 dL = 0;
+
+    // Setup dummy device to test ports with
+    DEV_Detector.Id.Bitmask = 0x7F;
+    DEV_Detector.Id.Bitshift = 0;
+    DEV_Detector.Id.Mode = DEVMODE_PARALLEL;
+
+    SetDevicePort(&DEV_Detector, p);
+
+    // Get device ID
+    UnsetDevCtrl(DEV_Detector);
+    OrDevCtrl(DEV_Detector, 0x40);
+    UnsetDevData(DEV_Detector);
+
+    OrDevData(DEV_Detector, 0x40);
+    dH = GetDevData(DEV_Detector, 0xF);
+
+    UnsetDevData(DEV_Detector);
+    dL = GetDevData(DEV_Detector, 0xF);
+
+    r |= (((dH & 8) >> 3) | ((dH & 4) >> 2)) << 3;
+    r |= (((dH & 2) >> 1) | ((dH & 1)     )) << 2;
+    r |= (((dL & 8) >> 3) | ((dL & 4) >> 2)) << 1;
+    r |= (((dL & 2) >> 1) | ((dL & 1)     ));
+
+    //kprintf("dH: $%X - dL: $%X", dH, dL);
+    //kprintf("Device ID: $%X", r);
+
+    return r;
+}
 
 void SetDevicePort(SM_Device *d, DevPort p)
 {
@@ -52,84 +114,54 @@ void SetDevicePort(SM_Device *d, DevPort p)
 
 void DetectDevices()
 {
-    char FStringTemp[32];
-    u8 bNoKeyboard = FALSE;
-    u8 ret = 0;
+    u8 bNoKeyboard = TRUE;
+    u8 DevId0 = 0;
+    u8 DevId1 = 0;
+    u8 DevId2 = 0;
+
+    DevId0 = GetDeviceID(DP_Port1);
+    DevId1 = GetDeviceID(DP_Port2);
+    DevId2 = GetDeviceID(DP_Port3);
 
     // -- PS/2 Keyboard setup --------------------------
-    DEV_KBPS2.Id.sName = "PS/2 KEYBOARD";
-    DEV_KBPS2.Id.Mode = DEVMODE_PARALLEL;
-
-    for (u8 s = 0; s < 6; s++)
+    if (KB_PS2_Init())
     {
-        switch (s)
+        DevList[DevSeq++] = &DEV_KBPS2;
+        TRM_SetStatusIcon(ICO_KB_OK, ICO_POS_0);
+        bNoKeyboard = FALSE;
+    }
+    else
+    {
+        bNoKeyboard = TRUE;
+    }
+
+    // -- Saturn Keyboard setup ------------------------
+    if (bNoKeyboard && ((DevId0 == DEVICE_SATURN_PERIPHERAL) || (DevId1 == DEVICE_SATURN_PERIPHERAL) || (DevId2 == DEVICE_SATURN_PERIPHERAL)))
+    {
+             if (DevId0 == DEVICE_SATURN_PERIPHERAL) SetDevicePort(&DEV_KBSATURN, DP_Port1);
+        else if (DevId1 == DEVICE_SATURN_PERIPHERAL) SetDevicePort(&DEV_KBSATURN, DP_Port2);
+        else if (DevId2 == DEVICE_SATURN_PERIPHERAL) SetDevicePort(&DEV_KBSATURN, DP_Port3);
+
+        if (KB_Saturn_Init())
         {
-            case 0: // Pin 1 and 2 @ Port 1
-                SetDevicePort(&DEV_KBPS2, DP_Port1);
-                DEV_KBPS2.Id.Bitmask = 0x3;
-                DEV_KBPS2.Id.Bitshift = 0;
-            break;
-            case 1: // Pin 3 and 4 @ Port 1
-                SetDevicePort(&DEV_KBPS2, DP_Port1);
-                DEV_KBPS2.Id.Bitmask = 0x3;
-                DEV_KBPS2.Id.Bitshift = 2;
-            break;
-
-            case 2: // Pin 1 and 2 @ Port 2
-                SetDevicePort(&DEV_KBPS2, DP_Port2);
-                DEV_KBPS2.Id.Bitmask = 0x3;
-                DEV_KBPS2.Id.Bitshift = 0;
-            break;
-            case 3: // Pin 3 and 4 @ Port 2
-                SetDevicePort(&DEV_KBPS2, DP_Port2);
-                DEV_KBPS2.Id.Bitmask = 0x3;
-                DEV_KBPS2.Id.Bitshift = 2;
-            break;
-
-            case 4: // Pin 1 and 2 @ Port 3
-                SetDevicePort(&DEV_KBPS2, DP_Port3);
-                DEV_KBPS2.Id.Bitmask = 0x3;
-                DEV_KBPS2.Id.Bitshift = 0;
-            break;
-            case 5: // Pin 3 and 4 @ Port 3
-                SetDevicePort(&DEV_KBPS2, DP_Port3);
-                DEV_KBPS2.Id.Bitmask = 0x3;
-                DEV_KBPS2.Id.Bitshift = 2;
-            break;
-        
-            default:
-            break;
-        }
-        
-        #ifndef EMU_BUILD
-        KB_SendCommand(0xEE);
-        waitMs(1);
-        KB_Poll(&ret);
-        #endif
-
-        if ((ret == 0xFE) || (ret == 0xEE)) // FE = Fail+Resend, EE = Successfull echo back
-        {
-            sprintf(FStringTemp, "Found KB @ slot %u:%u (r=$%X)", DEV_FULL(DEV_KBPS2), ret);
+            DevList[DevSeq++] = &DEV_KBSATURN;
             TRM_SetStatusIcon(ICO_KB_OK, ICO_POS_0);
-
-            DevList[DevSeq++] = &DEV_KBPS2;
-            
-            UnsetDevCtrl(DEV_KBPS2);
-            UnsetDevData(DEV_KBPS2);
-
-            break;
+            bNoKeyboard = FALSE;
         }
-        else if (s >= 5)
+        else
         {
-            sprintf(FStringTemp, "No KB found. (r=$%X)", ret);
             bNoKeyboard = TRUE;
         }
     }
 
-    TRM_DrawText(FStringTemp, 1, BootNextLine++, PAL1);
+    if (bNoKeyboard)
+    {
+        TRM_DrawText("No keyboard found.", 1, BootNextLine++, PAL1);
+        kprintf("No KB found - Press F1 to continue");
+    }
 
-    // -- Joypad setup --------------------------
-    if (bNoKeyboard || (DEV_KBPS2.PAssign == DP_Port2))
+    // -- Joypad setup ---------------------------------
+    if (bNoKeyboard || ((DEV_KBPS2.PAssign != DP_Port1) || (DEV_KBSATURN.PAssign != DP_Port1))) // Only enable joypad if there is no keyboard detected, or if port 1 is free
     {
         DEV_Joypad.Id.sName = "JOYPAD";
         DEV_Joypad.Id.Bitmask = 0x40;
@@ -138,7 +170,7 @@ void DetectDevices()
 
         DevList[DevSeq++] = &DEV_Joypad;
 
-        SetDevicePort(&DEV_Joypad, DP_Port1);        
+        SetDevicePort(&DEV_Joypad, DP_Port1);
 
         UnsetDevCtrl(DEV_Joypad);
         OrDevCtrl(DEV_Joypad, 0x40);
@@ -147,9 +179,11 @@ void DetectDevices()
 
         JOY_setSupport(PORT_1, JOY_SUPPORT_6BTN);
         JOY_setEventHandler(Input_JP);
-        kprintf("No KB found - Press F1 to continue");
 
-        if (bNoKeyboard) TRM_SetStatusIcon(ICO_JP_OK, ICO_POS_0);
+        if (bNoKeyboard) 
+        {
+            TRM_SetStatusIcon(ICO_JP_OK, ICO_POS_0);
+        }
     }
 
     // -- UART setup --------------------------

@@ -2,7 +2,7 @@
 #include "UI.h"
 #include "Input.h"
 #include "Terminal.h"
-#include "devices/Keyboard_PS2.h"
+#include "Keyboard.h"
 #include "Utils.h"
 #include "Buffer.h"
 #include "Network.h"

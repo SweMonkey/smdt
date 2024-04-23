@@ -5,9 +5,9 @@
 #include "StateCtrl.h"
 #include "Utils.h"
 #include "SRAM.h"
-#include "Network.h"                // DEV_UART
-#include "devices/Keyboard_PS2.h"   // vKBLayout
-#include "Screensaver.h"            // bScreensaver
+#include "Network.h"        // DEV_UART
+#include "Keyboard.h"       // vKB_Layout
+#include "Screensaver.h"    // bScreensaver
 
 // Forward decl.
 void WINFN_Reset();
@@ -354,7 +354,7 @@ void SetupQItemTags()
     MainMenu[ 5].tagged_entry = vNewlineConv;
     MainMenu[ 9].tagged_entry = vTermType;
     MainMenu[11].tagged_entry = FontSize;
-    MainMenu[12].tagged_entry = vKBLayout;
+    MainMenu[12].tagged_entry = vKB_Layout;
     MainMenu[16].tagged_entry = DEV_UART_PORT;
     MainMenu[17].tagged_entry = QSelected_BGCL;
     MainMenu[18].tagged_entry = QSelected_FGCL;
@@ -669,10 +669,10 @@ void WINFN_KBLayoutSel()
     {
         default:
         case 0: // US (English)
-            vKBLayout = 0;
+            vKB_Layout = 0;
         break;
         case 1: // SE (Swedish)
-            vKBLayout = 1;
+            vKB_Layout = 1;
         break;
     }
 }

@@ -1,5 +1,5 @@
 
-# SMD Telnet/IRC/Terminal client v0.27+
+# SMD Telnet/IRC/Terminal client v0.28+
 A telnet, IRC and terminal client for the Sega Mega Drive/Genesis with support for PS/2 keyboards and RS-232 communication.<br>
 ![Screenshot of the telnet client](https://deceptsoft.com/smdtc_extra_git/telnet_small.png)
 ![Screenshot of the IRC client](https://deceptsoft.com/smdtc_extra_git/irc_small.png)
@@ -8,7 +8,7 @@ A telnet, IRC and terminal client for the Sega Mega Drive/Genesis with support f
 ![Screenshot of the telnet client in 80 column + 8 colour mode](https://deceptsoft.com/smdtc_extra_git/blastem_20240401_203819.png)
 
 Extra hardware:<br>
-1. PS/2 keyboard (not required but preferred).<br>
+1. PS/2 keyboard or a Sega Saturn keyboard (not required but preferred).<br>
 2. A "voltage translator" to translate between the MD +5v and remote RS232 device logic levels,<br>
 I personally recommend the max3232 (https://www.ti.com/lit/ds/symlink/max3232.pdf)<br>
 <br>
@@ -98,7 +98,7 @@ P3:S = Port 3 UART<br>
 <br>
 
 ## PS/2 Keyboard shortcuts
-Right windows key = Open the Quick menu<br>
+Right windows key OR F8 = Open the Quick menu<br>
 Enter = Enter submenu and activate a choice<br>
 Escape = Back out of current menu<br>
 Up cursor = Move selector up<br>

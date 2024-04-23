@@ -3,7 +3,7 @@
 #include "Terminal.h"   // FontSize, HScroll
 #include "Buffer.h"
 #include "Input.h"
-#include "devices/Keyboard_PS2.h"
+#include "Keyboard.h"
 #include "Utils.h"
 #include "UI.h"
 #include "Network.h"

@@ -38,7 +38,11 @@
 			"numbers": "c",
 			"screensaver.h": "c",
 			"rl_network.h": "c",
-			"utf8.h": "c"
+			"utf8.h": "c",
+			"condition_variable": "c",
+			"input.h": "c",
+			"keyboard.h": "c",
+			"qmenu.h": "c"
 		}
 	}
 }

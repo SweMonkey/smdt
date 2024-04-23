@@ -11,6 +11,7 @@ Fixed old bug with ESC[A / B / C / D; It didn't always move the cursor by at lea
 Terminal: Added "DEC Special Character and Line Drawing Set" character map.
 Terminal: Allow printing characters > $7E again; Fixes some issues with certain telnet servers using extended ascii.
 Terminal: The terminal state is now acting as a command interpreter, which can be used to type commands and launch sessions with arguments.
+Added support for the Sega Saturn keyboard.
 
 v0.27:
 SRAM: Added the ability to save config to SRAM.

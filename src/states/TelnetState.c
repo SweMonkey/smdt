@@ -3,7 +3,7 @@
 #include "Terminal.h"
 #include "Buffer.h"
 #include "Input.h"
-#include "devices/Keyboard_PS2.h"
+#include "Keyboard.h"
 #include "Utils.h"
 #include "Network.h"
 #include "devices/RL_Network.h"

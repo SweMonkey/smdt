@@ -31,7 +31,7 @@ void VBlank()
 
     //if (CurrentState->VBlank) CurrentState->VBlank();
 
-    if (is_KeyDown(KEY_RWIN) && (CurrentStateEnum != PS_Entry) && (!bShowHexView)) QMenu_Toggle();   // Global quick menu
+    if ((is_KeyDown(KEY_RWIN) || is_KeyDown(KEY_F8)) && (CurrentStateEnum != PS_Entry) && (!bShowHexView)) QMenu_Toggle();   // Global quick menu
 
     if (CurrentState->Input != NULL) CurrentState->Input(); // Current PRG
 

@@ -3,8 +3,8 @@ Note: Addresses are in tile units (/32)
 
 $0   - $F       Background colour blocks
 $10  - $15      Cursor tiles (Block/Line/Bar 8x8/4x8)
-$16             Reserved for blank/invisible cursor tile
-$17             Free (1 tile)
+$16             Blank/invisible cursor tile
+$17             Mouse pointer cursor
 $18  - $1F      Icons
 $20  - $3F      Free (32 tiles) - 16 tiles being eyed for screensaver sprite
 $40  - $23F     Terminal ASCII font

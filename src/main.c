@@ -65,12 +65,13 @@ int main(bool hardReset)
     PAL_setColor(50, 0x000);    // Window text FG Inverted
 
     VDP_loadTileSet(&GFX_BGBLOCKS,   AVR_BGBLOCK, DMA);
+    VDP_loadTileSet(&GFX_POINTER,    AVR_POINTER, DMA);
     VDP_loadTileSet(&GFX_CURSOR,     AVR_CURSOR,  DMA);
     VDP_loadTileSet(&GFX_ICONS,      AVR_ICONS,   DMA);
     VDP_loadTileSet(&GFX_ASCII_MENU, AVR_UI,      DMA);
 
     BootNextLine = 0;
-    TRM_SetWinParam(FALSE, FALSE, 0, 1);   // Setup default window parameters
+    TRM_SetWinParam(FALSE, FALSE, 0, 1);    // Setup default window parameters
     TRM_SetWinHeight(13);                   // Change window height for boot menu
     TRM_ClearTextArea(0, 0, 40, 13);
     TRM_DrawText("Initializing system...", 1, BootNextLine++, PAL1);
@@ -88,7 +89,7 @@ int main(bool hardReset)
 
     Input_Init();
 
-    TRM_SetStatusIcon(ICO_ID_UNKNOWN, ICO_POS_0);
+    TRM_SetStatusIcon(ICO_ID_UNKNOWN,    ICO_POS_0);
     TRM_SetStatusIcon(ICO_NET_IDLE_RECV, ICO_POS_1);
     TRM_SetStatusIcon(ICO_NET_IDLE_SEND, ICO_POS_2);
 

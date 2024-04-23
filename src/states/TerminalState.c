@@ -3,7 +3,7 @@
 #include "Terminal.h"
 #include "Buffer.h"
 #include "Input.h"
-#include "devices/Keyboard_PS2.h"
+#include "Keyboard.h"
 #include "Utils.h"
 #include "Network.h"
 
@@ -157,12 +157,14 @@ void Reset_Terminal()
 
 void Run_Terminal()
 {
-    #ifndef EMU_BUILD
+    //#ifndef EMU_BUILD
     while (KB_Poll(&kbdata))
     {
         KB_Interpret_Scancode(kbdata);
     }
-    #endif
+    //#endif
+
+    //KB_Saturn_Poll(&kbdata);
 }
 
 void Input_Terminal()

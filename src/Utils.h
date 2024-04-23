@@ -6,14 +6,15 @@
 // Title bar prefix
 #define STATUS_TEXT "SMDTC v0.28"
 
-// Icon y position
+// Icon x position
 #define ICO_POS_0 36  // Main use: Input device icon
 #define ICO_POS_1 37  // Main use: Rx icon
 #define ICO_POS_2 38  // Main use: Tx icon
 
 // VRAM memory addresses for various graphics in tile units (/32)
 #define AVR_BGBLOCK 0       // $0000 - $01FF
-#define AVR_CURSOR  0x10    // $0200 - $02C0
+#define AVR_CURSOR  0x10    // $0200 - $02DF
+#define AVR_POINTER 0x17    // $02E0 - $02FF
 #define AVR_ICONS   0x18    // $0300 - $03FF
 #define AVR_FONT0   0x40    // $0800 - $47FF
 #define AVR_FONT1   0x240   // $4800 - $87FF
