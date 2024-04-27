@@ -4,18 +4,101 @@
 #include "Buffer.h"
 #include "Input.h"
 #include "Keyboard.h"
+#include "devices/Keyboard_PS2.h"
 #include "Utils.h"
 #include "Network.h"
 
 #define INPUT_SIZE 96
-#define INPUT_COMMAND 32
-#define INPUT_PARAM 64
+#define INPUT_SIZE_ARGV 64
 
 #ifndef EMU_BUILD
 static u8 kbdata;
 #endif
 
 static u8 pFontSize = 0;
+
+void PrintOutput(const char *str);
+
+void CMD_LaunchTelnet(u8 argc, char *argv[]) { ChangeState(PS_Telnet, argc, argv); }
+void CMD_LaunchIRC(u8 argc, char *argv[]) { ChangeState(PS_IRC, argc, argv); }
+void CMD_LaunchMenu(u8 argc, char *argv[]) { ChangeState(PS_Entry, argc, argv); }
+
+void CMD_Test(u8 argc, char *argv[])
+{
+    char tmp[32];
+
+    if (argc < 2) return;
+
+    sprintf(tmp, "%s %s\n", argv[0], argv[1]);
+    PrintOutput(tmp);
+}
+
+void CMD_Echo(u8 argc, char *argv[])
+{
+    char tmp[64];
+
+    if (argc < 2) return;
+
+    sprintf(tmp, "%s\n", argv[1]);
+    PrintOutput(tmp);
+}
+
+void CMD_KeyboardSend(u8 argc, char *argv[])
+{
+    char tmp[32];
+    char kbcmd_string[32] = {'\0'};;
+
+    if (argc < 2) 
+    {
+        PrintOutput("Send command to keyboard\n\nUsage:\n");
+        PrintOutput(argv[0]);
+        PrintOutput(" <decimal number between 0 and 255>\n");
+        return;
+    }
+
+    u8 kbcmd = atoi(argv[1]);
+    u8 ret = 0;
+
+    sprintf(tmp, "Sending command $%X to keyboard...\n", kbcmd);
+    PrintOutput(tmp);
+    
+    ret = KB_PS2_SendCommand(kbcmd, kbcmd_string);
+    PrintOutput(kbcmd_string);
+    
+    sprintf(tmp, "Recieved byte $%X from keyboard   \n", ret);
+
+    PrintOutput(tmp);
+}
+
+void CMD_Help(u8 argc, char *argv[])
+{
+    char tmp[256];
+    sprintf(tmp, "Commands available:\n\
+telnet <address:port>\n\
+irc <address:port>\n\
+menu - Run graphical start menu\n\
+echo <string>\n\
+kbc <decimal number>\n\
+help - This command\n");
+    PrintOutput(tmp);
+}
+
+
+static const struct s_cmdlist
+{
+    const char *id;
+    void (*fptr)(u8, char *[]);
+} CMDList[] =
+{
+    {"telnet",  CMD_LaunchTelnet},
+    {"irc",     CMD_LaunchIRC},
+    {"menu",    CMD_LaunchMenu},
+    {"test",    CMD_Test},
+    {"echo",    CMD_Echo},
+    {"kbc",     CMD_KeyboardSend},
+    {"help",    CMD_Help},
+    {0, 0}  // Terminator
+};
 
 
 void PrintOutput(const char *str)
@@ -28,17 +111,14 @@ void PrintOutput(const char *str)
 
 u8 ParseInputString()
 {
-    u8 inbuf[INPUT_SIZE] = {0};
-    char command[INPUT_COMMAND] = {0};
-    char param[INPUT_PARAM] = {0};
-    u16 i = 0;
-    u8 data;
-    u16 end_c = 0;
-    u16 end_p = 0;
+    u8 inbuf[INPUT_SIZE] = {0};     // Input buffer string
+    char *argv[INPUT_SIZE_ARGV];    // Argument list
+    int argc = 0;   // Argument count
+    u8 data;        // Byte buffer
+    u16 i = 0;      // Buffer iterator
+    u16 l = 0;      // List position
 
     memset(inbuf, 0, INPUT_SIZE);
-    memset(command, 0, INPUT_COMMAND);
-    memset(param, 0, INPUT_PARAM);
 
     // Pop the TxBuffer back into inbuf
     while ((Buffer_Pop(&TxBuffer, &data) != 0xFF) && (i < INPUT_SIZE))
@@ -47,75 +127,42 @@ u8 ParseInputString()
         i++;
     }
 
+    // Clear TxBuffer input
     Buffer_Flush(&TxBuffer);
 
-    while ((inbuf[end_c] != ' ') && (inbuf[end_c++] != 0));
-    strncpy(command, (char*)inbuf, end_c);
-
-    end_p = end_c;
-
-    if (strlen((char*)inbuf) > end_p)
+    // Extract argument list from input buffer string
+    char *p = strtok((char*)inbuf, ' ');
+    while (p != NULL)
     {
-        while (inbuf[end_p++] != 0);
-        strncpy(param, (char*)inbuf+end_c+1, end_p-1);
+        argv[argc++] = p;
+        p = strtok(NULL, ' ');
     }
 
-    //tolower_string(command);
-    TELNET_ParseRX(0x0A);
-
-    if (strcmp(command, "telnet") == 0)
+    // Iterate argv0 through the command list and call bound function
+    while (CMDList[l].id != 0)
     {
-        char *argv[1] =
+        if (strcmp(argv[0], CMDList[l].id) == 0)
         {
-            param
-        };
-        ChangeState(PS_Telnet, 1, argv);
-        return 0;
+            CMDList[l].fptr(argc, argv);
+
+            for (u8 a = 0; a < argc; a++) free(argv[a]);                // !!!
+
+            return 1;
+        }
+
+        l++;
     }
-    else if (strcmp(command, "irc") == 0)
-    {
-        char *argv[1] =
-        {
-            param
-        };
-        ChangeState(PS_IRC, 1, argv);
-        return 0;
-    }
-    else if (strcmp(command, "menu") == 0)
-    {
-        ChangeState(PS_Entry, 0, NULL);
-        return 0;
-    }
-    else if (strcmp(command, "test") == 0)
-    {
-        char tmp[32];
-        sprintf(tmp, "%s %s\n", command, param);
-        PrintOutput(tmp);
-    }
-    else if (strcmp(command, "echo") == 0)
-    {
-        char tmp[32];
-        sprintf(tmp, "%s\n", param);
-        PrintOutput(tmp);
-    }
-    else if (strcmp(command, "help") == 0)
-    {
-        char tmp[256];
-        sprintf(tmp, "Commands available:\ntelnet <address:port>\nirc <address:port>\nmenu - Run graphical start menu\necho <string>\nhelp - This command\n");
-        PrintOutput(tmp);
-    }
-    else if (strlen(command) > 0)
+
+    // Or let the user know that the command was not found
+    if (strlen(argv[0]) > 0)
     {
         char tmp[64];
-        sprintf(tmp, "Command \"%s\" not found...\n", command);
+        sprintf(tmp, "Command \"%s\" not found...\n", argv[0]);
         PrintOutput(tmp);
+        return 1;
     }
-    else
-    {
-        //TELNET_ParseRX(0x0A);
-    }    
 
-    return 1;
+    return 0;
 }
 
 void SetupTerminal()
@@ -136,7 +183,7 @@ void Enter_Terminal(u8 argc, char *argv[])
 {
     TELNET_Init();
     SetupTerminal();
-    PrintOutput("SMDTC Command Interpreter v0.1\nType \"help\" for available commands\n\n>");
+    PrintOutput("SMDTC Command Interpreter v0.2\nType \"help\" for available commands\n\n>");
 }
 
 void ReEnter_Terminal()
@@ -157,14 +204,10 @@ void Reset_Terminal()
 
 void Run_Terminal()
 {
-    //#ifndef EMU_BUILD
     while (KB_Poll(&kbdata))
     {
         KB_Interpret_Scancode(kbdata);
     }
-    //#endif
-
-    //KB_Saturn_Poll(&kbdata);
 }
 
 void Input_Terminal()
@@ -240,10 +283,12 @@ void Input_Terminal()
             TTY_SetSX(0);
             TTY_MoveCursor(TTY_CURSOR_DUMMY);
 
-            if (ParseInputString()) TTY_PrintChar('>');
+            if (ParseInputString()) TELNET_ParseRX(0xA);
+            
+            TTY_PrintChar('>');
         }
 
-        if (is_KeyDown(KEY_BACKSPACE))
+        if (is_KeyDown(KEY_BACKSPACE) && !Buffer_IsEmpty(&TxBuffer))
         {
             TTY_MoveCursor(TTY_CURSOR_LEFT, 1);
 

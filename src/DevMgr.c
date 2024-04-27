@@ -3,6 +3,7 @@
 #include "DevMgr.h"
 #include "devices/Keyboard_PS2.h"   // KB_SendCommand() and KB_Poll()
 #include "devices/Keyboard_Saturn.h"
+#include "Keyboard.h"
 #include "devices/RL_Network.h"
 #include "Network.h"
 #include "QMenu.h"                  // ChangeText() when KB is detected
@@ -41,7 +42,9 @@ u8 DevSeq = 0;                      // Number of devices
 bool bRLNetwork = FALSE;            // Use RetroLink cartridge instead of built-in UART
 DevPort DEV_UART_PORT = DP_Port2;   // Default UART port - Read only!
 
-
+/// @brief Get four bit device identifier (Sega devices only)
+/// @param p Port to check (DP_Port1, DP_Port2, DP_Port3)
+/// @return Four bit device identifier
 u8 GetDeviceID(DevPort p)
 {
     u8 r = 0;
@@ -77,6 +80,9 @@ u8 GetDeviceID(DevPort p)
     return r;
 }
 
+/// @brief Set device to desired port
+/// @param d Device pointer
+/// @param p Desired port
 void SetDevicePort(SM_Device *d, DevPort p)
 {
     switch (p)
@@ -112,6 +118,7 @@ void SetDevicePort(SM_Device *d, DevPort p)
     d->PAssign = p;
 }
 
+/// @brief Detect and initialize found devices
 void DetectDevices()
 {
     u8 bNoKeyboard = TRUE;
@@ -180,7 +187,7 @@ void DetectDevices()
         JOY_setSupport(PORT_1, JOY_SUPPORT_6BTN);
         JOY_setEventHandler(Input_JP);
 
-        if (bNoKeyboard) 
+        if (bNoKeyboard && (vKB_BATStatus == 0))
         {
             TRM_SetStatusIcon(ICO_JP_OK, ICO_POS_0);
         }
@@ -220,7 +227,8 @@ void DetectDevices()
 
 }
 
-void ConfigureDevices()
+/// @brief Initialize device manager and find/init devices
+void InitDeviceManager()
 {
     for (u8 s = 0; s < DEV_MAX; s++)
     {

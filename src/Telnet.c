@@ -390,6 +390,9 @@ void ChangeTitle()
 
     sprintf(TitleBuf, "%s - %-21s", STATUS_TEXT, ESC_TitleBuffer);
     TRM_SetStatusText(TitleBuf);
+
+    ESC_TitleSeq = 0;
+    ESC_TitleBuffer[0] = '\0';
 }
 
 // https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797

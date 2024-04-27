@@ -1,6 +1,9 @@
 #include "Buffer.h"
 
 
+/// @brief Check if buffer is full
+/// @param b Pointer to buffer
+/// @return 0xFF if full, otherwise 0
 u8 Buffer_IsFull(Buffer *b)
 {
     if ((b->head + 1) == b->tail) // if the head + 1 == tail, circular buffer is full
@@ -9,6 +12,21 @@ u8 Buffer_IsFull(Buffer *b)
     return 0;  // return false
 }
 
+/// @brief Check if buffer is empty
+/// @param b Pointer to buffer
+/// @return 0xFF if empty, otherwise 0
+u8 Buffer_IsEmpty(Buffer *b)
+{
+    if (b->head == b->tail) // if the head == tail, circular buffer is empty
+        return 0xFF;
+
+    return 0;  // return false
+}
+
+/// @brief Push byte into buffer at head
+/// @param b Pointer to buffer
+/// @param data Byte data to push into buffer
+/// @return 0xFF is returned if the buffer is full (data is dropped). 0 on successful push
 u8 Buffer_Push(Buffer *b, u8 data)
 {
     u16 next;
@@ -26,6 +44,10 @@ u8 Buffer_Push(Buffer *b, u8 data)
     return 0;  // return success to indicate successful push.
 }
 
+/// @brief Pop buffer data at tail into return byte
+/// @param b Pointer to buffer
+/// @param data Return byte to pop data into
+/// @return 0xFF is returned if the buffer is empty. 0 on successful pop.
 u8 Buffer_Pop(Buffer *b, u8 *data)
 {
     u16 next;
@@ -43,6 +65,9 @@ u8 Buffer_Pop(Buffer *b, u8 *data)
     return 0;  // return success to indicate successful pop.
 }
 
+/// @brief Pop the byte at the head of buffer
+/// @param b Pointer to buffer
+/// @return 0xFF if the buffer is empty. 0 on successful pop.
 u8 Buffer_ReversePop(Buffer *b)
 {
     if (b->head == b->tail)  // if the head == tail, we don't have any data
@@ -54,13 +79,18 @@ u8 Buffer_ReversePop(Buffer *b)
     return 0;
 }
 
+/// @brief Clear the buffer
+/// @param b Pointer to buffer
 void Buffer_Flush(Buffer *b)
 {
     b->head = 0;
     b->tail = 0;
 }
 
-// Get the last <num> bytes up to head
+/// @brief Get the last <num> of bytes up to head
+/// @param b Pointer to buffer
+/// @param num Number of bytes to return
+/// @param r Array of bytes to return the popped data in
 void Buffer_PeekLast(Buffer *b, u16 num, u8 r[])
 {
     u16 tmpTail = b->tail;

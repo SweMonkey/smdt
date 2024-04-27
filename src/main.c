@@ -72,8 +72,8 @@ int main(bool hardReset)
 
     BootNextLine = 0;
     TRM_SetWinParam(FALSE, FALSE, 0, 1);    // Setup default window parameters
-    TRM_SetWinHeight(13);                   // Change window height for boot menu
-    TRM_ClearTextArea(0, 0, 40, 13);
+    TRM_SetWinHeight(28);                   // Change window height for boot menu
+    TRM_ClearTextArea(0, 0, 40, 28);
     TRM_DrawText("Initializing system...", 1, BootNextLine++, PAL1);
 
     bPALSystem = IS_PAL_SYSTEM;
@@ -102,7 +102,7 @@ int main(bool hardReset)
     else TRM_DrawText("Successfully loaded config from SRAM", 1, BootNextLine++, PAL1);
     
     TRM_DrawText("Configuring devices...", 1, BootNextLine++, PAL1);
-    ConfigureDevices();
+    InitDeviceManager();
 
     bShowHexView = FALSE;
     bShowQMenu = FALSE;

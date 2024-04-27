@@ -8,7 +8,7 @@
 #include "Utils.h"
 
 u8 vKB_Layout = 0;
-bool bKB_BATStatus = FALSE;
+u8 vKB_BATStatus = 0;
 u8 bKB_ExtKey = FALSE;
 u8 bKB_Break = FALSE;
 u8 bKB_Shift = FALSE;
@@ -149,7 +149,7 @@ void KB_Interpret_Scancode(u8 scancode)
     switch (scancode)
     {
         case 0xAA:  // BAT OK
-            bKB_BATStatus = TRUE;
+            vKB_BATStatus = 1;
         break;
         case 0xE0:
             bKB_ExtKey = TRUE;
@@ -158,7 +158,7 @@ void KB_Interpret_Scancode(u8 scancode)
             bKB_Break = TRUE;
         break;
         case 0xFC: // BAT FAIL
-            bKB_BATStatus = FALSE;
+            vKB_BATStatus = 2;
             TRM_SetStatusIcon(ICO_ID_ERROR, ICO_POS_0);
         break;
 

@@ -83,6 +83,6 @@ extern DevPort DEV_UART_PORT;   // Default UART port - Read only!
 extern bool bRLNetwork;
 
 void SetDevicePort(SM_Device *d, DevPort p);
-void ConfigureDevices();
+void InitDeviceManager();
 
 #endif // DEVMGR_H_INCLUDED

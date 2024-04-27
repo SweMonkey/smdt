@@ -74,6 +74,7 @@ void TRM_ClearTextArea(u16 x, u16 y, u16 w, u16 h);
 u8 atoi(char *c);
 u16 atoi16(char *c);
 u8 tolower(u8 c);
+char *strtok(char *s, char d);
 
 // Lower case string
 #define tolower_string(s) u16 _ti = 0;while(s[_ti]){s[_ti]=(char)tolower((u8)s[_ti]);_ti++;}

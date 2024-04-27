@@ -72,10 +72,17 @@ MD port pin 9 = Serial RX<br>
 <br>
 
 ### Example keyboard wiring:
-MD port pin 1 = Keyboard clock pin<br>
-MD port pin 2 = Keyboard data pin<br>
-MD port pin 5 = Keyboard VCC<br>
-MD port pin 8 = Keyboard GND<br>
+MD port pin 1 = PS/2 clock pin 5<br>
+MD port pin 2 = PS/2 data pin 1<br>
+MD port pin 5 = PS/2 VCC pin 4<br>
+MD port pin 8 = PS/2 GND pin 3<br>
+<br>
+
+### PS/2 pin reference:
+PS/2 pin 1 = data<br>
+PS/2 pin 3 = GND<br>
+PS/2 pin 4 = VCC<br>
+PS/2 pin 5 = clock<br>
 <br>
 
 ### MD UART pin reference:

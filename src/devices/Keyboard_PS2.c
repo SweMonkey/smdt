@@ -64,18 +64,16 @@ bool KB_PS2_Init()
         }
         
         #ifndef EMU_BUILD
-        KB_PS2_SendCommand(0xEE);
-        waitMs(1);
-        KB_PS2_Poll(&ret);
+        char dummy[32] = {'\0'};
+        KB_PS2_SendCommand(0xAA, dummy);
+        
+        ret = KB_PS2_SendCommand(0xEE, dummy);
         #endif
 
         if ((ret == 0xFE) || (ret == 0xEE)) // FE = Fail+Resend, EE = Successfull echo back
         {
             sprintf(FStringTemp, "Found PS/2 KB @ slot %u:%u (r=$%X)", DEV_FULL(DEV_KBPS2), ret);
             TRM_DrawText(FStringTemp, 1, BootNextLine++, PAL1);
-
-            UnsetDevCtrl(DEV_KBPS2);
-            UnsetDevData(DEV_KBPS2);
 
             KB_SetKeyboard(&KB_PS2_Poll);
 
@@ -147,13 +145,13 @@ u8 KB_PS2_Poll(u8 *data)
 }
 
 //https://www.burtonsys.com/ps2_chapweske.htm
-void KB_PS2_SendCommand(u8 cmd)
+// Todo: Send multi byte commands/receive multi byte responses
+u8 KB_PS2_SendCommand(u8 cmd, char str[32])
 {
-    u8 p, c, b = 7;
-    u8 bc[11];
+    u8 p = 0, c = 0, b = 7;
+    u8 bc[9];
 
-    // bits: xxxxx0dd ddddddp1 - where d= data, p= parity
-    bc[0] = 0;  // Start
+    // bits: xxxxxdd ddddddp - where d= data, p= parity
     for (u8 i = 1; i < 9; i++)
     {
         c = (cmd >> b) & 1;
@@ -163,11 +161,7 @@ void KB_PS2_SendCommand(u8 cmd)
         b--;
     }
 
-    bc[9] = ((p % 2) == 0 ? 1<<KB_DT:0);  // Parity
-    bc[10] = 1 << KB_DT;  // Stop
-
-    //kprintf("<%u> %u %u %u %u %u %u %u %u <%u> <%u>", bc[0], bc[1], bc[2], bc[3], bc[4], bc[5], bc[6], bc[7], bc[8], bc[9], bc[10]);
-    //return;
+    bc[0] = ((p % 2) == 0 ? 1<<KB_DT:0);  // Parity
 
     /*
     1)   Bring the Clock line low for at least 100 microseconds.
@@ -189,19 +183,18 @@ void KB_PS2_SendCommand(u8 cmd)
     UnsetDevCtrl(DEV_KBPS2);    // (1) Set data(2) and clock(1) as input
     SetDevCtrl(DEV_KBPS2, 0x1); // (1) Set clock as output
     UnsetDevData(DEV_KBPS2);    // (1) Hold clock to low for at least 100 microseconds
-    // wait here for 100 µS
     waitMs(1);
     OrDevCtrl(DEV_KBPS2, 0x3);  // (2) Set data(2) and clock(1) as output
     UnsetDevData(DEV_KBPS2);    // (2) Set data(2) and clock(1) low
     AndDevCtrl(DEV_KBPS2, 0x2); // (3) Release clock line (data output - clock input)
 
-    for (u8 b = 0; b < 11; b++)  // Recieve byte
+    for (u8 b = 0; b < 9; b++)  // Send byte
     {
         timeout = 0;
         while (GetDevData(DEV_KBPS2, 0x1)){if (timeout++ >= 128)goto timedout;}  // (4) Wait for clock to go low
 
         UnsetDevData(DEV_KBPS2);
-        OrDevData(DEV_KBPS2, bc[b]);
+        OrDevData(DEV_KBPS2, bc[8-b]);  // Send bits in reverse order (Least significant bit first)
 
         while (!GetDevData(DEV_KBPS2, 0x1)){if (timeout++ >= 128)goto timedout;} // (6) Wait for clock to go high
     }
@@ -215,14 +208,18 @@ void KB_PS2_SendCommand(u8 cmd)
     while (GetDevData(DEV_KBPS2, 0x1)){if (timeout++ >= 128)goto timedout;} // (11) Wait for clock to go low
 
     // Release
-    //while (!GetDevData(DEV_KBPS2, 0x2)){if (timeout++ >= 128)goto timedout;} // (10) Wait for data to go high
-    //while (!GetDevData(DEV_KBPS2, 0x1)){if (timeout++ >= 128)goto timedout;} // (11) Wait for clock to go high
+    while (!GetDevData(DEV_KBPS2, 0x2)){if (timeout++ >= 128)goto timedout;} // (10) Wait for data to go high
+    while (!GetDevData(DEV_KBPS2, 0x1)){if (timeout++ >= 128)goto timedout;} // (11) Wait for clock to go high
 
-    //waitMs(1);
+    u8 ret = 0;
+    KB_PS2_Poll(&ret);
+
+    return ret;
+
+    // No response or timeout:
     timedout:
-    OrDevCtrl(DEV_KBPS2, 0x3); // Set pin 0 and 1 as output (smd->kb)
-    UnsetDevData(DEV_KBPS2);
-    OrDevData(DEV_KBPS2, 0x2); // Set clock low, data high - Stop kb sending data
 
-    // Call KB_Poll() after this to recieve response/data
+    sprintf(str, "Send timeout: %u\n", timeout);
+
+    return 0;
 }
