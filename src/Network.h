@@ -14,11 +14,17 @@
 #define ICO_NET_IDLE_RECV 0x19
 #define ICO_NET_ERROR     0x1D
 
+typedef bool NET_Connect_CB(char *str);
+
 extern Buffer RxBuffer;
 extern Buffer TxBuffer;
 extern SM_Device DEV_UART;      // Built-in UART
 
 void Ext_IRQ();
+
+void NET_SetConnectFunc(NET_Connect_CB *cb);
+bool NET_Connect(char *str);
+
 void NET_SendChar(const u8 c, u8 flags);
 void NET_TransmitBuffer();
 void NET_SendString(const char *str);

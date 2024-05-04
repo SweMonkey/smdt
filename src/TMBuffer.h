@@ -23,6 +23,7 @@ void TMB_UploadBufferFull(TMBuffer *tptr);
 
 u8 TMB_SetActiveBuffer(TMBuffer *b);
 void TMB_PrintChar(u8 c);
+void TMB_PrintString(const char *str);
 void TMB_ClearLine(u16 y, u16 line_count);
 void TMB_SetColorFG(u8 v);
 void TMB_MoveCursor(u8 dir, u8 num);

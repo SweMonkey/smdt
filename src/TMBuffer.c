@@ -143,6 +143,14 @@ void TMB_PrintChar(u8 c)
     TMB_MoveCursor(TTY_CURSOR_RIGHT, 1);
 }
 
+void TMB_PrintString(const char *str)
+{
+    for (u16 c = 0; c < strlen(str); c++)
+    {
+        TMB_PrintChar(str[c]);
+    }
+}
+
 void TMB_ClearLine(u16 y, u16 line_count)
 {
     if (TMB_Ptr == NULL) return;

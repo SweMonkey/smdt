@@ -4,101 +4,19 @@
 #include "Buffer.h"
 #include "Input.h"
 #include "Keyboard.h"
-#include "devices/Keyboard_PS2.h"
 #include "Utils.h"
 #include "Network.h"
+#include "CMDFunc.h"
+
+#include "DevMgr.h"
+#include "devices/XP_Network.h"
 
 #define INPUT_SIZE 96
 #define INPUT_SIZE_ARGV 64
 
-#ifndef EMU_BUILD
 static u8 kbdata;
-#endif
-
 static u8 pFontSize = 0;
-
-void PrintOutput(const char *str);
-
-void CMD_LaunchTelnet(u8 argc, char *argv[]) { ChangeState(PS_Telnet, argc, argv); }
-void CMD_LaunchIRC(u8 argc, char *argv[]) { ChangeState(PS_IRC, argc, argv); }
-void CMD_LaunchMenu(u8 argc, char *argv[]) { ChangeState(PS_Entry, argc, argv); }
-
-void CMD_Test(u8 argc, char *argv[])
-{
-    char tmp[32];
-
-    if (argc < 2) return;
-
-    sprintf(tmp, "%s %s\n", argv[0], argv[1]);
-    PrintOutput(tmp);
-}
-
-void CMD_Echo(u8 argc, char *argv[])
-{
-    char tmp[64];
-
-    if (argc < 2) return;
-
-    sprintf(tmp, "%s\n", argv[1]);
-    PrintOutput(tmp);
-}
-
-void CMD_KeyboardSend(u8 argc, char *argv[])
-{
-    char tmp[32];
-    char kbcmd_string[32] = {'\0'};;
-
-    if (argc < 2) 
-    {
-        PrintOutput("Send command to keyboard\n\nUsage:\n");
-        PrintOutput(argv[0]);
-        PrintOutput(" <decimal number between 0 and 255>\n");
-        return;
-    }
-
-    u8 kbcmd = atoi(argv[1]);
-    u8 ret = 0;
-
-    sprintf(tmp, "Sending command $%X to keyboard...\n", kbcmd);
-    PrintOutput(tmp);
-    
-    ret = KB_PS2_SendCommand(kbcmd, kbcmd_string);
-    PrintOutput(kbcmd_string);
-    
-    sprintf(tmp, "Recieved byte $%X from keyboard   \n", ret);
-
-    PrintOutput(tmp);
-}
-
-void CMD_Help(u8 argc, char *argv[])
-{
-    char tmp[256];
-    sprintf(tmp, "Commands available:\n\
-telnet <address:port>\n\
-irc <address:port>\n\
-menu - Run graphical start menu\n\
-echo <string>\n\
-kbc <decimal number>\n\
-help - This command\n");
-    PrintOutput(tmp);
-}
-
-
-static const struct s_cmdlist
-{
-    const char *id;
-    void (*fptr)(u8, char *[]);
-} CMDList[] =
-{
-    {"telnet",  CMD_LaunchTelnet},
-    {"irc",     CMD_LaunchIRC},
-    {"menu",    CMD_LaunchMenu},
-    {"test",    CMD_Test},
-    {"echo",    CMD_Echo},
-    {"kbc",     CMD_KeyboardSend},
-    {"help",    CMD_Help},
-    {0, 0}  // Terminator
-};
+static char LastCommand[INPUT_SIZE] = {'\0'};
 
 
 void PrintOutput(const char *str)
@@ -130,6 +48,9 @@ u8 ParseInputString()
     // Clear TxBuffer input
     Buffer_Flush(&TxBuffer);
 
+    // Copy the current input string into last command string
+    if (strlen((char*)inbuf) > 0) strncpy(LastCommand, (char*)inbuf, INPUT_SIZE);
+
     // Extract argument list from input buffer string
     char *p = strtok((char*)inbuf, ' ');
     while (p != NULL)
@@ -145,7 +66,7 @@ u8 ParseInputString()
         {
             CMDList[l].fptr(argc, argv);
 
-            for (u8 a = 0; a < argc; a++) free(argv[a]);                // !!!
+            for (u8 a = 0; a < argc; a++) if (argv[a] != NULL) free(argv[a]);                // !!!
 
             return 1;
         }
@@ -165,6 +86,26 @@ u8 ParseInputString()
     return 0;
 }
 
+u8 DoBackspace()
+{
+    if (Buffer_IsEmpty(&TxBuffer)) return 0;
+
+    TTY_MoveCursor(TTY_CURSOR_LEFT, 1);
+
+    if (!FontSize)
+    {
+        VDP_setTileMapXY(BG_B, TILE_ATTR_FULL(2, 0, 0, 0, 0), TTY_GetSX(), sy);
+    }
+    else
+    {
+        VDP_setTileMapXY(!(TTY_GetSX() % 2), TILE_ATTR_FULL(2, 0, 0, 0, 0), TTY_GetSX()>>1, sy);
+    }
+
+    Buffer_ReversePop(&TxBuffer);
+
+    return 1;
+}
+
 void SetupTerminal()
 {
     TRM_SetStatusText(STATUS_TEXT);
@@ -177,10 +118,22 @@ void SetupTerminal()
 
     pFontSize = FontSize;
     TTY_SetFontSize(0);
+
+    LastCommand[0] = '\0';
 }
 
 void Enter_Terminal(u8 argc, char *argv[])
 {
+    if ((argc > 0) && (strcmp(argv[0], "reset") == 0) && (bXPNetwork))
+    {
+        // Mainly meant to make sure an emulated Xport module disconnects and closes the current socket (if there is one)
+        // Xport emulator listens for a "enter monitor mode" to close any open connections/sockets
+        // TODO: How does a real Xport module do disconnect?
+        XPN_EnterMonitorMode();
+        waitMs(200);
+        XPN_ExitMonitorMode();
+    }
+
     TELNET_Init();
     SetupTerminal();
     PrintOutput("SMDTC Command Interpreter v0.2\nType \"help\" for available commands\n\n>");
@@ -216,21 +169,16 @@ void Input_Terminal()
     {
         if (is_KeyDown(KEY_UP))
         {
-            #ifdef EMU_BUILD
-            Buffer_Push(&TxBuffer, 't');
-            Buffer_Push(&TxBuffer, 'e');
-            Buffer_Push(&TxBuffer, 'l');
-            Buffer_Push(&TxBuffer, 'n');
-            Buffer_Push(&TxBuffer, 'e');
-            Buffer_Push(&TxBuffer, 't');
-            #endif
+            while (DoBackspace());
+
+            PrintOutput(LastCommand);
+
+            for (u16 i = 0; i < strlen(LastCommand); i++) Buffer_Push(&TxBuffer, LastCommand[i]);
         }
 
         if (is_KeyDown(KEY_DOWN))
         {
-            #ifdef EMU_BUILD
-            if (ParseInputString()) TTY_PrintChar('>');
-            #endif
+            while (DoBackspace());
         }
 
         if (is_KeyDown(KEY_KP4_LEFT))
@@ -283,25 +231,14 @@ void Input_Terminal()
             TTY_SetSX(0);
             TTY_MoveCursor(TTY_CURSOR_DUMMY);
 
-            if (ParseInputString()) TELNET_ParseRX(0xA);
+            if ((ParseInputString()) && (isCurrentState(PS_Terminal))) TELNET_ParseRX(0xA);
             
-            TTY_PrintChar('>');
+            if (isCurrentState(PS_Terminal)) TTY_PrintChar('>');
         }
 
-        if (is_KeyDown(KEY_BACKSPACE) && !Buffer_IsEmpty(&TxBuffer))
+        if (is_KeyDown(KEY_BACKSPACE))
         {
-            TTY_MoveCursor(TTY_CURSOR_LEFT, 1);
-
-            if (!FontSize)
-            {
-                VDP_setTileMapXY(BG_B, TILE_ATTR_FULL(2, 0, 0, 0, 0), TTY_GetSX(), sy);
-            }
-            else
-            {
-                VDP_setTileMapXY(!(TTY_GetSX() % 2), TILE_ATTR_FULL(2, 0, 0, 0, 0), TTY_GetSX()>>1, sy);
-            }
-
-            Buffer_ReversePop(&TxBuffer);
+            DoBackspace();
         }
 
         if (is_KeyDown(KEY_F9))

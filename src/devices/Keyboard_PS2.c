@@ -63,11 +63,8 @@ bool KB_PS2_Init()
             break;
         }
         
-        #ifndef EMU_BUILD
-        char dummy[32] = {'\0'};
-        KB_PS2_SendCommand(0xAA, dummy);
-        
-        ret = KB_PS2_SendCommand(0xEE, dummy);
+        #ifndef EMU_BUILD        
+        ret = KB_PS2_SendCommand(0xEE);
         #endif
 
         if ((ret == 0xFE) || (ret == 0xEE)) // FE = Fail+Resend, EE = Successfull echo back
@@ -80,9 +77,6 @@ bool KB_PS2_Init()
             return 1;
         }
     }
-
-    // Writing 0xf0 followed by 1, 2 or 3 to port 0x60 will put the keyboard in scancode mode 1, 2 or 3.
-    // Writing 0xf0 followed by 0 queries the mode, resulting in a scancode byte 43, 41 or 3f from the keyboard.
 
     return 0;
 }
@@ -101,85 +95,73 @@ inline void KB_Unlock()
     UnsetDevCtrl(DEV_KBPS2);    // Set pin 0 and 1 as input (kb->smd)
 }
 
-u8 KB_PS2_Poll(u8 *data)
+inline u8 KB_PS2_WaitClockLow()
 {
-    u32 timeout = 0;
-    u16 stream_buffer = 0;
+    u16 timeout = 0;
+
+    //  PAL/50hz or MD1? works fine with timeout >= 128
+    // NTSC/60hz or MD2? requires at least timeout >= 224, 192 may result in some dropped keys according to b1tsh1ft3r (hard to tell)
+    while (!GetDevData(DEV_KBPS2, 0x1)){if (timeout++ >= 224)goto timedout;}    // Wait for clock to go high
+    while ( GetDevData(DEV_KBPS2, 0x1)){if (timeout++ >= 224)goto timedout;}    // Wait for clock to go low
+
+    return 0;
+
+    timedout:
+    return 1;
+}
+
+u8 KB_PS2_Poll(u8 *r)
+{
+    u8 bit = 0;
+    u8 data = 0;
+    u8 parity = 0;
 
     KB_Unlock();
 
-    while (GetDevData(DEV_KBPS2, 0x1))
+    // Start bit
+    if (KB_PS2_WaitClockLow()) goto Error;
+
+    for (u8 b = 0; b < 8; b++)  // Recieve byte
     {
-        if (timeout++ >= 128)   // 3200 32000
-        {
-            KB_Lock();
-            return 0;
-        }
+        if (KB_PS2_WaitClockLow()) goto Error;
+
+        bit = GetDevData(DEV_KBPS2, 0x2) >> KB_DT;
+
+        data |= bit << b;
+        parity += bit;
     }
 
-    for (u8 b = 0; b < 11; b++)  // Recieve byte
+    // Parity bit
+    if (KB_PS2_WaitClockLow()) goto Error;
+    
+    parity += GetDevData(DEV_KBPS2, 0x2) >> KB_DT;
+
+    // Stop bit
+    if (KB_PS2_WaitClockLow()) goto Error;
+
+    u8 stop = GetDevData(DEV_KBPS2, 0x2) >> KB_DT;
+
+
+    if ((parity & 1) && (stop == 1))
     {
-        timeout = 0;
-        while (GetDevData(DEV_KBPS2, 0x1)){if (timeout++ >= 128)goto timedout;}  // Wait for clock to go low
-
-        stream_buffer |= (GetDevData(DEV_KBPS2, 0x2) >> KB_DT) << b;
-
-        timeout = 0;
-        while (!GetDevData(DEV_KBPS2, 0x1)){if (timeout++ >= 128)goto timedout;} // Wait for clock to go high
-    }
-
-    timedout:
-
-    KB_Lock();
-
-    if ((stream_buffer & 0x400) && ((stream_buffer & 1) == 0)) 
-    {
-        *data = ((stream_buffer & 0x1FE) >> 1);
+        KB_Lock();
+        *r = data;
         return 0xFF;
     }
-    else 
-    {
-        *data = 0; // Tx fail - ask kb to resend
-        return 0;
-    }
+
+    Error:
+    KB_Lock();
+    *r = 0;
+    return 0;
 }
 
 //https://www.burtonsys.com/ps2_chapweske.htm
 // Todo: Send multi byte commands/receive multi byte responses
-u8 KB_PS2_SendCommand(u8 cmd, char str[32])
+u8 KB_PS2_SendCommand(u8 cmd)
 {
-    u8 p = 0, c = 0, b = 7;
-    u8 bc[9];
+    u8 bit = 0;
+    u8 parity = (cmd % 2) << KB_DT;
 
-    // bits: xxxxxdd ddddddp - where d= data, p= parity
-    for (u8 i = 1; i < 9; i++)
-    {
-        c = (cmd >> b) & 1;
-        if (c) p++;
-
-        bc[i] = c << KB_DT;
-        b--;
-    }
-
-    bc[0] = ((p % 2) == 0 ? 1<<KB_DT:0);  // Parity
-
-    /*
-    1)   Bring the Clock line low for at least 100 microseconds.
-    2)   Bring the Data line low.
-    3)   Release the Clock line.
-    4)   Wait for the device to bring the Clock line low.
-    5)   Set/reset the Data line to send the first data bit
-    6)   Wait for the device to bring Clock high.
-    7)   Wait for the device to bring Clock low.
-    8)   Repeat steps 5-7 for the other seven data bits and the parity bit
-    9)   Release the Data line.
-    10) Wait for the device to bring Data low.
-    11) Wait for the device to bring Clock  low.
-    12) Wait for the device to release Data and Clock
-    */
-
-    u16 timeout = 0;
-    
     UnsetDevCtrl(DEV_KBPS2);    // (1) Set data(2) and clock(1) as input
     SetDevCtrl(DEV_KBPS2, 0x1); // (1) Set clock as output
     UnsetDevData(DEV_KBPS2);    // (1) Hold clock to low for at least 100 microseconds
@@ -188,38 +170,50 @@ u8 KB_PS2_SendCommand(u8 cmd, char str[32])
     UnsetDevData(DEV_KBPS2);    // (2) Set data(2) and clock(1) low
     AndDevCtrl(DEV_KBPS2, 0x2); // (3) Release clock line (data output - clock input)
 
-    for (u8 b = 0; b < 9; b++)  // Send byte
+    for (u8 b = 0; b < 8; b++)  // Send byte
     {
-        timeout = 0;
-        while (GetDevData(DEV_KBPS2, 0x1)){if (timeout++ >= 128)goto timedout;}  // (4) Wait for clock to go low
+        if (KB_PS2_WaitClockLow()) goto Error;
 
+        bit = ((cmd >> (b)) & 1) << KB_DT;
         UnsetDevData(DEV_KBPS2);
-        OrDevData(DEV_KBPS2, bc[8-b]);  // Send bits in reverse order (Least significant bit first)
-
-        while (!GetDevData(DEV_KBPS2, 0x1)){if (timeout++ >= 128)goto timedout;} // (6) Wait for clock to go high
+        OrDevData(DEV_KBPS2, bit);  // Send bits in reverse order (Least significant bit first)
     }
+
+    
+    if (KB_PS2_WaitClockLow()) goto Error;
+    UnsetDevData(DEV_KBPS2);
+    OrDevData(DEV_KBPS2, parity);    // Send parity bit
 
     UnsetDevCtrl(DEV_KBPS2);    // (9) Set data(2) and clock(1) as input
     
-    timeout = 0;
-
     // Ack
-    while (GetDevData(DEV_KBPS2, 0x2)){if (timeout++ >= 128)goto timedout;} // (10) Wait for data to go low
-    while (GetDevData(DEV_KBPS2, 0x1)){if (timeout++ >= 128)goto timedout;} // (11) Wait for clock to go low
+    if (KB_PS2_WaitClockLow()) goto Error;
 
     // Release
-    while (!GetDevData(DEV_KBPS2, 0x2)){if (timeout++ >= 128)goto timedout;} // (10) Wait for data to go high
-    while (!GetDevData(DEV_KBPS2, 0x1)){if (timeout++ >= 128)goto timedout;} // (11) Wait for clock to go high
+    if (KB_PS2_WaitClockLow()) goto Error;
 
     u8 ret = 0;
     KB_PS2_Poll(&ret);
-
     return ret;
 
-    // No response or timeout:
-    timedout:
-
-    sprintf(str, "Send timeout: %u\n", timeout);
-
+    Error:
+    KB_Lock();
     return 0;
 }
+
+/*
+SendCommand:
+
+1)   Bring the Clock line low for at least 100 microseconds.
+2)   Bring the Data line low.
+3)   Release the Clock line.
+4)   Wait for the device to bring the Clock line low.
+5)   Set/reset the Data line to send the first data bit
+6)   Wait for the device to bring Clock high.
+7)   Wait for the device to bring Clock low.
+8)   Repeat steps 5-7 for the other seven data bits and the parity bit
+9)   Release the Data line.
+10) Wait for the device to bring Data low.
+11) Wait for the device to bring Clock  low.
+12) Wait for the device to release Data and Clock
+*/

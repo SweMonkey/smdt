@@ -148,6 +148,20 @@ inline u16 atoi16(char *c)
     return value;
 }
 
+inline u32 atoi32(char *c)
+{
+    u32 value = 0;
+
+    while (isdigit(*c)) 
+    {
+        value *= 10;
+        value += (u32) (*c - '0');
+        c++;
+    }
+
+    return value;
+}
+
 inline u8 tolower(u8 c)
 {
     return ((c >= 'A') && (c <= 'Z') ? c | 0x60 : c);

@@ -38,37 +38,50 @@ static const u8 Frame[28][40] =
 static SM_Window *Target = NULL;
 
 
+/// @brief Start window composition
+/// @param w Pointer to window to composite in
 void UI_Begin(SM_Window *w)
 {
     Target = w;
 }
 
+/// @brief Stop window composition and repaint it
 void UI_End()
 {
     UI_RepaintWindow();
     Target = NULL;
 }
 
+/// @brief Stop window composition
 void UI_EndNoPaint()
 {
     Target = NULL;
 }
 
+/// @brief Set window visibility
+/// @param w Pointer to window
+/// @param v Visibility (boolean)
 void UI_SetVisible(SM_Window *w, bool v)
 {
     w->bVisible = v;
 }
 
+/// @brief Toggle window visibility
+/// @param w Pointer to window
 void UI_ToggleVisible(SM_Window *w)
 {
     w->bVisible = !w->bVisible;
 }
 
+/// @brief Get window visibility
+/// @param w Pointer to window
+/// @return TRUE if visible, FALSE if not visible
 bool UI_GetVisible(SM_Window *w)
 {
     return w->bVisible;
 }
 
+/// @brief Repaint window on screen
 void UI_RepaintWindow()
 {
     if (Target == NULL) return;
@@ -85,6 +98,8 @@ void UI_RepaintWindow()
     }
 }
 
+/// @brief Set window title
+/// @param title Title text
 void UI_SetWindowTitle(const char *title)
 {
     if (Target == NULL) return;
@@ -101,6 +116,10 @@ void UI_SetWindowTitle(const char *title)
     }
 }
 
+/// @brief Create a new window
+/// @param w Empty Window pointer to create
+/// @param title Window title
+/// @param flags Window flags; UC_NONE = No flags, UC_NOBORDER = Do not draw a window frame
 void UI_CreateWindow(SM_Window *w, const char *title, u8 flags)
 {
     if (w == NULL) return;
@@ -122,7 +141,10 @@ void UI_CreateWindow(SM_Window *w, const char *title, u8 flags)
 
 }
 
-// -- Clear / Print text --
+/// @brief Draw text string
+/// @param x X position
+/// @param y Y position
+/// @param text Text string
 void UI_DrawText(u8 x, u8 y, const char *text)
 {
     if (Target == NULL) return;
@@ -133,6 +155,11 @@ void UI_DrawText(u8 x, u8 y, const char *text)
     while (*c) Target->WinBuffer[y+3][_x++] = *c++;
 }
 
+/// @brief Clear rectangle
+/// @param x X position of rectangle
+/// @param y Y position of rectangle
+/// @param width Width of rectangle
+/// @param height Height of rectangle
 void UI_ClearRect(u8 x, u8 y, u8 width, u8 height)
 {
     if (Target == NULL) return;
@@ -146,6 +173,12 @@ void UI_ClearRect(u8 x, u8 y, u8 width, u8 height)
     }
 }
 
+/// @brief Fill rectangle
+/// @param x X position of rectangle
+/// @param y Y position of rectangle
+/// @param width Width of rectangle
+/// @param height Height of rectangle
+/// @param fillbyte Byte to fill the rectangle with (Extended ASCII)
 void UI_FillRect(u8 x, u8 y, u8 width, u8 height, u8 fillbyte)
 {
     if (Target == NULL) return;
@@ -159,7 +192,11 @@ void UI_FillRect(u8 x, u8 y, u8 width, u8 height, u8 fillbyte)
     }
 }
 
-// -- VLine / HLine --
+/// @brief Draw vertical line
+/// @param x X position
+/// @param y Y position
+/// @param height Height of line
+/// @param linechar UC_VLINE_SINGLE = Draw single line, UC_VLINE_DOUBLE = Draw double line
 void UI_DrawVLine(u8 x, u8 y, u8 height, u8 linechar)
 {
     if (Target == NULL) return;
@@ -218,6 +255,11 @@ void UI_DrawVLine(u8 x, u8 y, u8 height, u8 linechar)
     }
 }
 
+/// @brief Draw horizontal line
+/// @param x X position
+/// @param y Y position
+/// @param height Width of line
+/// @param linechar UC_HLINE_SINGLE = Draw single line, UC_HLINE_DOUBLE = Draw double line
 void UI_DrawHLine(u8 x, u8 y, u8 width, u8 linechar)
 {
     if (Target == NULL) return;
@@ -276,7 +318,12 @@ void UI_DrawHLine(u8 x, u8 y, u8 width, u8 linechar)
     }
 }
 
-// -- Box / Panel --
+/// @brief Draw panel
+/// @param x X position
+/// @param y Y position
+/// @param width Width of panel
+/// @param height Height of panel
+/// @param linetype UC_PANEL_SINGLE = Draw panel with single lines, UC_PANEL_DOUBLE = Draw panel with double lines
 void UI_DrawPanel(u8 x, u8 y, u8 width, u8 height, u8 linetype)
 {
     if (Target == NULL) return;
@@ -330,6 +377,12 @@ void UI_DrawPanel(u8 x, u8 y, u8 width, u8 height, u8 linetype)
 
     UI_ClearRect(x+1, y+1, width-2, height-2);
 }
+
+/// @brief Draw a simple panel
+/// @param x X position
+/// @param y Y position
+/// @param width Width of panel
+/// @param height Height of panel
 void UI_DrawPanelSimple(u8 x, u8 y, u8 width, u8 height)
 {
     if (Target == NULL) return;
@@ -352,11 +405,15 @@ void UI_DrawPanelSimple(u8 x, u8 y, u8 width, u8 height)
     Target->WinBuffer[y+3][x+1+width-1] = 0x9F;
     Target->WinBuffer[y+3+height-1][x+1] = 0xA0;
     Target->WinBuffer[y+3+height-1][x+1+width-1] = 0xB9;
-
-    //UI_ClearRect(x+1, y+1, width-2, height-2);
 }
 
-// -- Scrollbar --
+/// @brief Draw a vertical scrollbar
+/// @param x X position
+/// @param y Y position
+/// @param height Height of scrollbar
+/// @param min Min value of scrollbar
+/// @param max Max value of scrollbar
+/// @param pos Position of slider / Value of scrollbar
 void UI_DrawVScrollbar(u8 x, u8 y, u8 height, u16 min, u16 max, u16 pos)
 {
     if (Target == NULL) return;
@@ -372,7 +429,15 @@ void UI_DrawVScrollbar(u8 x, u8 y, u8 height, u16 min, u16 max, u16 pos)
     Target->WinBuffer[y+pos_+4][x+1] = 0xBB;    // Slider
 }
 
-// -- ItemList --
+/// @brief Draw an item list widget
+/// @param x X position
+/// @param y Y position
+/// @param width Width of item list
+/// @param height Height of item list
+/// @param caption Item list caption 
+/// @param list Array of 16 character strings to be drawn in list
+/// @param item_count Number of items (in list)
+/// @param scroll Scroll value of item list
 void UI_DrawItemList(u8 x, u8 y, u8 width, u8 height, const char *caption, char list[][16], u16 item_count, u16 scroll)
 {
     if (Target == NULL) return;
@@ -394,7 +459,13 @@ void UI_DrawItemList(u8 x, u8 y, u8 width, u8 height, const char *caption, char 
     }
 }
 
-// -- Text Input --
+/// @brief Draw text input box
+/// @param x X position
+/// @param y Y position
+/// @param width Width of text input box
+/// @param caption Text input box caption
+/// @param str String to output/input into
+/// @param bShowCaret Show caret in input box
 void UI_DrawTextInput(u8 x, u8 y, u8 width, const char *caption, char str[], bool bShowCaret)
 {
     if (Target == NULL) return;

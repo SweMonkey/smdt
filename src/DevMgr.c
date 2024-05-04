@@ -5,6 +5,7 @@
 #include "devices/Keyboard_Saturn.h"
 #include "Keyboard.h"
 #include "devices/RL_Network.h"
+#include "devices/XP_Network.h"
 #include "Network.h"
 #include "QMenu.h"                  // ChangeText() when KB is detected
 #include "Utils.h"                  // Definitions
@@ -40,6 +41,7 @@ SM_Device DEV_Detector;             // Detector device
 SM_Device *DevList[DEV_MAX];        // Device list
 u8 DevSeq = 0;                      // Number of devices
 bool bRLNetwork = FALSE;            // Use RetroLink cartridge instead of built-in UART
+bool bXPNetwork = FALSE;            // Use XPort network adapter
 DevPort DEV_UART_PORT = DP_Port2;   // Default UART port - Read only!
 
 /// @brief Get four bit device identifier (Sega devices only)
@@ -205,6 +207,24 @@ void DetectDevices()
     SCtrl = (vu8 *)DEV_UART.SCtrl;
     *SCtrl = 0x38;
 
+    u8 xpn_r = XPN_Initialize();
+
+    switch (xpn_r)
+    {
+        /*case 0:
+            TRM_DrawText("XPN: Device not found", 1, BootNextLine++, PAL1);
+        break;*/
+        case 1:
+            TRM_DrawText("XPN: XPort module OK", 1, BootNextLine++, PAL1);
+        break;
+        case 2:
+            TRM_DrawText("XPN: Error", 1, BootNextLine++, PAL1);
+        break;
+    
+        default:
+        break;
+    }
+
     // RetroLink Network
     if (RLN_Initialize())
     {
@@ -212,17 +232,33 @@ void DetectDevices()
 
         VDP_setReg(0xB, 0);   // Disable VDP ext interrupt (Enable: 8 - Disable: 0)
 
+        NET_SetConnectFunc(RLN_Connect);
+
         TRM_DrawText("RetroLink IP: ", 1, BootNextLine++, PAL1);
         RLN_PrintIP(1, BootNextLine++);
         TRM_DrawText("RetroLink MAC: ", 1, BootNextLine++, PAL1);
         RLN_PrintMAC(1, BootNextLine++);
     }
+    else if (xpn_r)
+    {
+        DEV_UART.Id.sName = "XPORT UART";
+        bXPNetwork = TRUE;
+
+        NET_SetConnectFunc(XPN_Connect);
+
+        TRM_DrawText("XPort IP: <not implemented>", 1, BootNextLine++, PAL1);
+        //XPN_PrintIP(1, BootNextLine++);
+        TRM_DrawText("XPort MAC: <not implemented>", 1, BootNextLine++, PAL1);
+        //XPN_PrintMAC(1, BootNextLine++);
+    }
     else
     {
         bRLNetwork = FALSE;
+        bXPNetwork = FALSE;
 
-        TRM_DrawText("RetroLink Network Adapter not found", 1, BootNextLine++, PAL1);
-        TRM_DrawText("Defaulting to built in UART", 1, BootNextLine++, PAL1);
+        //TRM_DrawText("RetroLink Network Adapter not found", 1, BootNextLine++, PAL1);
+        TRM_DrawText("No network adapters found", 1, BootNextLine++, PAL1);
+        TRM_DrawText("Listening on built in UART", 1, BootNextLine++, PAL1);
     }
 
 }
@@ -236,6 +272,9 @@ void InitDeviceManager()
     }
 
     DevSeq = 0;
+    
+    bRLNetwork = FALSE;
+    bXPNetwork = FALSE;
 
     DetectDevices();    // Detect and setup
 }

@@ -79,9 +79,9 @@ static inline void DoEscape(u8 dummy);
 static inline void DoIAC(u8 dummy);
 
 // Telnet modifiable variables
-static u8 vDoGA = 0;
-static u8 vDECOM = FALSE;  // DEC Origin Mode
-static u8 vDECLRMM = 0; // This control function defines whether or not the set left and right margins (DECSLRM) control function can set margins.
+static u8 vDoGA = 0;        // Use Go-Ahead
+static u8 vDECOM = FALSE;   // DEC Origin Mode
+static u8 vDECLRMM = 0;     // This control function defines whether or not the set left and right margins (DECSLRM) control function can set margins.
 
 // DECSTBM
 static s16 DMarginTop = 0;
@@ -115,16 +115,16 @@ static char ESC_TitleBuffer[32] = {'\0'};
 static u8 ESC_TitleSeq = 0;
 
 // IAC
-static u8 bIAC = FALSE;                        // TRUE = Currently in a "Intercept As Command" stream
-static u8 IAC_Command = 0;                     // Current TC_xxx command (0 = none set)
-static u8 IAC_Option = 0xFF;                   // Current TO_xxx option  (FF = none set)
-static u8 IAC_InSubNegotiation = 0;            // TRUE = Currently in a SB/SE block
-static u8 IAC_SubNegotiationOption = 0xFF;     // Current TO_xxx option to operate in a subnegotiation 
-static u8 IAC_SNSeq = 0;                       // Counter - where in "IAC_SubNegotiationBytes" we are
+static u8 bIAC = FALSE;                         // TRUE = Currently in a "Intercept As Command" stream
+static u8 IAC_Command = 0;                      // Current TC_xxx command (0 = none set)
+static u8 IAC_Option = 0xFF;                    // Current TO_xxx option  (FF = none set)
+static u8 IAC_InSubNegotiation = 0;             // TRUE = Currently in a SB/SE block
+static u8 IAC_SubNegotiationOption = 0xFF;      // Current TO_xxx option to operate in a subnegotiation 
+static u8 IAC_SNSeq = 0;                        // Counter - where in "IAC_SubNegotiationBytes" we are
 static u8 IAC_SubNegotiationBytes[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};   // Recieved byte stream in a subnegotiation block
 
-static s32 Saved_sx = 0, Saved_sy = C_YSTART;
-static u8 CharMapSelection = 0;
+static s32 Saved_sx = 0, Saved_sy = C_YSTART;   // Saved cursor position
+static u8 CharMapSelection = 0;                 // Character map selection (0 = Default extended ASCII, 1 = DEC Line drawing set)
 
 #ifdef EMU_BUILD
 extern u32 StreamPos;   // Stream replay position
@@ -545,9 +545,7 @@ static inline void DoEscape(u8 dummy)
                 break;
             
                 case 25:   // Shows the cursor, from the VT220. (DECTCEM)
-                    //*((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(0xAC04);  // Cursor sprite tile address
-                    //*((vu16*) VDP_DATA_PORT) = LastCursor;
-                    SetSprite_TILE(0, LastCursor);
+                    SetSprite_TILE(CURSOR_SPRITE_NUM, LastCursor);
                 break;
 
                 case 69:   // DECSLRM can set margins.
@@ -592,7 +590,7 @@ static inline void DoEscape(u8 dummy)
                 case 25:   // Hides the cursor. (DECTCEM)
                     //*((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(0xAC04);  // Cursor sprite tile address
                     //*((vu16*) VDP_DATA_PORT) = 0x2016;
-                    SetSprite_TILE(0, 0x2016);
+                    SetSprite_TILE(CURSOR_SPRITE_NUM, 0x2016);
                 break;
 
                 case 69:   // DECSLRM cannot set margins.
@@ -716,9 +714,7 @@ static inline void DoEscape(u8 dummy)
 
                 case 0x19:
                 case 0xF5: // Make cursor visible   ($F5 is actually ESC[?25h )
-                    //*((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(0xAC04);  // Cursor sprite tile address
-                    //*((vu16*) VDP_DATA_PORT) = LastCursor;
-                    SetSprite_TILE(0, LastCursor);
+                    SetSprite_TILE(CURSOR_SPRITE_NUM, LastCursor);
                 break;
 
                 case 0x21:
@@ -756,7 +752,7 @@ static inline void DoEscape(u8 dummy)
                 case 0xF5: // Make cursor invisible   ($F5 is actually ESC[?25l )
                     //*((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(0xAC04);  // Cursor sprite tile address
                     //*((vu16*) VDP_DATA_PORT) = 0x16;
-                    SetSprite_TILE(0, 0x16);
+                    SetSprite_TILE(CURSOR_SPRITE_NUM, 0x16);
                 break;
 
                 default:
@@ -1202,12 +1198,9 @@ static inline void DoEscape(u8 dummy)
                 break;
             }
 
-            //*((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(0xAC04);  // Cursor sprite tile address
-            //*((vu16*) VDP_DATA_PORT) = LastCursor;
+            SetSprite_TILE(CURSOR_SPRITE_NUM, LastCursor);
 
-            SetSprite_TILE(0, LastCursor);
-
-            *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_CRAM_ADDR((u32)8); // 62 Cursor CRAM colour address
+            *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_CRAM_ADDR((u32)8); // Cursor CRAM colour address
             *((vu16*) VDP_DATA_PORT) = Cursor_CL;
 
             goto EndEscape;

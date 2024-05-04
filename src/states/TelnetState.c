@@ -10,12 +10,12 @@
 
 #ifndef EMU_BUILD
 static u8 rxdata;
-static u8 kbdata;
 #endif
+static u8 kbdata;
 static u8 bOnce = FALSE;
 
 #ifdef EMU_BUILD
-asm(".global telnetdump\ntelnetdump:\n.incbin \"tmp/streams/rx_nethack6.log\"");
+asm(".global telnetdump\ntelnetdump:\n.incbin \"tmp/streams/rx_nethack_lines2.log\"");
 extern const unsigned char telnetdump[];
 u32 StreamPos = 0;
 #endif
@@ -51,7 +51,7 @@ void Enter_Telnet(u8 argc, char *argv[])
     // rx_absinthebbs.log 53692
     u8 data; 
     u32 p = 0;
-    u32 s = 719624;
+    u32 s = 365971;
     StreamPos = p;
 
     while (p < s)
@@ -90,11 +90,15 @@ void Enter_Telnet(u8 argc, char *argv[])
     Buffer_Flush(&TxBuffer);
     Buffer_Flush(&RxBuffer);
 
-    if ((argc > 0) && (bRLNetwork))
+    if (argc > 1)
     {
-        RLN_Connect(argv[0]);
+        if (NET_Connect(argv[1]) == FALSE) 
+        {
+            /*char TitleBuf[40];
+            sprintf(TitleBuf, "%s - <Connection Error>", STATUS_TEXT);
+            TRM_SetStatusText(TitleBuf);*/
+        }
     }
-
 }
 
 void ReEnter_Telnet()
@@ -124,12 +128,14 @@ void Run_Telnet()
             bOnce = !bOnce;
         }
     }
+    #endif
 
     while (KB_Poll(&kbdata))
     {
         KB_Interpret_Scancode(kbdata);
     }
     
+    #ifndef EMU_BUILD
     if (!bOnce)
     {
         TRM_SetStatusIcon(ICO_NET_IDLE_RECV, ICO_POS_1);

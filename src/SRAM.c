@@ -1,10 +1,11 @@
 #include "SRAM.h"
 #include "Terminal.h"
-#include "Utils.h"          // For EMU_BUILD define
-#include "QMenu.h"          // QSelected_BGCL & QSelected_FGCL
-#include "IRC.h"            // vUsername & vQuitStr
-#include "Screensaver.h"    // bScreensaver
-#include "Keyboard.h"       // vKB_Layout
+#include "Utils.h"              // For EMU_BUILD define
+#include "QMenu.h"              // QSelected_BGCL & QSelected_FGCL
+#include "IRC.h"                // vUsername & vQuitStr
+#include "Screensaver.h"        // bScreensaver
+#include "Keyboard.h"           // vKB_Layout
+#include "devices/XP_Network.h" // vConn_time
 
 #define SAVE_VERSION 1
 #define ST_BYTE 1
@@ -38,6 +39,7 @@ static const struct s_varlist
     {ST_SARR, vUsername},
     {ST_BYTE, &bHighCL},
     {ST_BYTE, &bScreensaver},
+    {ST_LONG, &vConn_time},
     {0, 0}  // Terminator
 };
 

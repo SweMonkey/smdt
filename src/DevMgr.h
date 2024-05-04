@@ -57,7 +57,6 @@ typedef struct s_device
 #define DEV_SLOT(device) (device.Id.Bitshift >> 1)
 #define DEV_FULL(device) DEV_PORT, DEV_SLOT(device)
 
-
 #define SetDevCtrl(d, b) (*d.Ctrl ^= ((b & d.Id.Bitmask) << d.Id.Bitshift)) // TODO: Can't XOR this stuff - Temp: Make sure to call UnsetDevCtrl at least once before calling SetDevCtrl
 #define OrDevCtrl(d, b) (*d.Ctrl |= ((b & d.Id.Bitmask) << d.Id.Bitshift))
 #define AndDevCtrl(d, b) (*d.Ctrl &= ((b & d.Id.Bitmask) << d.Id.Bitshift))
@@ -70,6 +69,7 @@ typedef struct s_device
 
 #define GetDevData(d, b) ((*d.Data & ((b & d.Id.Bitmask) << d.Id.Bitshift)) >> d.Id.Bitshift)
 
+
 // Debug
 /*
 #define SetDevData(d, b) (kprintf("SetDevData: $%X"  , (*d.Data^ ((b & d.Id.Bitmask) << d.Id.Bitshift))));(*d.Data ^=  ((b & d.Id.Bitmask) << d.Id.Bitshift))
@@ -81,6 +81,7 @@ typedef struct s_device
 extern SM_Device *DevList[DEV_MAX];
 extern DevPort DEV_UART_PORT;   // Default UART port - Read only!
 extern bool bRLNetwork;
+extern bool bXPNetwork;
 
 void SetDevicePort(SM_Device *d, DevPort p);
 void InitDeviceManager();

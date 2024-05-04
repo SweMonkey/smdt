@@ -1,5 +1,5 @@
 
-# SMD Telnet/IRC/Terminal client v0.28+
+# SMD Telnet/IRC/Terminal client v0.29+
 A telnet, IRC and terminal client for the Sega Mega Drive/Genesis with support for PS/2 keyboards and RS-232 communication.<br>
 ![Screenshot of the telnet client](https://deceptsoft.com/smdtc_extra_git/telnet_small.png)
 ![Screenshot of the IRC client](https://deceptsoft.com/smdtc_extra_git/irc_small.png)
@@ -22,7 +22,7 @@ I (smds) will not take any responsibilities for any failure to read and understa
 <br>
 
 ## Credits
-b1tsh1ft3r - Testing, improvement ideas and RetroLink support<br>
+b1tsh1ft3r - Testing, improvement ideas and RetroLink/xPico support<br>
 RKT - For creating a 4x8 extended ASCII font tileset<br>
 smds - Code<br>
 <br>
@@ -42,6 +42,8 @@ A total of 2 PS/2 devices and 1 UART device can be connected to a single MD cont
 When a keyboard is connected and detected a 'K' icon will be visible in the status bar.<br>
 A fallback joypad device will be activated if SMDTC fails to find a keyboard or when a keyboard is plugged into PORT 2, allowing the use of a regular joypad.<br>
 However a keyboard is recommended to be able to actually type or use special functions.<br>
+<br>
+TODO: Insert information about using a retrolink or xPico adapter with SMDTC here.
 <br>
 All detected devices can be viewed by going to the quick menu -> mega drive settings -> connected devices.<br>
 <br>
@@ -79,10 +81,10 @@ MD port pin 8 = PS/2 GND pin 3<br>
 <br>
 
 ### PS/2 pin reference:
-PS/2 pin 1 = data<br>
+PS/2 pin 1 = Data<br>
 PS/2 pin 3 = GND<br>
 PS/2 pin 4 = VCC<br>
-PS/2 pin 5 = clock<br>
+PS/2 pin 5 = Clock<br>
 <br>
 
 ### MD UART pin reference:
@@ -110,3 +112,14 @@ Enter = Enter submenu and activate a choice<br>
 Escape = Back out of current menu<br>
 Up cursor = Move selector up<br>
 Down cursor = Move selector down<br>
+
+## IRC Client shortcuts
+F1 = Channel 1 tab
+F2 = Channel 2 tab
+F3 = Channel 3 tab
+F5 = Toggle channel user list
+
+## Terminal emulator
+Type `help` for a list of all available built in commands.
+Up arrow   = Retype last entered string
+Down arrow = Clear current typed string

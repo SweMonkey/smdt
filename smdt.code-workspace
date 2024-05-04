@@ -42,7 +42,8 @@
 			"condition_variable": "c",
 			"input.h": "c",
 			"keyboard.h": "c",
-			"qmenu.h": "c"
+			"qmenu.h": "c",
+			"xp_network.h": "c"
 		}
 	}
 }

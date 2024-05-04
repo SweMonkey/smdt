@@ -14,9 +14,9 @@
 
 #ifndef EMU_BUILD
 static u8 rxdata;
-static u8 kbdata;
 #endif
 
+static u8 kbdata;
 static u8 bOnce = FALSE;
 static SM_Window UserWin;
 static u16 UserListScroll = 0;
@@ -89,9 +89,14 @@ void Enter_IRC(u8 argc, char *argv[])
     Buffer_Flush(&TxBuffer);
     Buffer_Flush(&RxBuffer);
 
-    if ((argc > 0) && (bRLNetwork))
+    if (argc > 1)
     {
-        RLN_Connect(argv[0]);
+        if (NET_Connect(argv[1]) == FALSE) 
+        {
+            /*char TitleBuf[40];
+            sprintf(TitleBuf, "%s - <Connection Error>", STATUS_TEXT);
+            TRM_SetStatusText(TitleBuf);*/
+        }
     }
 }
 
@@ -127,17 +132,19 @@ void Run_IRC()
             bOnce = !bOnce;
         }
     }
+    #endif
 
     while (KB_Poll(&kbdata))
     {
         KB_Interpret_Scancode(kbdata);
     }
     
+    #ifndef EMU_BUILD
     if (!bOnce)
     {
         TRM_SetStatusIcon(ICO_NET_IDLE_RECV, ICO_POS_1);
         bOnce = !bOnce;
-    }        
+    }
     #endif
 
     TMB_UploadBuffer(&PG_Buffer[PG_CurrentIdx]);

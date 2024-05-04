@@ -4,7 +4,7 @@
 #include <genesis.h>
 
 // Title bar prefix
-#define STATUS_TEXT "SMDTC v0.28"
+#define STATUS_TEXT "SMDTC v0.29"
 
 // Icon x position
 #define ICO_POS_0 36  // Main use: Input device icon
@@ -26,6 +26,9 @@
 #define AVR_WINDOW  0xB000  // $B000 - $BFFF
 #define AVR_PLANE_A 0xC000  // $C000 - $DFFF
 #define AVR_PLANE_B 0xE000  // $E000 - $FFFF
+
+// Cursor sprite index
+#define CURSOR_SPRITE_NUM 0
 
 // Check if a character is printable
 #define isPrintable(x) ((x != '\n')&&(x))
@@ -73,6 +76,7 @@ void TRM_ClearTextArea(u16 x, u16 y, u16 w, u16 h);
 
 u8 atoi(char *c);
 u16 atoi16(char *c);
+u32 atoi32(char *c);
 u8 tolower(u8 c);
 char *strtok(char *s, char d);
 

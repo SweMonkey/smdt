@@ -21,3 +21,6 @@ TILESET GFX_CURSOR "cursor.png" NONE NONE
 
 # Mouse pointer
 TILESET GFX_POINTER "mouse.png" NONE NONE
+
+# Logo
+IMAGE GFX_LOGO "logo_old.png" BEST ALL

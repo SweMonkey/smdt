@@ -1,3 +1,10 @@
+v0.29:
+IRC: Cursor fix.
+Added initial support for XPort module connected to an MD UART port.
+PS2KB: Reworked keyboard reading method, it now works on NTSC/MD2 models (Thanks to b1tsh1ft3r).
+PS2KB: SendCommand() has been rewritten.
+Quality of life improvement to the terminal emulator.
+
 v0.28:
 Added initial support for b1tsh1ft3r's network cartridge 'RetroLink', allowing much faster network speeds and a MD to be completely stand alone.
 Added a screensaver that will activate after 5 minutes of inactivity. Disabled by default.

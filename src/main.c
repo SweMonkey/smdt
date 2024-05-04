@@ -2,8 +2,6 @@
 #include "StateCtrl.h"
 #include "DevMgr.h"
 #include "Input.h"
-#include "Terminal.h"
-#include "devices/Keyboard_PS2.h"
 #include "../res/system.h"
 #include "Utils.h"
 #include "HexView.h"    // bShowHexView
@@ -41,12 +39,22 @@ int main(bool hardReset)
     if (!hardReset)
     {
         ChangeState(PS_Dummy, 0, NULL); 
+        SetSprite_Y(CURSOR_SPRITE_NUM, -128);
+    }
+
+    bPALSystem = IS_PAL_SYSTEM;
+
+    if (bPALSystem)
+    {
+        VDP_setScreenHeight240();
     }
 
     PAL_setPalette(PAL0, palette_black, DMA);
     PAL_setPalette(PAL1, palette_black, DMA);
     PAL_setPalette(PAL2, palette_black, DMA);
     PAL_setPalette(PAL3, palette_black, DMA);
+
+    VDP_setHilightShadow(TRUE);
 
     PSG_init();
     PSG_setEnvelope(0, PSG_ENVELOPE_MAX);
@@ -64,6 +72,8 @@ int main(bool hardReset)
     PAL_setColor(49, 0xeee);    // Window text BG Inverted / Terminal text FG? Was used for something there...
     PAL_setColor(50, 0x000);    // Window text FG Inverted
 
+    VDP_drawImageEx(BG_B, &GFX_LOGO, TILE_ATTR_FULL(PAL2, FALSE, 0, 0, 0x20), 27, (bPALSystem ? 19 : 17), TRUE, TRUE);
+
     VDP_loadTileSet(&GFX_BGBLOCKS,   AVR_BGBLOCK, DMA);
     VDP_loadTileSet(&GFX_POINTER,    AVR_POINTER, DMA);
     VDP_loadTileSet(&GFX_CURSOR,     AVR_CURSOR,  DMA);
@@ -73,15 +83,9 @@ int main(bool hardReset)
     BootNextLine = 0;
     TRM_SetWinParam(FALSE, FALSE, 0, 1);    // Setup default window parameters
     TRM_SetWinHeight(28);                   // Change window height for boot menu
-    TRM_ClearTextArea(0, 0, 40, 28);
+    //TRM_ClearTextArea(0, 0, 40, 28);
     TRM_DrawText("Initializing system...", 1, BootNextLine++, PAL1);
 
-    bPALSystem = IS_PAL_SYSTEM;
-
-    if (bPALSystem)
-    {
-        VDP_setScreenHeight240();
-    }
 
     VDP_setReg(0xB, 0x8);   // Enable VDP ext interrupt (Enable: 8 - Disable: 0)
     SYS_setInterruptMaskLevel(0);
@@ -140,7 +144,12 @@ int main(bool hardReset)
     waitMs(2000);
     #endif
 
+    waitMs(1000);
+
+    VDP_clearPlane(BG_B, TRUE);
     TRM_ResetWinParam();
+    VDP_setHilightShadow(FALSE);
+
     
     //ChangeState(PS_Debug, 0, NULL);
     //ChangeState(PS_Telnet, 0, NULL);

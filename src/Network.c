@@ -1,10 +1,10 @@
 #include "Network.h"
 #include "Buffer.h"
 #include "DevMgr.h"
-#include "Terminal.h"   // vLineMode
-#include "Telnet.h"     // LMSM define
-#include "Utils.h"      // EMU_BUILD define, TRM
-#include "devices/RL_Network.h"
+#include "Terminal.h"           // vLineMode
+#include "Telnet.h"             // LMSM define
+#include "Utils.h"              // EMU_BUILD define, TRM
+#include "devices/RL_Network.h" // RLN_SendByte
 
 // Statistics
 u32 RXBytes = 0;
@@ -12,6 +12,7 @@ u32 TXBytes = 0;
 
 Buffer RxBuffer, TxBuffer;
 SM_Device DEV_UART;
+NET_Connect_CB *ConnectCB = NULL;
 
 
 // Rx IRQ
@@ -28,10 +29,23 @@ void Ext_IRQ()
     SYS_setInterruptMaskLevel(0);
 }
 
+void NET_SetConnectFunc(NET_Connect_CB *cb)
+{
+    ConnectCB = cb;
+}
+
+bool NET_Connect(char *str)
+{
+    if (ConnectCB == NULL) return FALSE;
+
+    return ConnectCB(str);
+}
+
 // Send byte to remote machine or buffer it depending on linemode
 void NET_SendChar(const u8 c, u8 flags)
 {
     #ifdef EMU_BUILD
+    #warning EMU_BUILD active, key input from keyboard wont be buffered!
     return;
     #endif
 

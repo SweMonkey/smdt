@@ -1,0 +1,58 @@
+SMDTC v0.29
+
+See Changelog.txt for full list of additions.
+
+- Autodetected extra hardware support -
+Preliminary support for b1tsh1ft3rs RetroLink cartridge and XPort module using any controller port.
+PS/2 Keyboard support, can be in any port, max 2 PS/2 devices per port.
+Sega Saturn keyboard support, can be in any port, max 1 keyboard per port.
+Joypad support from SGDK.
+Sega devices detection support (4bit ID).
+Hardware is autodetected on bootup and can to an extent exist on the same port; Example: 2 PS/2 keyboards and an XPort module can all be on a single controller port.
+
+
+- Misc features -
+GUI System, makes it possible to create simple GUI windows and widgets. The GUI uses the window layer to avoid invalidating plane A/B/S.
+Hex viewer and debugging tools.
+Bouncing cursor screensaver.
+Limited UTF-8 support.
+Input subsystem which ties all various input methods together.
+Device manager to detect and initialize extra hardware.
+Network manager to deal with incomming/outgoing network traffic depending on network adapter in use (RL/XP/Built in UART).
+Sprite manager.
+State machine to act as a single tasking program manager.
+SRAM support for saving configuration.
+Buffering system for network traffic.
+
+
+- Multiple resolutions -
+Multiple resolutions by using different font sizes; 
+8x8 16 colours - 40 columns visible, scrollable left/right region for 128 columns
+4x8 8 colours  - 80 columns visible, scrollable left/right region for 256 columns
+4x8 monochrome - 80 columns visible, scrollable left/right region for 256 columns
+
+
+- Terminal emulator -
+Command prompt.
+Commands to debug keyboards and xport modules.
+A few common terminal commands built in. More planned.
+
+
+- Telnet client -
+IAC support.
+Most common escape sequences supported.
+DEC support.
+Alternate code pages supported (Extended ASCII, DEC special character and line drawing set, UTF-8).
+Colour and attribute support.
+Supports reporting system variables to remote server.
+Echo/line mode support.
+Implements various xterm functions.
+Implements various vt100/vt104 functions.
+<Error not enough memory to print all features>
+
+
+- IRC client -
+3-4 channel chat (switchable tabs with buffered chats).
+IRC command support.
+Toggleable window with list of users in channel.
+mIRC Colour support.

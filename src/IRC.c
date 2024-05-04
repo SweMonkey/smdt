@@ -105,9 +105,9 @@ void IRC_Reset()
     SetSprite_X(10, spr_x+288);
 
     // Setup cursor sprite y position and tile
-    SetSprite_Y(0, spr_y);
-    SetSprite_TILE(0, 0x12);
-    SetSprite_SIZELINK(0, 0, 1);
+    SetSprite_Y(CURSOR_SPRITE_NUM, spr_y);
+    SetSprite_TILE(CURSOR_SPRITE_NUM, 0x12);
+    SetSprite_SIZELINK(CURSOR_SPRITE_NUM, 0, 1);
 }
 
 // Text input at bottom of screen
@@ -128,7 +128,7 @@ void PrintTextLine(const u8 *str)
     }
 
     // Update cursor X position
-    SetSprite_X(0, (spr_x*8)+136);
+    SetSprite_X(CURSOR_SPRITE_NUM, (spr_x*8)+136);
 
     return;
 }

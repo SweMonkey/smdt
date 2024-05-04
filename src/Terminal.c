@@ -13,14 +13,14 @@
 
 // Modifiable variables
 u8 vNewlineConv = 0;    // 0 = none (\n = \n) -- 1 = \n becomes \n\r
-u8 vTermType = 0;   // See TermType table further down
-u8 vDoEcho = 0;
+u8 vTermType = 0;       // See TermType table further down
+u8 vDoEcho = 0;         // 0 = Rely on remote server to echo back typed characters -- 1 = Do echo typed characters back to screen
 u8 vLineMode = 0;
-char vSpeed[5] = "4800";
+char vSpeed[5] = "4800";// Report this baud speed to remote servers if they ask
 
 // Font
-u8 FontSize = 1;    // 0=8x8 16 colour - 1=4x8 8 colour AA - 2=4x8 monochrome AA
-u8 EvenOdd = 0;
+u8 FontSize = 1;        // 0=8x8 16 colour - 1=4x8 8 colour AA - 2=4x8 monochrome AA
+u8 EvenOdd = 0;         // Even/Odd character being printed
 static u8 LastPlane = 0;
 
 // TTY
@@ -37,13 +37,13 @@ u8 bWrapAround = TRUE;                  // Force wrap around at column 40/80
 u8 TermColumns = D_COLUMNS_80;
 
 // Cursor stuff
-u16 LastCursor = 0x13;
+u16 LastCursor = 0x13;      // Last cursor tile used
 
 // Colours
 u16 Custom_BGCL = 0;
 u16 Custom_FG0CL = 0xEEE;   // Custom text colour for 4x8 font
 u16 Custom_FG1CL = 0x666;   // Custom text antialiasing colour for 4x8 font
-u8 bHighCL = TRUE;         // Use the upper 8 colours instead when using FontSize=1
+u8 bHighCL = TRUE;          // Use the upper 8 colours instead when using FontSize=1
 
 static const u16 pColors[16] =
 {
@@ -66,7 +66,7 @@ void TTY_Init(u8 bHardReset)
 {
     if (bHardReset)
     {
-        TTY_SetColumns(TermColumns);   // 128=for 80 columns - 64=for 40 columns    -- 32=No.
+        TTY_SetColumns(TermColumns);
         RXBytes = 0;
         TXBytes = 0;
     }
@@ -139,7 +139,7 @@ void TTY_ReloadPalette()
     {
         // Font glyph set 0 (Colours 0-3)
         PAL_setColor(0x0C, pColorsHalf[0]);
-        PAL_setColor(0x0D, pColors[(bHighCL ?  8 : 8)]);    // Always use the brigth colour here
+        PAL_setColor(0x0D, pColors[(bHighCL ?  8 : 8)]);    // Always use the bright colour here
 
         PAL_setColor(0x1C, pColorsHalf[1]);
         PAL_setColor(0x1D, pColors[(bHighCL ?  9 : 1)]);
@@ -188,8 +188,8 @@ void TTY_SetFontSize(u8 size)
 
     if (FontSize == 1)   // 4x8
     {
-        VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA, AVR_FONT0, DMA);       // 0x20
-        VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA_ALT, AVR_FONT1, DMA);  // 0x320
+        VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA, AVR_FONT0, DMA);
+        VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA_ALT, AVR_FONT1, DMA);
 
         VDP_setHorizontalScroll(BG_A, HScroll+4);   // -4
         VDP_setHorizontalScroll(BG_B, HScroll  );   // -8
@@ -199,12 +199,12 @@ void TTY_SetFontSize(u8 size)
         EvenOdd = 1;
         LastPlane = 0;
 
-        if (TermColumns == D_COLUMNS_80) C_XMAX = 254;   // this is a test, remove me if fucky
+        if (TermColumns == D_COLUMNS_80) C_XMAX = 254;
         else C_XMAX = 126;
     }
     else if (FontSize == 2)   // 4x8 AA
     {
-        VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA, AVR_FONT0, DMA);   // 0x20
+        VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA, AVR_FONT0, DMA);
 
         VDP_setHorizontalScroll(BG_A, HScroll+4);   // -4
         VDP_setHorizontalScroll(BG_B, HScroll  );   // -8
@@ -214,19 +214,19 @@ void TTY_SetFontSize(u8 size)
         EvenOdd = 1;
         LastPlane = 0;
 
-        if (TermColumns == D_COLUMNS_80) C_XMAX = 254;   // this is a test, remove me if fucky
+        if (TermColumns == D_COLUMNS_80) C_XMAX = 254;
         else C_XMAX = 126;
     }
     else        // 8x8
     {
-        VDP_loadTileSet(&GFX_ASCII_TERM, AVR_FONT0, DMA);    // 0x20
+        VDP_loadTileSet(&GFX_ASCII_TERM, AVR_FONT0, DMA);
 
         VDP_setHorizontalScroll(BG_A, HScroll);
         VDP_setHorizontalScroll(BG_B, HScroll);
 
         LastCursor = 0x10;
         
-        if (TermColumns == D_COLUMNS_80) C_XMAX = 126;   // this is a test, remove me if fucky
+        if (TermColumns == D_COLUMNS_80) C_XMAX = 126;
         else C_XMAX = 62;
     }
 
@@ -239,10 +239,10 @@ void TTY_SetFontSize(u8 size)
     spry = spry >= 504 ? 504 : spry;
 
     // Setup cursor sprite
-    SetSprite_Y(0, spry);
-    SetSprite_X(0, sprx);
-    SetSprite_SIZELINK(0, SPR_SIZE_1x1, 0);
-    SetSprite_TILE(0, LastCursor);
+    SetSprite_Y(CURSOR_SPRITE_NUM, spry);
+    SetSprite_X(CURSOR_SPRITE_NUM, sprx);
+    SetSprite_SIZELINK(CURSOR_SPRITE_NUM, SPR_SIZE_1x1, 0);
+    SetSprite_TILE(CURSOR_SPRITE_NUM, LastCursor);
 }
 
 inline void TTY_PrintChar(u8 c)
@@ -695,8 +695,8 @@ inline void TTY_MoveCursor(u8 dir, u8 num)
     spry = spry >= 504 ? 504 : spry;
 
     // Update sprite position
-    SetSprite_Y(0, spry);
-    SetSprite_X(0, sprx);
+    SetSprite_Y(CURSOR_SPRITE_NUM, spry);
+    SetSprite_X(CURSOR_SPRITE_NUM, sprx);
 
     // Reset screensaver activation counter
     InactiveCounter = 0;

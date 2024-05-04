@@ -5,6 +5,7 @@
 #include "StateCtrl.h"
 #include "Utils.h"
 #include "SRAM.h"
+#include "IRQ.h"            // Cursor_CL
 #include "Network.h"        // DEV_UART
 #include "Keyboard.h"       // vKB_Layout
 #include "Screensaver.h"    // bScreensaver
@@ -524,12 +525,14 @@ void ChangeText(u8 menu_idx, u8 entry_idx, const char *new_text)
 
 void WINFN_Reset()
 {
+    char *argv[1] = {"reset"};
+
     QMenu_Toggle();
 
     switch (SelectedIdx)
     {
         case 0:
-            ChangeState(PS_Terminal, 0, NULL);
+            ChangeState(PS_Terminal, 1, argv);
         break;
         case 1:
             ChangeState(PS_Dummy, 0, NULL);
@@ -577,8 +580,6 @@ void WINFN_BGColor()
     QSelected_BGCL = SelectedIdx;
     PAL_setColor(0, Custom_BGCL);
 }
-
-extern u16 Cursor_CL;
 
 void WINFN_FGColor()
 {
@@ -715,7 +716,8 @@ void WINFN_DEBUGSEL()
 
 void WINFN_SERIALPORTSEL()
 {
-    SetDevicePort(&DEV_UART, SelectedIdx);
+    SetDevicePort(&DEV_UART, (DevPort)SelectedIdx);
+    DEV_UART_PORT = (DevPort)SelectedIdx;
     
     vu8 *SCtrl;
     SCtrl = (vu8 *)DEV_UART.SCtrl;
