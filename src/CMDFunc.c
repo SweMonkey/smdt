@@ -132,21 +132,21 @@ void CMD_xport(u8 argc, char *argv[])
             }
         }
 
-        switch (atoi(response_code))
+        switch (response_code)
         {
-            case 0:
+            case '0':
                 PrintOutput("OK; no error\n");
             break;
-            case 1:
+            case '1':
                 PrintOutput("No answer from remote device\n");
             break;
-            case 2:
+            case '2':
                 PrintOutput("Cannot reach remote device or no answer\n");
             break;
-            case 8:
+            case '8':
                 PrintOutput("Wrong parameter(s)\n");
             break;
-            case 9:
+            case '9':
                 PrintOutput("Invalid command\n");
             break;
         
@@ -182,21 +182,21 @@ void CMD_xport(u8 argc, char *argv[])
             }
         }
 
-        switch (atoi(response_code))
+        switch (response_code)
         {
-            case 0:
+            case '0':
                 PrintOutput("OK; no error\n");
             break;
-            case 1:
+            case '1':
                 PrintOutput("No answer from remote device\n");
             break;
-            case 2:
+            case '2':
                 PrintOutput("Cannot reach remote device or no answer\n");
             break;
-            case 8:
+            case '8':
                 PrintOutput("Wrong parameter(s)\n");
             break;
-            case 9:
+            case '9':
                 PrintOutput("Invalid command\n");
             break;
         

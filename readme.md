@@ -104,7 +104,6 @@ P2:S = Port 2 UART<br>
 P3:0 = Port 3 @ pin 1+2<br>
 P3:1 = Port 3 @ pin 3+4<br>
 P3:S = Port 3 UART<br>
-<br>
 
 ## PS/2 Keyboard shortcuts
 Right windows key OR F8 = Open the Quick menu<br>
@@ -114,12 +113,12 @@ Up cursor = Move selector up<br>
 Down cursor = Move selector down<br>
 
 ## IRC Client shortcuts
-F1 = Channel 1 tab
-F2 = Channel 2 tab
-F3 = Channel 3 tab
-F5 = Toggle channel user list
+F1 = Channel 1 tab<br>
+F2 = Channel 2 tab<br>
+F3 = Channel 3 tab<br>
+F5 = Toggle channel user list<br>
 
 ## Terminal emulator
-Type `help` for a list of all available built in commands.
-Up arrow   = Retype last entered string
-Down arrow = Clear current typed string
+Type `help` for a list of all available built in commands.<br>
+Up arrow   = Retype last entered string<br>
+Down arrow = Clear current typed string<br>
