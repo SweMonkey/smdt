@@ -17,10 +17,10 @@ xPico/RetroLink support as an alternative to the above is being worked on.<br>
 
 ## Disclaimer
 > [!WARNING]
-**Do note that the MD is a 5 volt system!** That means you should take care to not connect any random serial device directly to the MD (Such as a PC).<br>
-Use a "voltage translator" such as the max3232 between your MD and remote device to translate the voltage levels.<br>
-Make sure you understand my ramble down under the "Device" section to hook up external devices correctly!<br>
-I (smds) will not take any responsibilities for any failure to read and understand the above warning.<br>
+> **Do note that the MD is a 5 volt system!** That means you should take care to not connect any random serial device directly to the MD (Such as a PC).<br>
+> Use a "voltage translator" such as the max3232 between your MD and remote device to translate the voltage levels.<br>
+> Make sure you understand my ramble down under the "Device" section to hook up external devices correctly!<br>
+> I (smds) will not take any responsibilities for any failure to read and understand the above warning.<br>
 <br>
 
 ## Credits
@@ -31,7 +31,7 @@ smds - Code<br>
 
 ## Building SMDTC from source
 **This part needs to be expanded, for now it assumes you are familiar with SGDK and how to use it.**<br>
-To build SMDTC from source you will need SGDK version 1.80 (newer versions untested but will probably work as SMDTC does not use very much from it)<br>
+ To build SMDTC from source you will need SGDK version 1.80 (newer versions untested but will probably work as SMDTC does not use very much from it)<br>
 The SGDK library must be rebuilt with the flags `HALT_Z80_ON_IO` and `HALT_Z80_ON_DMA` set to 0 in config.h to make sure the z80 CPU is never getting its bus back.<br>
 <br>
 
@@ -47,11 +47,12 @@ A fallback joypad device will be activated if SMDTC fails to find a keyboard or 
 All detected devices can be viewed in the "Connected devices" list (Quick menu -> Mega Drive settings -> Connected devices)<br>
 <br>
 > [!NOTE]
-SMDTC is limited when it comes to detecting the presence of a serial connection on the built in UART (Only an xPico module can be autodetected)<br>
-By default SMDTC will listen for incoming connections on PORT 2 UART.<br>
-This setting can be changed in the "Select serial port" menu (Quick menu -> Mega Drive settings -> Select serial port)<br>
-Do not forget to save your changes! (Quick menu -> Reset -> Save config to sram)<br>
+> SMDTC is limited when it comes to detecting the presence of a serial connection on the built in UART (Only an xPico module can be autodetected)<br>
+> By default SMDTC will listen for incoming connections on PORT 2 UART.<br>
+> This setting can be changed in the "Select serial port" menu (Quick menu -> Mega Drive settings -> Select serial port)<br>
+> Do not forget to save your changes! (Quick menu -> Reset -> Save config to sram)<br>
 <br>
+
 ### List of autodetected devices that require no configuration
 PS/2 Keyboard.<br>
 Sega Saturn keyboard.<br>
