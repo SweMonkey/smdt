@@ -141,7 +141,7 @@ u8 KB_PS2_Poll(u8 *r)
 
     u8 stop = GetDevData(DEV_KBPS2, 0x2) >> KB_DT;
 
-
+    // Check parity
     if ((parity & 1) && (stop == 1))
     {
         KB_Lock();
@@ -179,7 +179,6 @@ u8 KB_PS2_SendCommand(u8 cmd)
         OrDevData(DEV_KBPS2, bit);  // Send bits in reverse order (Least significant bit first)
     }
 
-    
     if (KB_PS2_WaitClockLow()) goto Error;
     UnsetDevData(DEV_KBPS2);
     OrDevData(DEV_KBPS2, parity);    // Send parity bit

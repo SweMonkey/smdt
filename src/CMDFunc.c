@@ -22,6 +22,7 @@ SM_CMDList CMDList[] =
     {"uname",   CMD_UName,          " - Print system information"},
     {"setcon",  CMD_SetConn,        "- Set connection timeout"},
     {"clear",   CMD_ClearScreen,    " - Clear screen"},
+    {"testsram",CMD_TestSRAM,       " - Test SRAM"},
     {"help",    CMD_Help,           "  - This command"},
     {0, 0, 0}  // Terminator
 };
@@ -332,4 +333,77 @@ void CMD_SetConn(u8 argc, char *argv[])
 void CMD_ClearScreen(u8 argc, char *argv[])
 {
     TTY_Reset(TRUE);
+}
+
+void CMD_TestSRAM(u8 argc, char *argv[])
+{
+    if (argc < 2)
+    {
+        PrintOutput("Test SRAM\n\nUsage:\ntestsram <address> - Write/Readback test\ntestsram count     - Check installed RAM\n");
+        return;
+    }
+
+    char tmp[64];
+    u32 addr = 0;
+
+    if (strcmp(argv[1], "count") == 0)
+    {
+        u32 c = 0;
+        addr = 0x1000;
+
+        SRAM_enable();
+
+        while (addr < 0x1FFFF)
+        {
+            SRAM_writeByte(addr, 0xAC);
+
+            if (SRAM_readByte(addr) == 0xAC)
+            {
+                addr++;
+                c++;
+            }
+            else break;
+        }
+
+        SRAM_disable();
+
+        sprintf(tmp, "Total SRAM: %c$%lX\n", ((c+0x1000) >= 0x1FFFF ? '>' : ' '), c + 0x1000);
+        PrintOutput(tmp);
+
+
+        return;
+    }
+
+    addr = atoi32(argv[1]);
+
+    SRAM_enable();
+
+    // Byte read/write
+    sprintf(tmp, "Writing byte $%X to $%lX\n", 0xFF, addr);
+    PrintOutput(tmp);
+
+    SRAM_writeByte(addr, 0xFF);
+
+    if (SRAM_readByte(addr) == 0xFF) PrintOutput("Byte readback OK\n");
+    else PrintOutput("Byte readback FAIL\n");
+
+    // Word read/write
+    sprintf(tmp, "Writing word $%X to $%lX\n", 0xBEEF, addr);
+    PrintOutput(tmp);
+
+    SRAM_writeWord(addr, 0xBEEF);
+
+    if (SRAM_readWord(addr) == 0xBEEF) PrintOutput("Word readback OK\n");
+    else PrintOutput("Word readback FAIL\n");
+
+    // Long read/write
+    sprintf(tmp, "Writing long $%X to $%lX\n", 0xDEADBEEF, addr);
+    PrintOutput(tmp);
+
+    SRAM_writeLong(addr, 0xDEADBEEF);
+
+    if (SRAM_readLong(addr) == 0xDEADBEEF) PrintOutput("Long readback OK\n");
+    else PrintOutput("Long readback FAIL\n");
+
+    SRAM_disable();
 }

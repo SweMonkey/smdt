@@ -135,3 +135,50 @@ bool XPN_Connect(char *str)
     TRM_SetStatusText(STATUS_TEXT);
     return FALSE;
 }
+
+void XPN_Disconnect()
+{
+    u32 timeout = 0;
+
+    // 1. Real xPico
+    // Set CP3 pin to tell the xPico to disconnect from the remote server
+    OrDevData(DEV_UART, 0x20);  // Set pin 7 high
+    waitMs(200);
+    UnsetDevData(DEV_UART);     // Set pin 7 low
+    waitMs(200);
+
+    while (XPN_ReadByte() != 'D')
+    {
+        if (timeout++ >= 50000) break;
+    }
+
+    // 2. Emulated xPico
+    // Enter/Exit monitor to tell the xPico emulator to disconnect/close the socket
+    XPN_EnterMonitorMode();
+    waitMs(200);
+    XPN_ExitMonitorMode();
+}
+
+void XPN_PrintIP(int x, int y)
+{
+    /*
+    XPN_EnterMonitorMode();
+    XPN_FlushBuffers();
+    XPN_SendMessage("NC\n"); // Send command to get network information
+
+    waitMs(200);
+    
+    while (1)
+    {
+        //while (!RLN_RXReady());
+        u8 byte = RLN_ReadByte();
+        if (byte == 'G') { break; }
+        if ((byte >= '0' && byte <= '9') || byte == '.' || byte == '1')
+        {
+            TRM_DrawChar(byte, x, y, PAL1); x++;
+        }
+    }
+
+    XPN_ExitMonitorMode();
+    */
+}

@@ -22,8 +22,8 @@
 #define PORT3_SRx 0xA1001D
 #define PORT3_STx 0xA1001B
 
-#define DEVMODE_PARALLEL 0
-#define DEVMODE_SERIAL 1
+#define DEVMODE_PARALLEL 1
+#define DEVMODE_SERIAL 2
 
 #define ICO_ID_UNKNOWN 0x1F // Unknown input device '?'
 #define ICO_KB_OK 0x1C      // Keyboard input device 'K'

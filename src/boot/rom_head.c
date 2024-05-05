@@ -9,7 +9,7 @@ const ROMHeader rom_header = {
 #else
     "SEGA MEGA DRIVE ",
 #endif
-    "(C)DECEPTSOFT'23",
+    "(C)DECEPTSOFT'24",
     "SMD Terminal Client                             ",
     "SMD Terminal Client                             ",
     "GM 00000000-00",
@@ -26,8 +26,8 @@ const ROMHeader rom_header = {
     "RA",
     0xF820,
     0x00200000,
-    0x002001FF,
+    0x0020FFFF,
     "            ",
-    "SMD Telnet Client                       ",
+    "SMD Terminal Emulator                   ",
     "EUJ             "
 };

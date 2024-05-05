@@ -197,9 +197,9 @@ void DetectDevices()
 
     // -- UART setup --------------------------
     DEV_UART.Id.sName = "UART DEVICE";
-    DEV_UART.Id.Bitmask = 0;
+    DEV_UART.Id.Bitmask = 0x20; // TH pin
     DEV_UART.Id.Bitshift = 0;
-    DEV_UART.Id.Mode = DEVMODE_SERIAL;
+    DEV_UART.Id.Mode = DEVMODE_SERIAL | DEVMODE_PARALLEL;
     
     DevList[DevSeq++] = &DEV_UART;
     SetDevicePort(&DEV_UART, DEV_UART_PORT);
@@ -242,6 +242,10 @@ void DetectDevices()
     else if (xpn_r)
     {
         DEV_UART.Id.sName = "XPORT UART";
+
+        SetDevCtrl(DEV_UART, 0x20);
+        UnsetDevData(DEV_UART);
+
         bXPNetwork = TRUE;
 
         NET_SetConnectFunc(XPN_Connect);

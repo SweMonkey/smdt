@@ -17,5 +17,6 @@ bool XPN_EnterMonitorMode();
 bool XPN_ExitMonitorMode();
 
 bool XPN_Connect(char *str);
+void XPN_Disconnect();
 
 #endif // XP_NETWORK_H_INCLUDED

@@ -23,5 +23,6 @@ void CMD_xport(u8 argc, char *argv[]);
 void CMD_UName(u8 argc, char *argv[]);
 void CMD_SetConn(u8 argc, char *argv[]);
 void CMD_ClearScreen(u8 argc, char *argv[]);
+void CMD_TestSRAM(u8 argc, char *argv[]);
 
 #endif // CMDFUNC_H_INCLUDED
