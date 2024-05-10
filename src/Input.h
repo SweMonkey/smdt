@@ -2,7 +2,7 @@
 #define INPUT_H_INCLUDED
 
 #include <genesis.h>
-#include "KeyDef.h"
+#include "misc/KeyDef.h"
 
 bool is_KeyDown(u16 key);
 bool is_KeyUp(u16 key);

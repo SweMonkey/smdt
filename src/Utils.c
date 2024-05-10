@@ -36,20 +36,20 @@ void TRM_SetWinParam(bool from_bottom, bool from_right, u8 w, u8 h)
     WinWidth = w;
     WinHeight = h;
     
-    *((vu16*) VDP_CTRL_PORT) = 0x9100 | ((WinWidth  & 0x7F) | (WinRight ?0x80:0));
-    *((vu16*) VDP_CTRL_PORT) = 0x9200 | ((WinHeight & 0x7F) | (WinBottom?0x80:0));
+    *((vu16*) VDP_CTRL_PORT) = 0x9100 | ((WinWidth  & 0x7F) | (WinRight ?0x80:0));  // Set window width and left/right
+    *((vu16*) VDP_CTRL_PORT) = 0x9200 | ((WinHeight & 0x7F) | (WinBottom?0x80:0));  // Set window height and top/bottom
 }
 
 void TRM_ResetWinParam()
 {
-    *((vu16*) VDP_CTRL_PORT) = 0x9100 | ((WinWidth  & 0x7F) | (WinRight ?0x80:0));
-    *((vu16*) VDP_CTRL_PORT) = 0x9200 | ((WinHeight & 0x7F) | (WinBottom?0x80:0));
+    *((vu16*) VDP_CTRL_PORT) = 0x9100 | ((WinWidth  & 0x7F) | (WinRight ?0x80:0));  // Set window width and left/right
+    *((vu16*) VDP_CTRL_PORT) = 0x9200 | ((WinHeight & 0x7F) | (WinBottom?0x80:0));  // Set window height and top/bottom
 }
 
 inline void TRM_SetStatusIcon(const char icon, u16 pos)
 {
     *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(VDP_WINDOW + ((pos & 63) * 2));
-    *((vu16*) VDP_DATA_PORT) = TILE_ATTR_FULL(PAL0, 0, 0, 0, icon);  //+0x220
+    *((vu16*) VDP_DATA_PORT) = TILE_ATTR_FULL(PAL0, 0, 0, 0, icon);
 }
 
 void TRM_DrawChar(const u8 c, u8 x, u8 y, u8 palette)
@@ -63,85 +63,89 @@ void TRM_DrawText(const char *str, u16 x, u16 y, u8 palette)
     u16 data[128];
     const u8 *s;
     u16 *d;
-    u16 i, pw, ph, len;
+    u16 i, len;
 
-    // get the horizontal plane size (in cell)
-    pw = 64;//windowWidth;
-    ph = 32;
+    if ((x >= 64) || (y >= 32)) return;
 
-    // string outside plane --> exit
-    if ((x >= pw) || (y >= ph)) return;
-
-    // get string len
     len = strlen(str);
 
-    // if string don't fit in plane, we cut it
-    if (len > (pw - x)) len = pw - x;
+    // Adjust string length
+    if (len > (64 - x)) len = 64 - x;
 
-    // prepare the data
+    // Prepare the data
     s = (const u8*) str;
     d = data;
     i = len;
     while (i--) *d++ = AVR_UI + (*s++);
 
-    // VDP_setTileMapDataRowEx(..) take care of using temporary buffer to build the data so we are ok here
-    VDP_setTileMapDataRowEx(WINDOW, data, TILE_ATTR(palette, 1, 0, 0), y, x, len, CPU);
+    VDP_setTileMapDataRowEx(WINDOW, data, TILE_ATTR(palette, 1, 0, 0), y, x, len, DMA);
 }
 
 void TRM_ClearTextArea(u16 x, u16 y, u16 w, u16 h)
 {
     u16 data[128];
     u16 i, ya;
-    u16 pw, ph;
     u16 wa, ha;
 
-    // get the horizontal plane size (in cell)
-    pw = 64;//windowWidth;
-    ph = 32;
+    if ((x >= 64) || (y >= 32)) return;
 
-    // string outside plane --> exit
-    if ((x >= pw) || (y >= ph)) return;
-
-    // adjust width
+    // Adjust rectangle width
     wa = w;
+    if (wa > (64 - x)) wa = 64 - x;
 
-    // if don't fit in plane, we cut it
-    if (wa > (pw - x)) wa = pw - x;
-
-    // adjust height
+    // Adjust rectangle height
     ha = h;
+    if (ha > (32 - y)) ha = 32 - y;
 
-    // if don't fit in plane, we cut it
-    if (ha > (ph - y)) ha = ph - y;
-
-    // prepare the data
+    // Prepare the data
     memsetU16(data, AVR_UI, wa);
 
     ya = y;
     i = ha;
-    while (i--) VDP_setTileMapDataRowEx(WINDOW, data, TILE_ATTR(PAL1, 1, 0, 0), ya++, x, wa, CPU);
+    while (i--) VDP_setTileMapDataRowEx(WINDOW, data, TILE_ATTR(PAL1, 1, 0, 0), ya++, x, wa, DMA);
+}
+
+void TRM_FillPlane(VDPPlane plane, u16 tile)
+{
+    switch(plane)
+    {
+        case BG_A:
+            DMA_doVRamFill(VDP_BG_A, 0x2000, 0, 1);
+        break;
+
+        case BG_B:
+            DMA_doVRamFill(VDP_BG_B, 0x2000, 0, 1);
+        break;
+
+        default:
+        return;
+    }
+
+    VDP_waitDMACompletion();
 }
 
 inline u8 atoi(char *c)
 {
-    u8 r = 0;
+    u8 value = 0;
 
-    for (u8 i = 0; c[i] != '\0'; ++i)
+    while (*c != '\0')
     {
-        r = r * 10 + c[i] - '0';
+        value *= 10;
+        value += (u8) (*c - '0');
+        c++;
     }
 
-    return r;
+    return value;
 }
 
 inline u16 atoi16(char *c)
 {
     u16 value = 0;
 
-    while (isdigit(*c)) 
+    while (*c != '\0')
     {
         value *= 10;
-        value += (u16) (*c - '0');
+        value += (u8) (*c - '0');
         c++;
     }
 
@@ -152,10 +156,10 @@ inline u32 atoi32(char *c)
 {
     u32 value = 0;
 
-    while (isdigit(*c)) 
+    while (*c != '\0')
     {
         value *= 10;
-        value += (u32) (*c - '0');
+        value += (u8) (*c - '0');
         c++;
     }
 
@@ -204,7 +208,7 @@ char *strtok(char *s, char d)
 }
 
 
-// From SGDK, modified from sprintf
+// snprintf, modified sprintf from SGDK
 static const char const uppercase_hexchars[] = "0123456789ABCDEF";
 static const char const lowercase_hexchars[] = "0123456789abcdef";
 
@@ -212,8 +216,7 @@ static u16 skip_atoi(const char **s)
 {
     u16 i = 0;
 
-    while(isdigit(**s))
-        i = (i * 10) + *((*s)++) - '0';
+    while(isdigit(**s)) i = (i * 10) + *((*s)++) - '0';
 
     return i;
 }

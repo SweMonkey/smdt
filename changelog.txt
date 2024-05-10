@@ -1,9 +1,13 @@
 v0.29:
 IRC: Cursor fix.
-Added initial support for XPort module connected to an MD UART port.
+Added initial support for xPico module connected to an MD UART port.
 PS2KB: Reworked keyboard reading method, it now works on NTSC/MD2 models (Thanks to b1tsh1ft3r).
 PS2KB: SendCommand() has been rewritten.
 Quality of life improvement to the terminal emulator.
+Terminal/Telnet: Code speed improvements/readability decreased
+Cursor stuff; 1. Now alternates tile instead of colour, visually the same but now it is actually transparent when it is in the "off" state. 2. Cursor colour can be set and saved.
+Terminal: Better BG colouring support when using custom BG colour.
+Terminal: More built in commands. See "help" command in SMDTC.
 
 v0.28:
 Added initial support for b1tsh1ft3r's network cartridge 'RetroLink', allowing much faster network speeds and a MD to be completely stand alone.

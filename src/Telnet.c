@@ -3,7 +3,7 @@
 #include "UTF8.h"
 #include "Utils.h"
 #include "Network.h"
-#include "IRQ.h"
+#include "Cursor.h"
 #include "DevMgr.h"
 
 // https://vt100.net/docs/vt100-ug/chapter3.html
@@ -75,8 +75,8 @@
 #define TS_IS   0
 #define TS_SEND 1
 
-static inline void DoEscape(u8 dummy);
-static inline void DoIAC(u8 dummy);
+static inline void DoEscape(u8 byte);
+static inline void DoIAC(u8 byte);
 
 // Telnet modifiable variables
 static u8 vDoGA = 0;        // Use Go-Ahead
@@ -230,45 +230,93 @@ void TELNET_Init()
     ESC_TitleSeq = 0;
 }
 
-inline void TELNET_ParseRX(u8 dummy)
+inline void TELNET_ParseRX(u8 byte)
 {
-    vu8 *PRX = &dummy;
-
-    RXBytes++;
-
-    if (bIAC)
-    {
-        DoIAC(*PRX);
-        return;
-    }
+    //RXBytes++;
 
     if (bESCAPE)
     {
-        DoEscape(*PRX);
+        DoEscape(byte);
+        return;
+    }
+    else if (bUTF8)
+    {
+        DoUTF8(byte);
+        return;
+    }
+    else if (bIAC)
+    {
+        DoIAC(byte);
         return;
     }
 
-    if (bUTF8)
+    switch (byte)
     {
-        DoUTF8(*PRX);
-        return;
-    }
+        default:
+            LastPrintedChar = CharMap[CharMapSelection][byte];
+            TTY_PrintChar(LastPrintedChar);
+            
+            #ifdef TRM_LOGGING
+            if ((byte < 0x20) /*|| (byte > 0x7E)*/) kprintf("TTY_ParseRX: Caught unhandled byte: $%X at position $%lX", byte, StreamPos);
+            #endif
+        break;
+        case 0x1B:  // Escape 1
+            bESCAPE = TRUE;
+        break;
+        case 0xE2:  // Dumb handling of UTF8
+        case 0xEF:
+            bUTF8 = TRUE;
+        break;
+        case TC_IAC:  // IAC
+            bIAC = TRUE;
+        break;
+        case 0x0A:  // Line feed (new line)
+            if (vNewlineConv == 1)  // Convert \n to \n\r
+            {
+                TTY_SetSX(0);
+            }
+            TTY_MoveCursor(TTY_CURSOR_DOWN, 1);
+        break;
+        case 0x0D:  // Carriage return
+            TTY_SetSX(0);
+            TTY_MoveCursor(TTY_CURSOR_DUMMY);   // Dummy
+        break;
+        case 0x08:  // Backspace
+            TTY_MoveCursor(TTY_CURSOR_LEFT, 1);
+        break;
+        case 0x09:  // Horizontal tab
+            TTY_MoveCursor(TTY_CURSOR_RIGHT, C_HTAB);
+        break;
+        case 0x0B:  // Vertical tab
+            TTY_MoveCursor(TTY_CURSOR_DOWN, C_VTAB);
+        break;
+        case 0x0C:  // Form feed (new page)
+            TTY_SetSX(0);
+            TTY_SetSY(C_YSTART);
 
-    switch (*PRX)
-    {
+            VScroll = D_VSCROLL;
+
+            TRM_FillPlane(BG_A, 0);
+            TRM_FillPlane(BG_B, 0);
+
+            *((vu32*) VDP_CTRL_PORT) = 0x40000010;
+            *((vu16*) VDP_DATA_PORT) = VScroll;
+            *((vu32*) VDP_CTRL_PORT) = 0x40020010;
+            *((vu16*) VDP_DATA_PORT) = VScroll;
+
+            TTY_MoveCursor(TTY_CURSOR_DUMMY);   // Dummy
+        break;
         case 0x00:  // Null
-        break;
         case 0x01:  // Start of heading
-        break;
         case 0x02:  // Start of text
-        break;
         case 0x03:  // End of text
-        break;
         case 0x04:  // End of transmission
-        break;
         case 0x05:  // Enquiry
-        break;
         case 0x06:  // Acknowledge
+        case 0x15:  // NAK (negative acknowledge)
+            #ifdef TRM_LOGGING
+            kprintf("Unimplemented VT100 mode single-character function: $%X", byte);
+            #endif
         break;
         case 0x07:  // Bell
             PSG_setEnvelope(0, PSG_ENVELOPE_MAX);
@@ -287,100 +335,6 @@ inline void TELNET_ParseRX(u8 dummy)
             waitMs(100);
             PSG_setEnvelope(0, PSG_ENVELOPE_MIN);
         break;
-        case 0x08:  // Backspace
-            TTY_MoveCursor(TTY_CURSOR_LEFT, 1);
-        break;
-        case 0x09:  // Horizontal tab
-            TTY_MoveCursor(TTY_CURSOR_RIGHT, C_HTAB);
-        break;
-        case 0x0A:  // Line feed (new line)
-            if (vNewlineConv == 1)  // Convert \n to \n\r
-            {
-                TTY_SetSX(0);
-            }
-            TTY_MoveCursor(TTY_CURSOR_DOWN, 1);
-        break;
-        case 0x0B:  // Vertical tab
-            TTY_MoveCursor(TTY_CURSOR_DOWN, C_VTAB);
-        break;
-        case 0x0C:  // Form feed (new page)
-            TTY_SetSX(0);
-            TTY_SetSY(C_YSTART);
-
-            VScroll = D_VSCROLL;
-
-            VDP_clearPlane(BG_A, TRUE);
-            VDP_clearPlane(BG_B, TRUE);
-
-            VDP_setVerticalScroll(BG_A, VScroll);
-            VDP_setVerticalScroll(BG_B, VScroll);
-
-            TTY_MoveCursor(TTY_CURSOR_DUMMY);   // Dummy
-        break;
-        case 0x0D:  // Carriage return
-            TTY_SetSX(0);
-            TTY_MoveCursor(TTY_CURSOR_DUMMY);   // Dummy
-        break;
-        case 0x15:  // NAK (negative acknowledge)
-        break;
-        case 0x1B:  // Escape 1
-            bESCAPE = TRUE;
-            ESC_Seq = 0;
-            ESC_Type = 0;
-            ESC_Param[0] = 0xFF;
-            ESC_Param[1] = 0xFF;
-            ESC_Param[2] = 0xFF;
-            ESC_Param[3] = 0xFF;
-            ESC_ParamSeq = 0;
-            ESC_Buffer[0] = '\0';
-            ESC_Buffer[1] = '\0';
-            ESC_Buffer[2] = '\0';
-            ESC_Buffer[3] = '\0';
-            ESC_BufferSeq = 0;
-            ESC_QBuffer[0] = 0;
-            ESC_QBuffer[1] = 0;
-            ESC_QBuffer[2] = 0;
-            ESC_QBuffer[3] = 0;
-            ESC_QBuffer[4] = 0;
-            ESC_QBuffer[5] = 0;
-            ESC_QSeq = 0;
-            
-            ESC_OSCBuffer[0] = 0xFF;
-            ESC_OSCBuffer[1] = '\0';
-            ESC_OSCSeq = 0;
-
-            return;
-        break;
-        case 0xE2:  // Dumb handling of UTF8
-        case 0xEF:
-            bUTF8 = TRUE;
-            return;
-        break;
-        case TC_IAC:  // IAC
-            bIAC = TRUE;
-            return;
-        break;
-
-        default:
-            #ifdef TRM_LOGGING
-            if ((*PRX < 0x20) /*|| (*PRX > 0x7E)*/) kprintf("TTY_ParseRX: Caught unhandled byte: $%X at position $%lX", *PRX, StreamPos);
-            #endif
-        break;
-    }
-
-    /*
-    Current font tiles (VRAM Tiles 0x9F-0x11F) do not match ANSI (Characters 0x80-0xFF)
-    therefore only ANSI characters 0x20-0x7E is allowed for now (VRAM Tiles 0x40-0x9E)
-
-    https://www.gaijin.at/en/infos/ascii-ansi-character-table
-    http://www.alanwood.net/demos/ansi.html
-    */
-    if ((*PRX >= 0x20) )//&& (*PRX <= 0x7E)) // <= 0x7E
-    {
-        LastPrintedChar = CharMap[CharMapSelection][*PRX];
-        TTY_PrintChar(LastPrintedChar);
-        
-        return;
     }
 }
 
@@ -402,15 +356,13 @@ void ChangeTitle()
 // It will need to be rewritten in the future as it was never meant to handle all the stuff it does
 // and therefore has ended up as one big giant hack
 // -------------------------------------------------------------------------------------------------
-static inline void DoEscape(u8 dummy)
+static inline void DoEscape(u8 byte)
 {
-    vu8 *PRX = &dummy;
-
     ESC_Seq++;
 
     if (ESC_Seq == 1)
     {
-        ESC_Type = *PRX;
+        ESC_Type = byte;
         
         #ifdef ESC_LOGGING
         //kprintf("ESC_Type: $%X ( %c )", ESC_Type, (char)ESC_Type);
@@ -478,7 +430,7 @@ static inline void DoEscape(u8 dummy)
             break;
         }
 
-        switch (*PRX)
+        switch (byte)
         {
             case ';':
                 bOSC = FALSE;
@@ -495,7 +447,7 @@ static inline void DoEscape(u8 dummy)
             default:
                 if (ESC_OSCSeq < 2)
                 {
-                    ESC_OSCBuffer[ESC_OSCSeq++] = *PRX;
+                    ESC_OSCBuffer[ESC_OSCSeq++] = byte;
                 }
             break;
         }
@@ -504,7 +456,7 @@ static inline void DoEscape(u8 dummy)
     }
     else if (bTitle)
     {
-        if (*PRX == 7)
+        if (byte == 7)
         {
             #ifdef ESC_LOGGING
             kprintf("OSC: Change Window Title to %s", ESC_TitleBuffer);
@@ -517,7 +469,7 @@ static inline void DoEscape(u8 dummy)
 
         if (ESC_TitleSeq < 32)
         {
-            ESC_TitleBuffer[ESC_TitleSeq++] = *PRX;
+            ESC_TitleBuffer[ESC_TitleSeq++] = byte;
         }
 
         return;
@@ -526,10 +478,10 @@ static inline void DoEscape(u8 dummy)
     // https://invisible-island.net/xterm/ctlseqs/ctlseqs.html
     if (ESC_QSeq > 0)
     {
-        ESC_QBuffer[ESC_QSeq-1] = *PRX;
+        ESC_QBuffer[ESC_QSeq-1] = byte;
         //kprintf("ESC_Q: $%X - '%c'", ESC_QBuffer[ESC_QSeq-1], (char)ESC_QBuffer[ESC_QSeq-1]);
 
-        if (*PRX == 'h')
+        if (byte == 'h')
         {
             QSeqNumber = atoi16((char*)ESC_QBuffer);
             //kprintf("QSeqNumber = %u", QSeqNumber);
@@ -572,7 +524,7 @@ static inline void DoEscape(u8 dummy)
             goto EndEscape;
         }
 
-        if (*PRX == 'l')
+        if (byte == 'l')
         {
             QSeqNumber = atoi16((char*)ESC_QBuffer);
             //kprintf("QSeqNumber = %u", QSeqNumber);
@@ -621,10 +573,9 @@ static inline void DoEscape(u8 dummy)
         return;
     }
 
-
     if (ESC_Type == '(')
     {
-        switch (*PRX)
+        switch (byte)
         {
             case '0':   // DEC Special Character and Line Drawing Set
             {
@@ -647,7 +598,7 @@ static inline void DoEscape(u8 dummy)
             default:
             {
                 #ifdef ESC_LOGGING
-                kprintf("Unknown ESC( sequence - $%X ( %c )", *PRX, (char)*PRX);
+                kprintf("Unknown ESC( sequence - $%X ( %c )", byte, (char)byte);
                 #endif
             }
         }
@@ -655,7 +606,7 @@ static inline void DoEscape(u8 dummy)
         goto EndEscape;
     }
 
-    switch (*PRX)
+    switch (byte)
     {
         case ';':
         {
@@ -687,26 +638,6 @@ static inline void DoEscape(u8 dummy)
         {
             switch (atoi(ESC_Buffer))
             {
-                case 0: // 40 x 25 monochrome (text)
-                case 130:   // 0 prefixed with =
-                    //TTY_SetColumns(D_COLUMNS_64);
-                    //PAL_setPalette(PAL2, pColorsMONO, CPU);
-                break;
-                case 1:     // 40 x 25 color (text)
-                case 131:   // 1 prefixed with =
-                    //TTY_SetColumns(D_COLUMNS_64);
-                    //PAL_setPalette(PAL2, pColors, CPU);
-                break;
-                case 2:     // 80 x 25 monochrome (text)
-                case 132:   // 2 prefixed with =
-                    //TTY_SetColumns(D_COLUMNS_80);
-                    //PAL_setPalette(PAL2, pColorsMONO, CPU);
-                break;
-                case 3:     // 80 x 25 color (text)
-                case 133:   // 3 prefixed with =
-                    //TTY_SetColumns(D_COLUMNS_80);
-                    //PAL_setPalette(PAL2, pColors, CPU);
-                break;
                 case 7:     // Enables line wrapping
                 case 137:   // 7 prefixed with =
                     bWrapAround = TRUE;
@@ -717,20 +648,6 @@ static inline void DoEscape(u8 dummy)
                     SetSprite_TILE(CURSOR_SPRITE_NUM, LastCursor);
                 break;
 
-                case 0x21:
-                case 0xFD: // ??   ($FD is actually ESC[?33h )
-                break;
-
-                case 4: // 320 x 200 4-color (graphics)
-                case 5: // 320 x 200 monochrome (graphics)
-                case 6: // 640 x 200 monochrome (graphics)
-                case 13: // 320 x 200 color (graphics)
-                case 14: // 640 x 200 color (16-color graphics)
-                case 15: // 640 x 350 monochrome (2-color graphics)
-                case 16: // 640 x 350 color (16-color graphics)
-                case 17: // 640 x 480 monochrome (2-color graphics)
-                case 18: // 640 x 480 color (16-color graphics)
-                case 19: // 320 x 200 color (256-color graphics)
                 default:
                     //kprintf("Unimplemented screen mode '%u' ($%X)", atoi(ESC_Buffer), atoi(ESC_Buffer));
                 break;
@@ -750,8 +667,6 @@ static inline void DoEscape(u8 dummy)
 
                 case 0x19:
                 case 0xF5: // Make cursor invisible   ($F5 is actually ESC[?25l )
-                    //*((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(0xAC04);  // Cursor sprite tile address
-                    //*((vu16*) VDP_DATA_PORT) = 0x16;
                     SetSprite_TILE(CURSOR_SPRITE_NUM, 0x16);
                 break;
 
@@ -986,13 +901,9 @@ static inline void DoEscape(u8 dummy)
                 break;
 
                 case 2: // Clear screen (move cursor to top left only if emulating ANSI.SYS otherwise keep cursor position)
-                    VDP_clearPlane(BG_B, TRUE);
-                    VDP_clearPlane(BG_A, TRUE);
-                break;
-
                 case 3: // Clear screen and delete all lines saved in the scrollback buffer (Keep cursor position)
-                    VDP_clearPlane(BG_B, TRUE);
-                    VDP_clearPlane(BG_A, TRUE);
+                    TRM_FillPlane(BG_A, 0);
+                    TRM_FillPlane(BG_B, 0);
                 break;
             
                 case 0: // Clear screen from cursor down (Keep cursor position)
@@ -1230,23 +1141,46 @@ static inline void DoEscape(u8 dummy)
         }
 
         default:
-            if ((*PRX >= 65) && (*PRX <= 122)) 
+            if ((byte >= 65) && (byte <= 122)) 
             {
                 #ifdef EMU_BUILD
-                kprintf("Unhandled $%X  -  u8: %u  -  char: '%c'  -  EscType: %c (EscSeq: %u  -  StreamPos: $%lX)", *PRX, *PRX, (char)*PRX, (char)ESC_Type, ESC_BufferSeq, StreamPos);
+                kprintf("Unhandled $%X  -  u8: %u  -  char: '%c'  -  EscType: %c (EscSeq: %u  -  StreamPos: $%lX)", byte, byte, (char)byte, (char)ESC_Type, ESC_BufferSeq, StreamPos);
                 #endif
                 goto EndEscape;
             }
         break;
     }
 
-    ESC_Buffer[ESC_BufferSeq++] = (char)*PRX;
+    ESC_Buffer[ESC_BufferSeq++] = (char)byte;
 
     return;
 
     EndEscape:
     {
         bESCAPE = FALSE;
+        ESC_Seq = 0;
+        ESC_Type = 0;
+        ESC_Param[0] = 0xFF;
+        ESC_Param[1] = 0xFF;
+        ESC_Param[2] = 0xFF;
+        ESC_Param[3] = 0xFF;
+        ESC_ParamSeq = 0;
+        ESC_Buffer[0] = '\0';
+        ESC_Buffer[1] = '\0';
+        ESC_Buffer[2] = '\0';
+        ESC_Buffer[3] = '\0';
+        ESC_BufferSeq = 0;
+        /*ESC_QBuffer[0] = 0;
+        ESC_QBuffer[1] = 0;
+        ESC_QBuffer[2] = 0;
+        ESC_QBuffer[3] = 0;
+        ESC_QBuffer[4] = 0;
+        ESC_QBuffer[5] = 0;*/
+        ESC_QSeq = 0;
+        
+        //ESC_OSCBuffer[0] = 0xFF;
+        //ESC_OSCBuffer[1] = '\0';
+        ESC_OSCSeq = 0;
         return;
     }
 }
@@ -1267,34 +1201,32 @@ static inline void IAC_SuggestEcho(u8 enable)
     NET_SendChar(TO_ECHO, TXF_NOBUFFER);
 }
 
-static inline void DoIAC(u8 dummy)
+static inline void DoIAC(u8 byte)
 {
-    vu8 *PRX = &dummy;
+    if (byte == TC_IAC) return; // Go away IAC...
 
-    if (*PRX == TC_IAC) return; // Go away IAC...
-
-    if ((IAC_InSubNegotiation) && (*PRX != TC_SE)) // What horror will emerge if an IAC is recieved here?
+    if ((IAC_InSubNegotiation) && (byte != TC_SE)) // What horror will emerge if an IAC is recieved here?
     {
         if (IAC_SNSeq > 15) return;
 
-        IAC_SubNegotiationBytes[IAC_SNSeq++] = *PRX;
+        IAC_SubNegotiationBytes[IAC_SNSeq++] = byte;
         #ifdef IAC_LOGGING
-        kprintf("InSubNeg: Byte recieved: $%X (Seq: %u)", *PRX, IAC_SNSeq-1); 
+        kprintf("InSubNeg: Byte recieved: $%X (Seq: %u)", byte, IAC_SNSeq-1); 
         #endif
         return;
     }
 
-    if (*PRX >= 240)
+    if (byte >= 240)
     {
-        IAC_Command = *PRX;
+        IAC_Command = byte;
         #ifdef IAC_LOGGING
         kprintf("Got IAC CMD: $%X", IAC_Command);
         #endif
     }
 
-    if (*PRX <= 39)
+    if (byte <= 39)
     {
-        IAC_Option = *PRX;
+        IAC_Option = byte;
         #ifdef IAC_LOGGING
         kprintf("Got IAC Option: $%X", IAC_Option);
         #endif

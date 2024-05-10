@@ -64,7 +64,7 @@ int main(bool hardReset)
     
     PAL_setColor( 1, 0x00e);    // Icon Red
     PAL_setColor( 3, 0x0e0);    // Icon Green
-    PAL_setColor( 4, 0x000);    // Cursor (Blink)
+    PAL_setColor( 4, 0x0e0);    // Cursor (Blink)
     PAL_setColor( 5, 0x000);    // Icon BG
     PAL_setColor( 6, 0xeee);    // Icon Normal
     PAL_setColor(17, 0x000);    // Window text BG Normal / Terminal text BG
@@ -96,6 +96,7 @@ int main(bool hardReset)
     TRM_SetStatusIcon(ICO_ID_UNKNOWN,    ICO_POS_0);
     TRM_SetStatusIcon(ICO_NET_IDLE_RECV, ICO_POS_1);
     TRM_SetStatusIcon(ICO_NET_IDLE_SEND, ICO_POS_2);
+    TRM_SetStatusIcon(ICO_NONE,          ICO_POS_3);
 
     TRM_DrawText("Loading config...", 1, BootNextLine++, PAL1);
     if (SRAM_LoadData()) 
@@ -146,7 +147,7 @@ int main(bool hardReset)
 
     waitMs(1000);
 
-    VDP_clearPlane(BG_B, TRUE);
+    TRM_FillPlane(BG_B, 0);
     TRM_ResetWinParam();
     VDP_setHilightShadow(FALSE);
 

@@ -7,23 +7,26 @@
 #include "Terminal.h"
 #include "devices/XP_Network.h"
 #include "devices/Keyboard_PS2.h"
+#include "misc/VarList.h"
 
 void PrintOutput(const char *str);
 
 SM_CMDList CMDList[] =
 {
     {"telnet",  CMD_LaunchTelnet,   "<address:port>"},
-    {"irc",     CMD_LaunchIRC,      "   <address:port>"},
-    {"menu",    CMD_LaunchMenu,     "  - Run graphical start menu"},
-    {"test",    CMD_Test,           "  - CMD Test"},
-    {"echo",    CMD_Echo,           "  <string>"},
-    {"kbc",     CMD_KeyboardSend,   "   <decimal number>"},
-    {"xport",   CMD_xport,          " - Send a string to xport"},
-    {"uname",   CMD_UName,          " - Print system information"},
+    {"irc",     CMD_LaunchIRC,      "<address:port>"},
+    {"echo",    CMD_Echo,           "- Echo string to screen"},
+    {"kbc",     CMD_KeyboardSend,   "- Send command to keyboard"},
+    {"menu",    CMD_LaunchMenu,     "- Run graphical start menu"},
+    {"setattr", CMD_Test,           "- Set terminal attributes"},
+    {"xpico",   CMD_xpico,          "- Send command to xpico"},
+    {"uname",   CMD_UName,          "- Print system information"},
     {"setcon",  CMD_SetConn,        "- Set connection timeout"},
-    {"clear",   CMD_ClearScreen,    " - Clear screen"},
-    {"testsram",CMD_TestSRAM,       " - Test SRAM"},
-    {"help",    CMD_Help,           "  - This command"},
+    {"clear",   CMD_ClearScreen,    "- Clear screen"},
+    {"sram",    CMD_TestSRAM,       "- Test SRAM"},
+    {"setvar",  CMD_SetVar,         "- Set variable"},
+    {"getip",   CMD_GetIP,          "- Get network IP"},
+    {"help",    CMD_Help,           "- This command"},
     {0, 0, 0}  // Terminator
 };
 
@@ -47,10 +50,27 @@ void CMD_Test(u8 argc, char *argv[])
 {
     char tmp[32];
 
-    if (argc < 2) return;
+    switch (argc)
+    {
+        case 2:
+            sprintf(tmp, "[%um\n", atoi(argv[1]));
+            PrintOutput(tmp);
+        break;
+        case 3:
+            sprintf(tmp, "[%u;%um\n", atoi(argv[1]), atoi(argv[2]));
+            PrintOutput(tmp);
+        break;
+    
+        default:
+            PrintOutput("Set terminal attribute\n\nUsage:\n");
+            PrintOutput(argv[0]);
+            PrintOutput(" <number> <number>\n");
+            PrintOutput(argv[0]);
+            PrintOutput(" <number>\n");
+        return;
+    }
 
-    sprintf(tmp, "%s %s\n", argv[0], argv[1]);
-    PrintOutput(tmp);
+    PrintOutput("Attributes set.\n");
 }
 
 void CMD_Echo(u8 argc, char *argv[])
@@ -97,15 +117,24 @@ void CMD_Help(u8 argc, char *argv[])
     while (CMDList[i].id != 0)
     {
         strclr(tmp);
-        sprintf(tmp, "%s %s\n", CMDList[i].id, CMDList[i].desc);
+        sprintf(tmp, "%10s %-30s\n", CMDList[i].id, CMDList[i].desc);
         PrintOutput(tmp);
 
         i++;
     }
 }
 
-void CMD_xport(u8 argc, char *argv[])
+void CMD_xpico(u8 argc, char *argv[])
 {
+    if (argc == 1)
+    {
+        PrintOutput("xPico debug\n\nUsage:\n\
+xpico enter       - Enter monitor mode\n\
+xpico exit        - Exit monitor mode\n\
+xpico <string>    - Send string to xPico\n\
+xpico connect <address>\n");
+        return;
+    }
 
     if ((argc > 1) && (strcmp(argv[1], "enter") == 0))
     {
@@ -205,7 +234,7 @@ void CMD_xport(u8 argc, char *argv[])
             break;
         }
 
-        if (timeout >= 50000) PrintOutput("<EnterMonitor timed out>\n");
+        if (timeout >= 50000) PrintOutput("<ExitMonitor timed out>\n");
     }
     else if ((argc > 2) && (strcmp(argv[1], "connect") == 0))
     {
@@ -339,14 +368,14 @@ void CMD_TestSRAM(u8 argc, char *argv[])
 {
     if (argc < 2)
     {
-        PrintOutput("Test SRAM\n\nUsage:\ntestsram <address> - Write/Readback test\ntestsram count     - Check installed RAM\n");
+        PrintOutput("Test SRAM\n\nUsage:\nsram <address> - Write/Readback test\nsram -count    - Check installed RAM\n");
         return;
     }
 
     char tmp[64];
     u32 addr = 0;
 
-    if (strcmp(argv[1], "count") == 0)
+    if (strcmp(argv[1], "-count") == 0)
     {
         u32 c = 0;
         addr = 0x1000;
@@ -367,7 +396,7 @@ void CMD_TestSRAM(u8 argc, char *argv[])
 
         SRAM_disable();
 
-        sprintf(tmp, "Total SRAM: %c$%lX\n", ((c+0x1000) >= 0x1FFFF ? '>' : ' '), c + 0x1000);
+        sprintf(tmp, "Total SRAM: %c$%lX bytes\n", ((c+0x1000) >= 0x1FFFF ? '>' : ' '), c + 0x1000);
         PrintOutput(tmp);
 
 
@@ -406,4 +435,88 @@ void CMD_TestSRAM(u8 argc, char *argv[])
     else PrintOutput("Long readback FAIL\n");
 
     SRAM_disable();
+}
+
+void CMD_SetVar(u8 argc, char *argv[])
+{
+    if ((argc < 3) && (strcmp(argv[1], "-list")))
+    {
+        PrintOutput("Set variable\n\nUsage:\nsetvar <variable_name> <value>\nsetvar -list\n");
+        return;
+    }
+
+    if (argc == 2)
+    {
+        u16 i = 0;
+        char tmp[64];
+
+        sprintf(tmp, "%-12s %s   %s\n", "Name", "Type", "Value");
+        PrintOutput(tmp);
+
+        while (VarList[i].size)
+        {
+            switch (VarList[i].size)
+            {
+                case ST_BYTE:
+                    sprintf(tmp, "%-12s u8     %u\n", VarList[i].name, *((u8*)VarList[i].ptr));
+                break;
+                case ST_WORD:
+                    sprintf(tmp, "%-12s u16    %u\n", VarList[i].name, *((u16*)VarList[i].ptr));
+                break;
+                case ST_LONG:
+                    sprintf(tmp, "%-12s u32    %lu\n", VarList[i].name, *((u32*)VarList[i].ptr));
+                break;        
+                case ST_SPTR:
+                    sprintf(tmp, "%-12s StrPtr \"%s\"\n", VarList[i].name, (char*)VarList[i].ptr);
+                break;
+                case ST_SARR:
+                    sprintf(tmp, "%-12s StrArr \"%s\"\n", VarList[i].name, (char*)VarList[i].ptr);
+                break;
+                default:
+                    memset(tmp, 0, 64);
+                break;
+            }
+
+            PrintOutput(tmp);
+            i++;
+        }
+
+        return;
+    }
+
+    PrintOutput("hi\n");
+}
+
+void CMD_GetIP(u8 argc, char *argv[])
+{
+    char *ipstr = malloc(32);
+
+    if (ipstr)
+    {
+        PrintOutput("Please wait...\n");
+
+        u8 r = XPN_GetIP(ipstr);
+
+        if (r == 0)
+        {
+            char tmp[64];
+
+            sprintf(tmp, "IP: %s\n", ipstr);
+            PrintOutput(tmp);
+        }
+        else if (r == 1)
+        {
+            PrintOutput("Error: IPSTR is NULL!\n");
+        }
+        else if (r == 2)
+        {
+            PrintOutput("Error: Timed out\n");
+        }
+
+        free(ipstr);
+
+        return;
+    }
+
+    PrintOutput("Error: Out of RAM!\n");
 }

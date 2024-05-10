@@ -6,6 +6,7 @@
 extern bool bShowQMenu;
 extern u8 QSelected_BGCL;
 extern u8 QSelected_FGCL;
+extern u8 QSelected_CURCL;
 
 void QMenu_Input();
 void SetupQItemTags();

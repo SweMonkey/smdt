@@ -4,7 +4,7 @@
 #include "Utils.h"
 #include "Buffer.h"
 #include "Network.h"
-#include "IRQ.h"
+#include "Cursor.h"
 #include "../res/system.h"
 
 #define B_PRINTSTR_LEN 512
@@ -72,6 +72,7 @@ void IRC_Reset()
     bFirstRun = TRUE;
 
     Cursor_CL = 0x0E0;
+    LastCursor = 0x12;
 
     for (u8 ch = 0; ch < MAX_CHANNELS; ch++)
     {
@@ -106,7 +107,7 @@ void IRC_Reset()
 
     // Setup cursor sprite y position and tile
     SetSprite_Y(CURSOR_SPRITE_NUM, spr_y);
-    SetSprite_TILE(CURSOR_SPRITE_NUM, 0x12);
+    SetSprite_TILE(CURSOR_SPRITE_NUM, LastCursor);
     SetSprite_SIZELINK(CURSOR_SPRITE_NUM, 0, 1);
 }
 

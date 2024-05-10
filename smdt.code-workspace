@@ -43,7 +43,12 @@
 			"input.h": "c",
 			"keyboard.h": "c",
 			"qmenu.h": "c",
-			"xp_network.h": "c"
+			"xp_network.h": "c",
+			"cmdfunc.h": "c",
+			"cstddef": "c",
+			"cursor.h": "c",
+			"irc.h": "c",
+			"atomic": "c"
 		}
 	}
 }

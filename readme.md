@@ -6,6 +6,7 @@ A terminal emulator, telnet and IRC client for the Sega Mega Drive/Genesis with 
 ![Screenshot of the terminal emulator showing nano](https://deceptsoft.com/smdtc_extra_git/blastem_20240401_104314.png)
 ![Screenshot of a debugging utility to inspect streams](https://deceptsoft.com/smdtc_extra_git/hexview_small.png)
 ![Screenshot of the telnet client in 80 column + 8 colour mode](https://deceptsoft.com/smdtc_extra_git/blastem_20240401_203819.png)
+![Screenshot of the terminal emulator](https://deceptsoft.com/smdtc_extra_git/blastem_20240505_222454.png)
 
 Extra hardware:<br>
 A PS/2 keyboard or a Sega Saturn keyboard (not required but preferred).<br>
@@ -106,14 +107,17 @@ MD port pin 9 = RX<br>
 P1:0 = Port 1 @ pin 1+2<br>
 P1:1 = Port 1 @ pin 3+4<br>
 P1:S = Port 1 UART<br>
+P1:D = Port 1 Parallel+UART Mode<br>
 P2:0 = Port 2 @ pin 1+2<br>
 P2:1 = Port 2 @ pin 3+4<br>
 P2:S = Port 2 UART<br>
+P2:D = Port 2 Parallel+UART Mode<br>
 P3:0 = Port 3 @ pin 1+2<br>
 P3:1 = Port 3 @ pin 3+4<br>
 P3:S = Port 3 UART<br>
+P3:D = Port 3 Parallel+UART Mode<br>
 
-## PS/2 Keyboard shortcuts
+## Keyboard shortcuts
 Right windows key OR F8 = Open the Quick menu<br>
 Enter = Enter submenu and activate a choice<br>
 Escape = Back out of current menu<br>

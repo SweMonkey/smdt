@@ -12,9 +12,10 @@
 static u8 rxdata;
 #endif
 static u8 kbdata;
-static u8 bOnce = FALSE;
+//static u8 bOnce = FALSE;
 
 #ifdef EMU_BUILD
+#include "kdebug.h"
 asm(".global telnetdump\ntelnetdump:\n.incbin \"tmp/streams/rx_nethack_lines2.log\"");
 extern const unsigned char telnetdump[];
 u32 StreamPos = 0;
@@ -24,7 +25,7 @@ u32 StreamPos = 0;
 void Enter_Telnet(u8 argc, char *argv[])
 {
     TELNET_Init();
-    TRM_SetStatusText(STATUS_TEXT);  
+    TRM_SetStatusText(STATUS_TEXT);
 
     #ifdef EMU_BUILD
     // out.log 7357
@@ -49,21 +50,26 @@ void Enter_Telnet(u8 argc, char *argv[])
     // putty_abbs.log 19370
     // logo.log 1055
     // rx_absinthebbs.log 53692
+    // rx_nethack_lines2 365971
+    // rx_nethack_lines3 1175552
     u8 data; 
     u32 p = 0;
     u32 s = 365971;
     StreamPos = p;
+
+    kprintf("Stream replay start.");
+    KDebug_StartTimer();
 
     while (p < s)
     {
         while(Buffer_Push(&RxBuffer, telnetdump[p]) != 0xFF)
         {
             p++;
-            if (bOnce)
+            /*if (bOnce)
             {
                 TRM_SetStatusIcon(ICO_NET_RECV, ICO_POS_1);
                 bOnce = !bOnce;
-            }
+            }*/
 
             if (p >= s) break;
         }
@@ -74,17 +80,18 @@ void Enter_Telnet(u8 argc, char *argv[])
             //kprintf("StreamPos: $%lX (%lu)", StreamPos, StreamPos);
             //waitMs(16);
             
-            if (!bOnce)
+            /*if (!bOnce)
             {
                 TRM_SetStatusIcon(ICO_NET_IDLE_RECV, ICO_POS_1);
                 bOnce = !bOnce;
-            }
+            }*/
 
-            StreamPos++;
+            //StreamPos++;
         }
     }
 
-    kprintf("Stream replay ended.");    
+    KDebug_StopTimer();
+    kprintf("Stream replay end.");
     #endif
 
     Buffer_Flush(&TxBuffer);
@@ -122,11 +129,11 @@ void Run_Telnet()
     {
         TELNET_ParseRX(rxdata);
 
-        if (bOnce)
+        /*if (bOnce)
         {
             TRM_SetStatusIcon(ICO_NET_RECV, ICO_POS_1);
             bOnce = !bOnce;
-        }
+        }*/
     }
     #endif
 
@@ -136,11 +143,11 @@ void Run_Telnet()
     }
     
     #ifndef EMU_BUILD
-    if (!bOnce)
+    /*if (!bOnce)
     {
         TRM_SetStatusIcon(ICO_NET_IDLE_RECV, ICO_POS_1);
         bOnce = !bOnce;
-    }
+    }*/
     #endif
 }
 
@@ -256,7 +263,7 @@ void Input_Telnet()
 
             // Line feed (new line)
             TTY_MoveCursor(TTY_CURSOR_DOWN, 1);
-            TTY_ClearLine(sy % 32, 4);
+            //TTY_ClearLineSingle(sy % 32);
 
             // Carriage return
             TTY_SetSX(0);

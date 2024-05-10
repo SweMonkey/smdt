@@ -9,6 +9,6 @@
 #define LMSM_MODEACK 4
 
 void TELNET_Init();
-void TELNET_ParseRX(u8 dummy);
+void TELNET_ParseRX(u8 byte);
 
 #endif // TELNET_H_INCLUDED

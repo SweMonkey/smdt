@@ -319,11 +319,9 @@ void UTF8_Init()
 
 // https://www.utf8-chartable.de/unicode-utf8-table.pl
 // U+2500->
-inline void DoUTF8(u8 dummy)
+inline void DoUTF8(u8 byte)
 {
-    vu8 *PRX = &dummy;
-
-    UTF_Buffer[UTF_Seq++] = *PRX;
+    UTF_Buffer[UTF_Seq++] = byte;
 
     if (UTF_Seq >= 2)
     {

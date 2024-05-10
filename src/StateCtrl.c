@@ -2,7 +2,7 @@
 #include "Input.h"
 #include "QMenu.h"
 #include "HexView.h"
-#include "IRQ.h"
+#include "Cursor.h"
 #include "devices/RL_Network.h"
 #include "Screensaver.h"
 #include "DevMgr.h"             // bRLNetwork
@@ -36,7 +36,7 @@ void VBlank()
     if (CurrentState->Input != NULL) CurrentState->Input(); // Current PRG
 
     InputTick();    // Pump IO system
-    VB_IRQ();       // Old cursor blink
+    CR_Blink();     // Cursor blink
 
     bWindowActive = (bShowQMenu || bShowHexView);
     
@@ -103,8 +103,9 @@ void ChangeState(State new_state, u8 argc, char *argv[])
 
     CurrentState->Enter(argc, argv);
 
-    ScreensaverInit();    
+    ScreensaverInit();
     SetupQItemTags();
+    PAL_setColor(4, Cursor_CL);
 
     SYS_setVBlankCallback(VBlank);
     SYS_setHIntCallback(CurrentState->HBlank);

@@ -5,7 +5,7 @@
 #include "StateCtrl.h"
 #include "Utils.h"
 #include "SRAM.h"
-#include "IRQ.h"            // Cursor_CL
+#include "Cursor.h"         // Cursor_CL
 #include "Network.h"        // DEV_UART
 #include "Keyboard.h"       // vKB_Layout
 #include "Screensaver.h"    // bScreensaver
@@ -29,6 +29,7 @@ void WINFN_Echo();
 void WINFN_LineMode();
 void WINFN_CUSTOM_FGCL();
 void WINFN_SCREENSAVER();
+void WINFN_CURSOR_CL();
 
 static struct s_menu
 {
@@ -133,14 +134,15 @@ static struct s_menu
      "P3:1= <?>"}
 },
 {//8
-    3,
+    4,
     0, 255, 0,
     NULL, NULL, NULL,
     "COLOUR",
-    {17, 18, 24},
+    {17, 18, 24, 26},
     {"BG COLOUR",
      "4x8 MONO COLOUR",
-     "4x8 8 COLOUR SET"}
+     "4x8 8 COLOUR SET",
+     "CURSOR COLOUR"}
 },
 {//9
     5,
@@ -311,6 +313,17 @@ static struct s_menu
     {254, 254},
     {"OFF",
      "ON"}
+},
+{//26
+    4,
+    0, 255, 0,
+    NULL, WINFN_CURSOR_CL, NULL,
+    "CURSOR COLOUR",
+    {254, 254, 254, 254},
+    {"GREEN",
+     "BLACK",
+     "WHITE",
+     "RANDOM"}
 }};
 
 static const u8 QFrame[3][24] = 
@@ -326,6 +339,7 @@ static const u8 MenuPosX = 1, MenuPosY = 0;
 bool bShowQMenu = FALSE;
 u8 QSelected_BGCL = 0;
 u8 QSelected_FGCL = 1;
+u8 QSelected_CURCL = 0;
 
 
 void QMenu_Input()
@@ -578,7 +592,10 @@ void WINFN_BGColor()
     }
     
     QSelected_BGCL = SelectedIdx;
-    PAL_setColor(0, Custom_BGCL);
+    PAL_setColor( 0, Custom_BGCL);
+    PAL_setColor( 5, Custom_BGCL);
+    PAL_setColor(17, Custom_BGCL);
+    PAL_setColor(50, Custom_BGCL);
 }
 
 void WINFN_FGColor()
@@ -746,6 +763,10 @@ void WINFN_DEVLISTENTRY()
         {
             sprintf(buf, "P%u:S= %s", p, DevList[i]->Id.sName);
         }
+        else if (DevList[i]->Id.Mode == (DEVMODE_SERIAL | DEVMODE_PARALLEL))
+        {
+            sprintf(buf, "P%u:D= %s", p, DevList[i]->Id.sName);
+        }
 
         ChangeText(7, d, buf);
         d++;
@@ -826,4 +847,30 @@ void WINFN_CUSTOM_FGCL()
 void WINFN_SCREENSAVER()
 {
     bScreensaver = SelectedIdx;
+}
+
+void WINFN_CURSOR_CL()
+{
+    switch (SelectedIdx)
+    {
+        case 0:
+            Cursor_CL = 0x0E0;
+        break;
+        case 1:
+            Cursor_CL = 0;
+        break;
+        case 2:
+            Cursor_CL = 0xEEE;
+        break;
+        case 3:
+            Cursor_CL = random();
+        break;
+    
+        default:
+            Cursor_CL = 0;
+        break;
+    }
+    
+    QSelected_CURCL = SelectedIdx;
+    PAL_setColor(4, Cursor_CL);
 }

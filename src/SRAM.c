@@ -1,47 +1,11 @@
 #include "SRAM.h"
-#include "Terminal.h"
 #include "Utils.h"              // For EMU_BUILD define
-#include "QMenu.h"              // QSelected_BGCL & QSelected_FGCL
-#include "IRC.h"                // vUsername & vQuitStr
-#include "Screensaver.h"        // bScreensaver
-#include "Keyboard.h"           // vKB_Layout
-#include "devices/XP_Network.h" // vConn_time
+#include "misc/VarList.h"
 
 #define SAVE_VERSION 1
-#define ST_BYTE 1
-#define ST_WORD 2
-#define ST_LONG 3
-#define ST_SPTR 4
-#define ST_SARR 5
 
 static u32 Offset = 0;
 
-static const struct s_varlist
-{
-    u8 size;
-    void *ptr;
-} VarList[] =
-{
-    {ST_BYTE, &D_HSCROLL},
-    {ST_BYTE, &vTermType},
-    {ST_SARR, vSpeed},
-    {ST_BYTE, &TermColumns},
-    {ST_BYTE, &QSelected_BGCL},
-    {ST_BYTE, &QSelected_FGCL},
-    {ST_WORD, &Custom_BGCL},
-    {ST_WORD, &Custom_FG0CL},
-    {ST_WORD, &Custom_FG1CL},
-    {ST_BYTE, &FontSize},
-    {ST_LONG, &DEV_UART_PORT},
-    {ST_BYTE, &bWrapAround},
-    {ST_BYTE, &vKB_Layout},
-    {ST_SARR, &vQuitStr},
-    {ST_SARR, vUsername},
-    {ST_BYTE, &bHighCL},
-    {ST_BYTE, &bScreensaver},
-    {ST_LONG, &vConn_time},
-    {0, 0}  // Terminator
-};
 
 void SRAM_ClearSRAM()
 {

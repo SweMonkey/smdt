@@ -19,10 +19,12 @@ void CMD_Test(u8 argc, char *argv[]);
 void CMD_Echo(u8 argc, char *argv[]);
 void CMD_KeyboardSend(u8 argc, char *argv[]);
 void CMD_Help(u8 argc, char *argv[]);
-void CMD_xport(u8 argc, char *argv[]);
+void CMD_xpico(u8 argc, char *argv[]);
 void CMD_UName(u8 argc, char *argv[]);
 void CMD_SetConn(u8 argc, char *argv[]);
 void CMD_ClearScreen(u8 argc, char *argv[]);
 void CMD_TestSRAM(u8 argc, char *argv[]);
+void CMD_SetVar(u8 argc, char *argv[]);
+void CMD_GetIP(u8 argc, char *argv[]);
 
 #endif // CMDFUNC_H_INCLUDED

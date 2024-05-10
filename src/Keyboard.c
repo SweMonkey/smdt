@@ -57,6 +57,7 @@ const u8 SCTable_US[3][128] =
 }};
 
 // Swedish Layout
+// TODO: Add the "<>|" key
 const u8 SCTable_SV[3][128] =
 {
 {   // Lower

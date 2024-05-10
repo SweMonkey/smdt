@@ -19,4 +19,6 @@ bool XPN_ExitMonitorMode();
 bool XPN_Connect(char *str);
 void XPN_Disconnect();
 
+u8 XPN_GetIP(char *ret);
+
 #endif // XP_NETWORK_H_INCLUDED

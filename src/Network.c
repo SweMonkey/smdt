@@ -25,6 +25,7 @@ void Ext_IRQ()
 
     vu8 *byte = (vu8*)DEV_UART.RxData;
     Buffer_Push(&RxBuffer, *byte);
+    //RXBytes++;
 
     SYS_setInterruptMaskLevel(0);
 }
@@ -45,8 +46,8 @@ bool NET_Connect(char *str)
 void NET_SendChar(const u8 c, u8 flags)
 {
     #ifdef EMU_BUILD
-    #warning EMU_BUILD active, key input from keyboard wont be buffered!
-    return;
+    #warning EMU_BUILD active, key input from keyboard may not be recognized in terminal!
+    //return;   // Uncomment me if running on a bad emulator
     #endif
 
     if ((vLineMode & LMSM_EDIT) && ((flags & TXF_NOBUFFER) == 0))

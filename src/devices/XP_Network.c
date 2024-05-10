@@ -95,6 +95,7 @@ bool XPN_Connect(char *str)
     char tmp[64];
     u32 timeout = 0;
     u8 byte = 0;
+    bool r = FALSE;
 
     snprintf(tmp, 36, "Connecting to %s", str);
     TRM_SetStatusText(tmp);
@@ -105,8 +106,6 @@ bool XPN_Connect(char *str)
     XPN_SendMessage(str);
     XPN_SendByte(0x0A);
 
-    waitMs(500);
-
     while (timeout < vConn_time)
     {
         if (Buffer_Pop(&RxBuffer, &byte) == 0)
@@ -115,15 +114,16 @@ bool XPN_Connect(char *str)
             {
                 case 'C': // Connected
                 {
-                    TRM_SetStatusText(STATUS_TEXT);
-                    XPN_FlushBuffers();
-                    return TRUE;
+                    //TRM_SetStatusText(STATUS_TEXT);
+                    //XPN_FlushBuffers();
+                    r = TRUE;
+                    goto Exit;
                 }
                 case 'N': // Host Unreachable
                 {
-                    TRM_SetStatusText(STATUS_TEXT);
-                    XPN_FlushBuffers();
-                    return FALSE;
+                    //TRM_SetStatusText(STATUS_TEXT);
+                    //XPN_FlushBuffers();
+                    goto Exit;
                 }
             }
         }
@@ -131,9 +131,10 @@ bool XPN_Connect(char *str)
         timeout++;
     }
     
+    Exit:
     XPN_FlushBuffers();
     TRM_SetStatusText(STATUS_TEXT);
-    return FALSE;
+    return r;
 }
 
 void XPN_Disconnect()
@@ -159,26 +160,40 @@ void XPN_Disconnect()
     XPN_ExitMonitorMode();
 }
 
-void XPN_PrintIP(int x, int y)
+u8 XPN_GetIP(char *ret)
 {
-    /*
+    u32 timeout = 0;
+    u8 byte = 0;
+    u8 i = 0;
+    u8 r = 0;
+
+    if (ret == NULL) return 1;
+
     XPN_EnterMonitorMode();
     XPN_FlushBuffers();
     XPN_SendMessage("NC\n"); // Send command to get network information
 
     waitMs(200);
-    
-    while (1)
+
+    while (byte != 'G')
     {
-        //while (!RLN_RXReady());
-        u8 byte = RLN_ReadByte();
-        if (byte == 'G') { break; }
+        byte = XPN_ReadByte();
+
         if ((byte >= '0' && byte <= '9') || byte == '.' || byte == '1')
         {
-            TRM_DrawChar(byte, x, y, PAL1); x++;
+            ret[i++] = byte;
+            timeout = 0;
+        }
+
+        if (timeout++ >= 1000) 
+        {
+            r = 2;
+            break;
         }
     }
 
     XPN_ExitMonitorMode();
-    */
+
+    ret[i++] = '\0';
+    return r;
 }

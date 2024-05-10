@@ -215,7 +215,7 @@ void DetectDevices()
             TRM_DrawText("XPN: Device not found", 1, BootNextLine++, PAL1);
         break;*/
         case 1:
-            TRM_DrawText("XPN: XPort module OK", 1, BootNextLine++, PAL1);
+            TRM_DrawText("XPN: xPico module OK", 1, BootNextLine++, PAL1);
         break;
         case 2:
             TRM_DrawText("XPN: Error", 1, BootNextLine++, PAL1);
@@ -241,7 +241,7 @@ void DetectDevices()
     }
     else if (xpn_r)
     {
-        DEV_UART.Id.sName = "XPORT UART";
+        DEV_UART.Id.sName = "XPICO UART";
 
         SetDevCtrl(DEV_UART, 0x20);
         UnsetDevData(DEV_UART);
@@ -250,9 +250,9 @@ void DetectDevices()
 
         NET_SetConnectFunc(XPN_Connect);
 
-        TRM_DrawText("XPort IP: <not implemented>", 1, BootNextLine++, PAL1);
+        //TRM_DrawText("xPico IP: <not implemented>", 1, BootNextLine++, PAL1);
         //XPN_PrintIP(1, BootNextLine++);
-        TRM_DrawText("XPort MAC: <not implemented>", 1, BootNextLine++, PAL1);
+        //TRM_DrawText("xPico MAC: <not implemented>", 1, BootNextLine++, PAL1);
         //XPN_PrintMAC(1, BootNextLine++);
     }
     else

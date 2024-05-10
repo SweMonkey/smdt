@@ -6,7 +6,7 @@
 #include "Keyboard.h"
 #include "Utils.h"
 #include "Network.h"
-#include "CMDFunc.h"
+#include "misc/CMDFunc.h"
 
 #include "DevMgr.h"
 #include "devices/XP_Network.h"
@@ -98,7 +98,7 @@ u8 DoBackspace()
     }
     else
     {
-        VDP_setTileMapXY(!(TTY_GetSX() % 2), TILE_ATTR_FULL(2, 0, 0, 0, 0), TTY_GetSX()>>1, sy);
+        VDP_setTileMapXY(!(TTY_GetSX() & 1), TILE_ATTR_FULL(2, 0, 0, 0, 0), TTY_GetSX()>>1, sy);
     }
 
     Buffer_ReversePop(&TxBuffer);

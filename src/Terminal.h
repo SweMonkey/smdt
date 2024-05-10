@@ -48,7 +48,6 @@ extern u16 Custom_FG0CL;   // Custom text colour for 4x8 font
 extern u16 Custom_FG1CL;   // Custom text antialiasing colour for 4x8 font 
 
 extern const char * const TermTypeList[];
-extern u16 LastCursor;
 
 // Font
 extern u8 FontSize;
@@ -68,6 +67,7 @@ void TTY_SetFontSize(u8 size);
 void TTY_PrintChar(u8 c);
 void TTY_PrintString(const char *str);
 void TTY_ClearLine(u16 y, u16 line_count);
+void TTY_ClearLineSingle(u16 y);
 void TTY_ClearPartialLine(u16 y, u16 from_x, u16 to_x);
 void TTY_SetAttribute(u8 v);
 

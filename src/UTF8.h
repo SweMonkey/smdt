@@ -6,6 +6,6 @@
 extern u8 bUTF8;
 
 void UTF8_Init();
-void DoUTF8(u8 dummy);
+void DoUTF8(u8 byte);
 
 #endif // UTF8_TABLE_H_INCLUDED

@@ -6,11 +6,6 @@
 // Title bar prefix
 #define STATUS_TEXT "SMDTC v0.29"
 
-// Icon x position
-#define ICO_POS_0 36  // Main use: Input device icon
-#define ICO_POS_1 37  // Main use: Rx icon
-#define ICO_POS_2 38  // Main use: Tx icon
-
 // VRAM memory addresses for various graphics in tile units (/32)
 #define AVR_BGBLOCK 0       // $0000 - $01FF
 #define AVR_CURSOR  0x10    // $0200 - $02DF
@@ -26,6 +21,15 @@
 #define AVR_WINDOW  0xB000  // $B000 - $BFFF
 #define AVR_PLANE_A 0xC000  // $C000 - $DFFF
 #define AVR_PLANE_B 0xE000  // $E000 - $FFFF
+
+// Icon x position
+#define ICO_POS_0 36  // Main use: Input device icon
+#define ICO_POS_1 37  // Main use: Rx icon
+#define ICO_POS_2 38  // Main use: Tx icon
+#define ICO_POS_3 39  // Main use: None
+
+// Undefined icon/
+#define ICO_NONE  2
 
 // Cursor sprite index
 #define CURSOR_SPRITE_NUM 0
@@ -73,6 +77,7 @@ void TRM_SetStatusIcon(const char icon, u16 pos);
 void TRM_DrawChar(const u8 c, u8 x, u8 y, u8 palette);
 void TRM_DrawText(const char *str, u16 x, u16 y, u8 palette);
 void TRM_ClearTextArea(u16 x, u16 y, u16 w, u16 h);
+void TRM_FillPlane(VDPPlane plane, u16 tile);
 
 u8 atoi(char *c);
 u16 atoi16(char *c);
