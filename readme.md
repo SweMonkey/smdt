@@ -24,15 +24,15 @@ xPico/RetroLink support as an alternative to the above is being worked on.<br>
 > I (smds) will not take any responsibilities for any failure to read and understand the above warning.<br>
 <br>
 
-## Thanks to:
+## Thanks to
 b1tsh1ft3r - Testing, improvement ideas and RetroLink/xPico support<br>
 RKT - For creating a 4x8 extended ASCII font tileset<br>
 Stef - For creating [SGDK](https://github.com/Stephane-D/SGDK)<br>
 <br>
 
 ## Building SMDTC from source
-**This part needs to be expanded, for now it assumes you are familiar with SGDK and how to use it.**<br>
- To build SMDTC from source you will need SGDK version 1.80 (newer versions untested but will probably work as SMDTC does not use very much from it)<br>
+**This part needs to be expanded, for now it assumes you are familiar with SGDK and how to use it.**<br><br>
+ To build SMDTC from source you will need SGDK version 1.80 (newer versions untested but will probably work as SMDTC mostly only uses macros and basic functions from SGDK)<br>
 The SGDK library must be rebuilt with the flags `HALT_Z80_ON_IO` and `HALT_Z80_ON_DMA` set to 0 in config.h to make sure the z80 CPU is never getting its bus back.<br>
 <br>
 
@@ -40,7 +40,7 @@ The SGDK library must be rebuilt with the flags `HALT_Z80_ON_IO` and `HALT_Z80_O
 SMDTC has a device manager which can autodetect if a device is present and where it is plugged in.<br>
 Device detection is only done on bootup, no plug & play support (yet).<br>
 <br>
-A total of 2 PS/2 devices and 1 UART device can be connected to a single MD controller port.<br>
+A total of 2 PS/2 devices and 1 UART device can potentially be connected to a single MD controller port. However, beware the power draw may exceed what the MD can supply!<br>
 <br>
 When a keyboard is connected and detected a 'K' icon will be visible in the status bar.<br>
 A fallback joypad device will be activated if SMDTC fails to find a keyboard or when a keyboard is plugged into PORT 2, allowing the use of a regular joypad.<br>
