@@ -13,12 +13,12 @@ void CR_Blink()
     if (!bDoCursorBlink) return;
 
     // Cursor blink
-    if (CursorBlink == (bPALSystem?12:15))
+    if (CursorBlink == (bPALSystem?16:20))
     {
         SetSprite_TILE(CURSOR_SPRITE_NUM, LastCursor);
         CursorBlink++;
     }
-    else if (CursorBlink == (bPALSystem?24:30))
+    else if (CursorBlink == (bPALSystem?32:40))
     {
         SetSprite_TILE(CURSOR_SPRITE_NUM, 0x16);
         CursorBlink = 0;

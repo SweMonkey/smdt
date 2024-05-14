@@ -14,10 +14,7 @@ static char IPSTR[32];
 static u8 pLineMode = 1;
 static u8 SelectedIdx = 0;
 static u8 SubMenuIdx = 0;
-
-#ifndef EMU_BUILD
 static u8 kbdata;
-#endif
 
 
 void UpdateWindow()
@@ -95,7 +92,6 @@ void Reset_Entry()
 
 void Run_Entry()
 {
-    #ifndef EMU_BUILD
     while (KB_Poll(&kbdata))
     {
         KB_Interpret_Scancode(kbdata);
@@ -122,7 +118,6 @@ void Run_Entry()
             UI_End();
         }
     }
-    #endif
 }
 
 void VBlank_Entry()

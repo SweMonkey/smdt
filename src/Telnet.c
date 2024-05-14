@@ -106,8 +106,7 @@ static u16 QSeqNumber = 0; // atoi'd ESC_QBuffer
 
 static char LastPrintedChar = ' ';
 
-// Nasty hack
-static u8 bOSC = FALSE;
+// This really should be cleaned up; Its only used to get/set the title text on SMDT status line
 static char ESC_OSCBuffer[2] = {0xFF,'\0'};
 static u8 ESC_OSCSeq = 0;
 static u8 bTitle = FALSE;
@@ -221,7 +220,6 @@ void TELNET_Init()
     bWrapAround = TRUE;
 
     // ...
-    bOSC = FALSE;
     ESC_OSCBuffer[0] = 0xFF;
     ESC_OSCBuffer[1] = '\0';
     ESC_OSCSeq = 0;
@@ -353,805 +351,794 @@ void ChangeTitle()
 // https://en.wikipedia.org/wiki/ANSI_escape_code#CSIsection
 // -------------------------------------------------------------------------------------------------
 // Please ignore this hacky escape handling function...
-// It will need to be rewritten in the future as it was never meant to handle all the stuff it does
-// and therefore has ended up as one big giant hack
+// It was never meant to handle all the stuff it does and has ended up being quite messy
 // -------------------------------------------------------------------------------------------------
 static inline void DoEscape(u8 byte)
 {
     ESC_Seq++;
 
-    if (ESC_Seq == 1)
+    switch (ESC_Type)
     {
-        ESC_Type = byte;
-        
-        #ifdef ESC_LOGGING
-        //kprintf("ESC_Type: $%X ( %c )", ESC_Type, (char)ESC_Type);
-        #endif
-
-        switch (ESC_Type)
-        {        
-            case ']':   // Operating System Command (OSC  is 0x9d)
-                bOSC = TRUE;
-            return;
-
-            case '(':   // ESC ( C Ⓝ    Setup G0 charset with 94 characters
-                // Ignore this case, its handled later. Do not go to EndEscape here
-            break;
-
-            case '=':   // ESC =     Application Keypad (DECKPAM).
-                goto EndEscape;
-            break;
-
-            case '>':   // ESC >     Normal Keypad (DECKPNM), VT100.
-                goto EndEscape;
-            break;
-
-            case 'M':   // ESC M     Reverse Index (RI) https://terminalguide.namepad.de/seq/a_esc_cm/  (Old note: Moves cursor one line up, scrolling if needed)
-                // Not quite right, but eh
-                TTY_MoveCursor(TTY_CURSOR_UP, 1);
-                goto EndEscape;
-            break;
-            
-            case '7':   // Save Cursor (DECSC) (ESC 7)
-            {
-                Saved_sx = TTY_GetSX();
-                Saved_sy = TTY_GetSY();
-                goto EndEscape;
-            }
-
-            case '8':   // Restore Cursor (DECRC) (ESC 8)
-            {
-                TTY_SetSX(Saved_sx);
-                TTY_SetSY(Saved_sy);
-                goto EndEscape;
-            }
-        
-            default:
-            break;
-        }
-
-        return;
-    }
-
-    // Ugly hack to handle ESC]xy<text>; - this will break if it does not recieve a 2 to change title
-    if (bOSC)
-    {
-        switch (atoi(ESC_OSCBuffer))
+        case '[':
         {
-            case 2:
-                #ifdef ESC_LOGGING
-                kprintf("OSC: Change Window Title");
-                #endif
-
-                bTitle = TRUE;
-            break;
-        
-            default:
-            break;
-        }
-
-        switch (byte)
-        {
-            case ';':
-                bOSC = FALSE;
-                
-                #ifdef ESC_LOGGING
-                kprintf("OSC: $%X", atoi(ESC_OSCBuffer));
-                #endif
-
-                ESC_OSCBuffer[0] = 0xFF;
-                ESC_OSCBuffer[1] = '\0';
-                ESC_OSCSeq = 0;
-            break;
-        
-            default:
-                if (ESC_OSCSeq < 2)
+            switch (byte)
+            {
+                case ';':
                 {
-                    ESC_OSCBuffer[ESC_OSCSeq++] = byte;
+                    if (ESC_ParamSeq >= 4) return;
+
+                    ESC_Param[ESC_ParamSeq++] = atoi(ESC_Buffer);
+                    //kprintf("ESC_ParamSeq: %u = %u (%s)", (u8)ESC_ParamSeq-1, ESC_Param[ESC_ParamSeq-1], ESC_Buffer);
+                    //kprintf("Got an ';' : ESC_Param[%u] = $%X", ESC_ParamSeq-1, ESC_Param[ESC_ParamSeq-1]);
+
+                    ESC_Buffer[0] = '\0';
+                    ESC_Buffer[1] = '\0';
+                    ESC_Buffer[2] = '\0';
+                    ESC_Buffer[3] = '\0';
+                    ESC_BufferSeq = 0;
+
+                    return;
                 }
-            break;
-        }
 
-        return;
-    }
-    else if (bTitle)
-    {
-        if (byte == 7)
-        {
-            #ifdef ESC_LOGGING
-            kprintf("OSC: Change Window Title to %s", ESC_TitleBuffer);
-            #endif 
-
-            ChangeTitle();
-            bTitle = FALSE;
-            goto EndEscape;
-        }
-
-        if (ESC_TitleSeq < 32)
-        {
-            ESC_TitleBuffer[ESC_TitleSeq++] = byte;
-        }
-
-        return;
-    }
-
-    // https://invisible-island.net/xterm/ctlseqs/ctlseqs.html
-    if (ESC_QSeq > 0)
-    {
-        ESC_QBuffer[ESC_QSeq-1] = byte;
-        //kprintf("ESC_Q: $%X - '%c'", ESC_QBuffer[ESC_QSeq-1], (char)ESC_QBuffer[ESC_QSeq-1]);
-
-        if (byte == 'h')
-        {
-            QSeqNumber = atoi16((char*)ESC_QBuffer);
-            //kprintf("QSeqNumber = %u", QSeqNumber);
-
-            switch (QSeqNumber)
-            {
-                case 6:   // Origin Mode (DECOM), VT100.
-                    vDECOM = TRUE;
-                break;
-            
-                case 7:   // Auto-Wrap Mode (DECAWM), VT100.
-                    bWrapAround = TRUE;
-                break;
-            
-                case 25:   // Shows the cursor, from the VT220. (DECTCEM)
-                    SetSprite_TILE(CURSOR_SPRITE_NUM, LastCursor);
-                break;
-
-                case 69:   // DECSLRM can set margins.
-                    vDECLRMM = TRUE;
-                break;
-
-                //case 2004:   // Turn on bracketed paste mode. In bracketed paste mode, text pasted into the terminal will be surrounded by ESC [200~ and ESC [201~; programs running in the terminal should not treat characters bracketed by those sequences as commands (Vim, for example, does not treat them as commands). From xterm
-                //break;
-
-                // 1000h = Send Mouse X & Y on button press and release.  See the section Mouse Tracking.  This is the X11 xterm mouse protocol.
-                // 1006h = Enable SGR Mouse Mode, xterm.
-
-                // Missing QEsq:
-                // ?2004h
-                // ?1049h
-                // ?1h
-                // ?25h
-
-                default:
-                //kprintf("Got an unknown ?%uh", QSeqNumber);//?%ch", (char)ESC_QBuffer[0]);
-                break;
-            }
-
-            goto EndEscape;
-        }
-
-        if (byte == 'l')
-        {
-            QSeqNumber = atoi16((char*)ESC_QBuffer);
-            //kprintf("QSeqNumber = %u", QSeqNumber);
-
-            switch (QSeqNumber)
-            {
-                case 6:   // Normal Cursor Mode (DECOM), VT100.
-                    vDECOM = FALSE;
-                break;
-            
-                case 7:   // No Auto-Wrap Mode (DECAWM), VT100.
-                    bWrapAround = FALSE;
-                break;
-            
-                case 25:   // Hides the cursor. (DECTCEM)
-                    //*((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(0xAC04);  // Cursor sprite tile address
-                    //*((vu16*) VDP_DATA_PORT) = 0x2016;
-                    SetSprite_TILE(CURSOR_SPRITE_NUM, 0x2016);
-                break;
-
-                case 69:   // DECSLRM cannot set margins.
-                    vDECLRMM = FALSE;
-                break;
-
-                //case 2004:   // Turn off bracketed paste mode. 
-                //break;
-
-
-                default:
-                //kprintf("Got an unknown ?%cl", (char)ESC_QBuffer[0]);
-                //kprintf("Got an unknown ?%ul", QSeqNumber);//?%ch", (char)ESC_QBuffer[0]);
-                break;
-            }
-
-            goto EndEscape;
-        }
-
-        if (ESC_QSeq > 5) 
-        {
-            //for (u8 i = 0; i < 6; i++) kprintf("ESC_QBuffer[%u] = $%X (%c)", i, ESC_QBuffer[i], (char)ESC_QBuffer[i]);
-            goto EndEscape;
-        }
-
-        ESC_QSeq++;
-
-        return;
-    }
-
-    if (ESC_Type == '(')
-    {
-        switch (byte)
-        {
-            case '0':   // DEC Special Character and Line Drawing Set
-            {
-                CharMapSelection = 1;
-                #ifdef ESC_LOGGING
-                kprintf("ESC(0: DEC Special Character and Line Drawing Set");
-                #endif
-                break;
-            }
-            
-            case 'B':
-            {
-                CharMapSelection = 0;
-                #ifdef ESC_LOGGING
-                kprintf("ESC(B: United States (USASCII), VT100");
-                #endif
-                break;
-            }
-
-            default:
-            {
-                #ifdef ESC_LOGGING
-                kprintf("Unknown ESC( sequence - $%X ( %c )", byte, (char)byte);
-                #endif
-            }
-        }
-
-        goto EndEscape;
-    }
-
-    switch (byte)
-    {
-        case ';':
-        {
-            if (ESC_ParamSeq >= 4) return;
-
-            ESC_Param[ESC_ParamSeq++] = atoi(ESC_Buffer);
-            //kprintf("ESC_ParamSeq: %u = %u (%s)", (u8)ESC_ParamSeq-1, ESC_Param[ESC_ParamSeq-1], ESC_Buffer);
-            //kprintf("Got an ';' : ESC_Param[%u] = $%X", ESC_ParamSeq-1, ESC_Param[ESC_ParamSeq-1]);
-
-            ESC_Buffer[0] = '\0';
-            ESC_Buffer[1] = '\0';
-            ESC_Buffer[2] = '\0';
-            ESC_Buffer[3] = '\0';
-            ESC_BufferSeq = 0;
-
-            return;
-        }
-
-        case 'c':
-        {
-            if (ESC_Type == ' ')    // RIS: Reset to initial state - Resets the device to its state after being powered on. 
-            {
-                TTY_Reset(TRUE);
-                goto EndEscape;
-            }
-        }
-
-        case 'h':   // Screen modes
-        {
-            switch (atoi(ESC_Buffer))
-            {
-                case 7:     // Enables line wrapping
-                case 137:   // 7 prefixed with =
-                    bWrapAround = TRUE;
-                break;
-
-                case 0x19:
-                case 0xF5: // Make cursor visible   ($F5 is actually ESC[?25h )
-                    SetSprite_TILE(CURSOR_SPRITE_NUM, LastCursor);
-                break;
-
-                default:
-                    //kprintf("Unimplemented screen mode '%u' ($%X)", atoi(ESC_Buffer), atoi(ESC_Buffer));
-                break;
-            }
-
-            goto EndEscape;
-        }
-
-        case 'l':   // Reset screen mode
-        {
-            switch (atoi(ESC_Buffer))
-            {
-                case 7:     // Disables line wrapping
-                case 137:   // 7 prefixed with =
-                    bWrapAround = FALSE;    // Was TRUE, copy paste error?
-                break;
-
-                case 0x19:
-                case 0xF5: // Make cursor invisible   ($F5 is actually ESC[?25l )
-                    SetSprite_TILE(CURSOR_SPRITE_NUM, 0x16);
-                break;
-
-                default:
-                    //kprintf("Unimplemented reset screen mode '%u'", atoi(ESC_Buffer));
-                break;
-            }
-
-            goto EndEscape;
-        }
-
-        case 'A':
-        {
-            u8 n = atoi(ESC_Buffer);
-            n = (n ? n : 1);
-            TTY_SetSY_A(TTY_GetSY_A() - n);
-            goto EndEscape;
-        }
-
-        case 'B':
-        {
-            u8 n = atoi(ESC_Buffer);
-            n = (n ? n : 1);
-            TTY_SetSY_A(TTY_GetSY_A() + n);            
-            goto EndEscape;
-        }
-
-        case 'C':
-        {
-            u8 n = atoi(ESC_Buffer);
-            n = (n ? n : 1);
-
-            if (vDECLRMM || vDECOM)
-            {
-                if (n > DMarginRight) n = DMarginRight;
-            }
-            else
-            {
-                n = (n > C_XMAX ? C_XMAX: n);
-            }
-            
-            TTY_SetSX(TTY_GetSX() + n);
-            goto EndEscape;
-        }
-
-        case 'D':
-        {
-            u8 n = atoi(ESC_Buffer);
-            n = (n ? n : 1);
-
-            if (vDECLRMM || vDECOM)
-            {
-                if (n < DMarginLeft) n = DMarginLeft;
-            }
-            else
-            {
-                if ((TTY_GetSX() == 0) && (bWrapAround))
+                case 'c':
                 {
-                    TTY_MoveCursor(TTY_CURSOR_LEFT, 1);
+                    if (ESC_Type == ' ')    // RIS: Reset to initial state - Resets the device to its state after being powered on. 
+                    {
+                        TTY_Reset(TRUE);
+                        goto EndEscape;
+                    }
+                }
+
+                case 'h':   // Screen modes
+                {
+                    switch (atoi(ESC_Buffer))
+                    {
+                        case 7:     // Enables line wrapping
+                        case 137:   // 7 prefixed with =
+                            bWrapAround = TRUE;
+                        break;
+
+                        case 0x19:
+                        case 0xF5: // Make cursor visible   ($F5 is actually ESC[?25h )
+                            SetSprite_TILE(CURSOR_SPRITE_NUM, LastCursor);
+                        break;
+
+                        default:
+                            //kprintf("Unimplemented screen mode '%u' ($%X)", atoi(ESC_Buffer), atoi(ESC_Buffer));
+                        break;
+                    }
+
                     goto EndEscape;
                 }
-                else if (TTY_GetSX() == 0)
+
+                case 'l':   // Reset screen mode
                 {
-                    n = (TTY_GetSX() == 0 ? 0: n);
-                }
-            }
+                    switch (atoi(ESC_Buffer))
+                    {
+                        case 7:     // Disables line wrapping
+                        case 137:   // 7 prefixed with =
+                            bWrapAround = FALSE;    // Was TRUE, copy paste error?
+                        break;
 
-            TTY_SetSX(TTY_GetSX() - n);
-            goto EndEscape;
-        }
+                        case 0x19:
+                        case 0xF5: // Make cursor invisible   ($F5 is actually ESC[?25l )
+                            SetSprite_TILE(CURSOR_SPRITE_NUM, 0x16);
+                        break;
 
-        case 'b':   // Repeat last printed character n times
-        {
-            u8 n = atoi(ESC_Buffer);
+                        default:
+                            //kprintf("Unimplemented reset screen mode '%u'", atoi(ESC_Buffer));
+                        break;
+                    }
 
-            for (u8 i = 0; i < n; i++) TTY_PrintChar(LastPrintedChar);
-            
-            goto EndEscape;
-        }
-
-        case 's':   // Set Left and Right Margin (DECSLRM) when in DECLRMM mode, otherwise it is: Save Cursor [variant] (ansi.sys) - Same as Save Cursor (DECSC) (ESC 7)
-        {
-            if (vDECLRMM)
-            {
-                ESC_Param[ESC_ParamSeq++] = atoi(ESC_Buffer);
-
-                if ((ESC_Param[1] == 0xFF) || (ESC_Param[1] == 0) || (ESC_Param[1] > C_XMAX))  // > or >= C_XMAX ?
-                {
-                    DMarginRight = C_XMAX;
-                }
-                else DMarginRight = ESC_Param[1];
-
-                if (ESC_Param[0] >ESC_Param[0])
-                {
-                    DMarginLeft = DMarginRight;
-                }
-                else DMarginLeft = ESC_Param[0];
-            }
-            else
-            {
-                Saved_sx = TTY_GetSX();
-                Saved_sy = TTY_GetSY();
-            }
-
-            goto EndEscape;
-        }
-
-        case 't':   // Window operations [DISPATCH] - https://terminalguide.namepad.de/seq/csi_st/
-        {
-            u8 n = atoi(ESC_Buffer);
-            char str[16] = {'\0'};
-            //kprintf("Got ESC[%ut", n);
-
-            switch (n)
-            {
-                case 7:     // Refresh/Redraw Terminal Window ( Needs testing! CMD = "ESC [ 7 t" )
-                break;
-
-                case 8:     // Set Terminal Window Size ( Needs testing! CMD = "ESC [ 8 ; Ⓝ ; Ⓝ t"  Ⓝ = H/W in rows/columns )
-                    //C_YMAX = H;
-                    //C_XMAX = W;
-                break;
-
-                case 11:    // Report Terminal Window State (1 = non minimized - 2 = minimized)
-                    NET_SendString("[1t");
-                break;
-
-                case 13:    // Report Terminal Window Position ( Needs testing! CMD = "ESC [ 13 ; Ⓝ t"  Ⓝ = 0/2 )
-                    NET_SendString("[3;0;0t");
-                break;
-
-                case 14:    // Report Terminal Window Size in Pixels ( Needs testing! CMD = "ESC [ 14 ; Ⓝ t"  Ⓝ = 0/2 )
-                    sprintf(str, "[4;%d;%dt", (bPALSystem?232:216), (FontSize==0?320:640));
-                    NET_SendString(str);
-                break;
-
-                case 15:    // Report Screen Size in Pixels ( Needs testing! CMD = "ESC [ 15 t" )
-                    sprintf(str, "[5;%d;%dt", (bPALSystem?232:216), (FontSize==0?320:640));
-                    NET_SendString(str);
-                break;
-
-                case 16:    // Report Cell Size in Pixels ( Needs testing! CMD = "ESC [ 16 t" )
-                    NET_SendString("[6;8;8t");
-                break;
-
-                case 18:    // Report Terminal Size ( Needs testing! CMD = "ESC [ 18 t" )
-                    sprintf(str, "[8;%d;%dt", (bPALSystem?0x1D:0x1B), (FontSize==0?0x28:0x50));
-                    NET_SendString(str);
-                break;
-
-                case 19:    // Report Screen Size ( Needs testing! CMD = "ESC [ 19 t" )
-                    sprintf(str, "[9;%d;%dt", (bPALSystem?0x1D:0x1B), (FontSize==0?0x28:0x50));
-                    NET_SendString(str);
-                break;
-
-                case 20:    // Get Icon Title ( Needs testing! CMD = "ESC [ 20 t" )
-                    NET_SendString("]LNoIcon\\");
-                break;
-
-                case 21:    // Get Terminal Title ( Needs testing! CMD = "ESC [ 21 t" )
-                    NET_SendString("]lNoTitle\\");
-                break;
-
-                case 22:    // Push Terminal Title ( Needs testing! CMD = "ESC [ 22 ; Ⓝ t" Ⓝ = 0/1/2)
-                break;
-
-                case 23:    // Pop Terminal Title ( Needs testing! CMD = "ESC [ 23 ; Ⓝ t" Ⓝ = 0/1/2)
-                break;
-
-                default:
-                break;
-            }
-            
-            goto EndEscape;
-        }
-
-        case 'u':   // Restore Cursor [variant] (ansi.sys) - Same as Restore Cursor (DECRC) (ESC 8)
-        {
-            TTY_SetSX(Saved_sx);
-            TTY_SetSY(Saved_sy);
-            goto EndEscape;
-        }
-
-        case 'G':   // Alias: Cursor Horizontal Position Absolute
-        {
-            u8 n = atoi(ESC_Buffer);
-
-            TTY_SetSX(n);
-
-            goto EndEscape;
-        }
-
-        case 'H':   // Move cursor to upper left corner if no parameters or to yy;xx
-        case 'f':   // Some say its the same, other say its different...
-        {
-            if (ESC_Buffer[0] != '\0') ESC_Param[ESC_ParamSeq++] = atoi(ESC_Buffer);
-            
-            //for (u8 i = 0; i < ESC_ParamSeq; i++) kprintf("ESC_ParamSeq: %u = %u", (u8)i, ESC_Param[i]);
-            
-            if (((ESC_Param[0] == 0xFF) && (ESC_Param[1] == 0xFF)) || ((ESC_Param[0] == 0) && (ESC_Param[1] == 0)))
-            {
-                TTY_SetSX(0);
-                TTY_SetSY_A(0);
-            }
-            else
-            {
-                TTY_SetSX(ESC_Param[1]-1);
-                
-                if (vDECOM)
-                {
-                    if ((ESC_Param[0]-1) < DMarginTop) ESC_Param[0] = DMarginTop+1;
-
-                    if ((ESC_Param[0]-1) > DMarginBottom) ESC_Param[0] = DMarginBottom+1;
+                    goto EndEscape;
                 }
 
-                TTY_SetSY_A(ESC_Param[0]-1);
-            }
+                case 'A':
+                {
+                    u8 n = atoi(ESC_Buffer);
+                    n = (n ? n : 1);
+                    TTY_SetSY_A(TTY_GetSY_A() - n);
+                    goto EndEscape;
+                }
 
-            TTY_MoveCursor(TTY_CURSOR_DUMMY);   // Dummy
+                case 'B':
+                {
+                    u8 n = atoi(ESC_Buffer);
+                    n = (n ? n : 1);
+                    TTY_SetSY_A(TTY_GetSY_A() + n);            
+                    goto EndEscape;
+                }
 
-            goto EndEscape;
-        }
+                case 'C':
+                {
+                    u8 n = atoi(ESC_Buffer);
+                    n = (n ? n : 1);
 
-        case 'J':
-        {
-            u8 n = atoi(ESC_Buffer);
-
-            switch (n)
-            {
-                case 1: // Clear screen from cursor up (Keep cursor position)
-                    TTY_ClearLine(TTY_GetSY(), TTY_GetSY_A());
-                break;
-
-                case 2: // Clear screen (move cursor to top left only if emulating ANSI.SYS otherwise keep cursor position)
-                case 3: // Clear screen and delete all lines saved in the scrollback buffer (Keep cursor position)
-                    TRM_FillPlane(BG_A, 0);
-                    TRM_FillPlane(BG_B, 0);
-                break;
-            
-                case 0: // Clear screen from cursor down (Keep cursor position)
-                default:
-                    TTY_ClearLine(TTY_GetSY(), C_YMAX - TTY_GetSY_A());
-                break;
-            }            
-
-            goto EndEscape;
-        }
-
-        case 'K':
-        {
-            u8 n = atoi(ESC_Buffer);
-
-            switch (n)
-            {
-                case 1: // Erase start of line to the cursor (Keep cursor position)
-                    TTY_ClearPartialLine(sy % 32, 0, TTY_GetSX());
-                break;
-
-                case 2: // Erase the entire line (Keep cursor position)
-                    TTY_ClearLine(sy % 32, 1);
-                break;
-            
-                case 0: // Erase from cursor to end of line (Keep cursor position)
-                default:
-                    TTY_ClearPartialLine(sy % 32, TTY_GetSX(), C_XMAX);
-                break;
-            }            
-
-            goto EndEscape;
-        }
-        
-        case 'X':   // Erase Character (ECH) -- ESC[ Ⓝ X
-        {
-            u8 n = atoi(ESC_Buffer);
-
-            n = n == 0 ? 1 : n;
-
-            s32 oldsx = TTY_GetSX();
-            s32 oldsy = TTY_GetSY();
-            
-            TTY_MoveCursor(TTY_CURSOR_LEFT, 1);
-
-            for (u16 i = 0; i < n; i++)
-            {
-                TTY_PrintChar(' ');
-            }
-
-            TTY_SetSX(oldsx);
-            TTY_SetSY(oldsy);
-
-            TTY_MoveCursor(TTY_CURSOR_DUMMY);
-
-            goto EndEscape;
-        }
-
-        case 'd':   // Line Position Absolute [Row] (VPA)
-        {
-            u8 n = atoi(ESC_Buffer);
-
-            TTY_SetSY_A(n-1);
-
-            goto EndEscape;
-        }
-
-        case 'e':   // Line Position Relative [rows] (VPR)
-        {
-            u8 n = atoi(ESC_Buffer);
-
-            TTY_SetSY_A((TTY_GetSY_A() + n) -1);
-
-            goto EndEscape;
-        }
-
-        case 'm':
-        {
-            ESC_Param[ESC_ParamSeq++] = atoi(ESC_Buffer);
-
-            if ((ESC_Param[0] == 38) && (ESC_Param[1] == 5))
-            {
-                if (ESC_Param[2] <= 7) TTY_SetAttribute(ESC_Param[2]+30);                                   //   0-  7:  standard colors (as in ESC [ 30–37 m)
-                else if ((ESC_Param[2] >= 8) && (ESC_Param[2] <= 15)) TTY_SetAttribute(ESC_Param[2]+90);    //   8- 15:  high intensity colors (as in ESC [ 90–97 m)
-                                                                                                            //  16-231:  6 × 6 × 6 cube (216 colors): 16 + 36 × r + 6 × g + b (0 ≤ r, g, b ≤ 5)
-                                                                                                            // 232-255:  grayscale from dark to light in 24 steps
-            }
-            else if ((ESC_Param[0] == 48) && (ESC_Param[1] == 5))
-            {
-                if (ESC_Param[2] <= 7) TTY_SetAttribute(ESC_Param[2]+40);                                   //   0-  7:  standard colors (as in ESC [ 40–47 m)
-                else if ((ESC_Param[2] >= 8) && (ESC_Param[2] <= 15)) TTY_SetAttribute(ESC_Param[2]+100);   //   8- 15:  high intensity colors (as in ESC [ 100–107 m)
-                                                                                                            //  16-231:  6 × 6 × 6 cube (216 colors): 16 + 36 × r + 6 × g + b (0 ≤ r, g, b ≤ 5)
-                                                                                                            // 232-255:  grayscale from dark to light in 24 steps
-            }
-            else
-            {
-                if (ESC_Param[0] != 255) TTY_SetAttribute(ESC_Param[0]);
-                if (ESC_Param[1] != 255) TTY_SetAttribute(ESC_Param[1]);
-                if (ESC_Param[2] != 255) TTY_SetAttribute(ESC_Param[2]);
-                if (ESC_Param[3] != 255) TTY_SetAttribute(ESC_Param[3]);
-            }
-
-            #ifdef ESC_LOGGING
-            //kprintf("TTY_SetAttribute: 0:<%u> 1:<%u> 2:<%u> 3:<%u>", ESC_Param[0], ESC_Param[1], ESC_Param[2], ESC_Param[3]);
-            #endif
-
-            goto EndEscape;
-        }
-
-        case 'n':   // Device Status Report [Dispatch] (DSR)
-        {            
-            u8 n = atoi(ESC_Buffer);
-            char str[16] = {'\0'};
-
-            switch (n)
-            {
-                case 5: // Report Operating Status
-                    NET_SendString("[0n");
-                break;
-
-                case 6: // Cursor Position Report (CPR)
-                    sprintf(str, "[%ld;%ldR", TTY_GetSY_A(), TTY_GetSX());
-                    NET_SendString(str);
-                break;
-
-                case 8: // Set Title to Terminal Name and Version.
-                    // This could easily be set here, however current versions of SMDTC prefixes all titles with this information already
-                break;
-
-                default:
-                break;
-            }
-
-            goto EndEscape;
-        }
-
-        case 'p':   // Soft Reset (DECSTR)
-        {            
-            u8 n = atoi(ESC_Buffer);
-
-            switch (n)
-            {
-                case '!': // Soft Reset.
-                    TELNET_Init();
-                    //TTY_Reset(TRUE);
-                break;
-
-                default:
-                break;
-            }
-
-            goto EndEscape;
-        }
-
-        case 'q':   // Select Cursor Style (DECSCUSR) - "ESC [ Ⓝ ␣ q" - (␣ = Space)
-        {            
-            u8 n = atoi(ESC_Buffer);
-
-            switch (n)
-            {
-                case 0:
-                case 1: // Select Cursor Style Blinking Block
-                default:
-                    bDoCursorBlink = TRUE;
-
-                    if (FontSize) LastCursor = 0x13;
-                    else          LastCursor = 0x10;
-                break;
-                
-                case 2: // Select Cursor Style Steady Block
-                    bDoCursorBlink = FALSE;
+                    if (vDECLRMM || vDECOM)
+                    {
+                        if (n > DMarginRight) n = DMarginRight;
+                    }
+                    else
+                    {
+                        n = (n > C_XMAX ? C_XMAX: n);
+                    }
                     
-                    if (FontSize) LastCursor = 0x13;
-                    else          LastCursor = 0x10;
-                break;
-                
-                case 3: // Select Cursor Style Blinking Underline
-                    bDoCursorBlink = TRUE;
+                    TTY_SetSX(TTY_GetSX() + n);
+                    goto EndEscape;
+                }
 
-                    if (FontSize) LastCursor = 0x14;
-                    else          LastCursor = 0x11;
-                break;
-                
-                case 4: // Select Cursor Style Steady Underline
-                    bDoCursorBlink = FALSE;
-                    
-                    if (FontSize) LastCursor = 0x14;
-                    else          LastCursor = 0x11;
-                break;
-                
-                case 5: // Select Cursor Style Blinking Bar
-                    bDoCursorBlink = TRUE;
+                case 'D':
+                {
+                    u8 n = atoi(ESC_Buffer);
+                    n = (n ? n : 1);
 
-                    if (FontSize) LastCursor = 0x15;
-                    else          LastCursor = 0x12;
-                break;
-                
-                case 6: // Select Cursor Style Steady Bar
-                    bDoCursorBlink = FALSE;
+                    if (vDECLRMM || vDECOM)
+                    {
+                        if (n < DMarginLeft) n = DMarginLeft;
+                    }
+                    else
+                    {
+                        if ((TTY_GetSX() == 0) && (bWrapAround))
+                        {
+                            TTY_MoveCursor(TTY_CURSOR_LEFT, 1);
+                            goto EndEscape;
+                        }
+                        else if (TTY_GetSX() == 0)
+                        {
+                            n = (TTY_GetSX() == 0 ? 0: n);
+                        }
+                    }
+
+                    TTY_SetSX(TTY_GetSX() - n);
+                    goto EndEscape;
+                }
+
+                case 'b':   // Repeat last printed character n times
+                {
+                    u8 n = atoi(ESC_Buffer);
+
+                    for (u8 i = 0; i < n; i++) TTY_PrintChar(LastPrintedChar);
                     
-                    if (FontSize) LastCursor = 0x15;
-                    else          LastCursor = 0x12;
+                    goto EndEscape;
+                }
+
+                case 's':   // Set Left and Right Margin (DECSLRM) when in DECLRMM mode, otherwise it is: Save Cursor [variant] (ansi.sys) - Same as Save Cursor (DECSC) (ESC 7)
+                {
+                    if (vDECLRMM)
+                    {
+                        ESC_Param[ESC_ParamSeq++] = atoi(ESC_Buffer);
+
+                        if ((ESC_Param[1] == 0xFF) || (ESC_Param[1] == 0) || (ESC_Param[1] > C_XMAX))  // > or >= C_XMAX ?
+                        {
+                            DMarginRight = C_XMAX;
+                        }
+                        else DMarginRight = ESC_Param[1];
+
+                        if (ESC_Param[0] >ESC_Param[0])
+                        {
+                            DMarginLeft = DMarginRight;
+                        }
+                        else DMarginLeft = ESC_Param[0];
+                    }
+                    else
+                    {
+                        Saved_sx = TTY_GetSX();
+                        Saved_sy = TTY_GetSY();
+                    }
+
+                    goto EndEscape;
+                }
+
+                case 't':   // Window operations [DISPATCH] - https://terminalguide.namepad.de/seq/csi_st/
+                {
+                    u8 n = atoi(ESC_Buffer);
+                    char str[16] = {'\0'};
+                    //kprintf("Got ESC[%ut", n);
+
+                    switch (n)
+                    {
+                        case 7:     // Refresh/Redraw Terminal Window ( Needs testing! CMD = "ESC [ 7 t" )
+                        break;
+
+                        case 8:     // Set Terminal Window Size ( Needs testing! CMD = "ESC [ 8 ; Ⓝ ; Ⓝ t"  Ⓝ = H/W in rows/columns )
+                            //C_YMAX = H;
+                            //C_XMAX = W;
+                        break;
+
+                        case 11:    // Report Terminal Window State (1 = non minimized - 2 = minimized)
+                            NET_SendString("[1t");
+                        break;
+
+                        case 13:    // Report Terminal Window Position ( Needs testing! CMD = "ESC [ 13 ; Ⓝ t"  Ⓝ = 0/2 )
+                            NET_SendString("[3;0;0t");
+                        break;
+
+                        case 14:    // Report Terminal Window Size in Pixels ( Needs testing! CMD = "ESC [ 14 ; Ⓝ t"  Ⓝ = 0/2 )
+                            sprintf(str, "[4;%d;%dt", (bPALSystem?232:216), (FontSize==0?320:640));
+                            NET_SendString(str);
+                        break;
+
+                        case 15:    // Report Screen Size in Pixels ( Needs testing! CMD = "ESC [ 15 t" )
+                            sprintf(str, "[5;%d;%dt", (bPALSystem?232:216), (FontSize==0?320:640));
+                            NET_SendString(str);
+                        break;
+
+                        case 16:    // Report Cell Size in Pixels ( Needs testing! CMD = "ESC [ 16 t" )
+                            NET_SendString("[6;8;8t");
+                        break;
+
+                        case 18:    // Report Terminal Size ( Needs testing! CMD = "ESC [ 18 t" )
+                            sprintf(str, "[8;%d;%dt", (bPALSystem?0x1D:0x1B), (FontSize==0?0x28:0x50));
+                            NET_SendString(str);
+                        break;
+
+                        case 19:    // Report Screen Size ( Needs testing! CMD = "ESC [ 19 t" )
+                            sprintf(str, "[9;%d;%dt", (bPALSystem?0x1D:0x1B), (FontSize==0?0x28:0x50));
+                            NET_SendString(str);
+                        break;
+
+                        case 20:    // Get Icon Title ( Needs testing! CMD = "ESC [ 20 t" )
+                            NET_SendString("]LNoIcon\\");
+                        break;
+
+                        case 21:    // Get Terminal Title ( Needs testing! CMD = "ESC [ 21 t" )
+                            NET_SendString("]lNoTitle\\");
+                        break;
+
+                        case 22:    // Push Terminal Title ( Needs testing! CMD = "ESC [ 22 ; Ⓝ t" Ⓝ = 0/1/2)
+                        break;
+
+                        case 23:    // Pop Terminal Title ( Needs testing! CMD = "ESC [ 23 ; Ⓝ t" Ⓝ = 0/1/2)
+                        break;
+
+                        default:
+                        break;
+                    }
+                    
+                    goto EndEscape;
+                }
+
+                case 'u':   // Restore Cursor [variant] (ansi.sys) - Same as Restore Cursor (DECRC) (ESC 8)
+                {
+                    TTY_SetSX(Saved_sx);
+                    TTY_SetSY(Saved_sy);
+                    goto EndEscape;
+                }
+
+                case 'G':   // Alias: Cursor Horizontal Position Absolute
+                {
+                    u8 n = atoi(ESC_Buffer);
+
+                    TTY_SetSX(n);
+
+                    goto EndEscape;
+                }
+
+                case 'H':   // Move cursor to upper left corner if no parameters or to yy;xx
+                case 'f':   // Some say its the same, other say its different...
+                {
+                    if (ESC_Buffer[0] != '\0') ESC_Param[ESC_ParamSeq++] = atoi(ESC_Buffer);
+                    
+                    //for (u8 i = 0; i < ESC_ParamSeq; i++) kprintf("ESC_ParamSeq: %u = %u", (u8)i, ESC_Param[i]);
+                    
+                    if (((ESC_Param[0] == 0xFF) && (ESC_Param[1] == 0xFF)) || ((ESC_Param[0] == 0) && (ESC_Param[1] == 0)))
+                    {
+                        TTY_SetSX(0);
+                        TTY_SetSY_A(0);
+                    }
+                    else
+                    {
+                        TTY_SetSX(ESC_Param[1]-1);
+                        
+                        if (vDECOM)
+                        {
+                            if ((ESC_Param[0]-1) < DMarginTop) ESC_Param[0] = DMarginTop+1;
+
+                            if ((ESC_Param[0]-1) > DMarginBottom) ESC_Param[0] = DMarginBottom+1;
+                        }
+
+                        TTY_SetSY_A(ESC_Param[0]-1);
+                    }
+
+                    TTY_MoveCursor(TTY_CURSOR_DUMMY);   // Dummy
+
+                    goto EndEscape;
+                }
+
+                case 'J':
+                {
+                    u8 n = atoi(ESC_Buffer);
+
+                    switch (n)
+                    {
+                        case 1: // Clear screen from cursor up (Keep cursor position)
+                            TTY_ClearLine(TTY_GetSY(), TTY_GetSY_A());
+                        break;
+
+                        case 2: // Clear screen (move cursor to top left only if emulating ANSI.SYS otherwise keep cursor position)
+                        case 3: // Clear screen and delete all lines saved in the scrollback buffer (Keep cursor position)
+                            TRM_FillPlane(BG_A, 0);
+                            TRM_FillPlane(BG_B, 0);
+                        break;
+                    
+                        case 0: // Clear screen from cursor down (Keep cursor position)
+                        default:
+                            TTY_ClearLine(TTY_GetSY(), C_YMAX - TTY_GetSY_A());
+                        break;
+                    }            
+
+                    goto EndEscape;
+                }
+
+                case 'K':
+                {
+                    u8 n = atoi(ESC_Buffer);
+
+                    switch (n)
+                    {
+                        case 1: // Erase start of line to the cursor (Keep cursor position)
+                            TTY_ClearPartialLine(sy % 32, 0, TTY_GetSX());
+                        break;
+
+                        case 2: // Erase the entire line (Keep cursor position)
+                            TTY_ClearLine(sy % 32, 1);
+                        break;
+                    
+                        case 0: // Erase from cursor to end of line (Keep cursor position)
+                        default:
+                            TTY_ClearPartialLine(sy % 32, TTY_GetSX(), C_XMAX);
+                        break;
+                    }            
+
+                    goto EndEscape;
+                }
+                
+                case 'X':   // Erase Character (ECH) -- ESC[ Ⓝ X
+                {
+                    u8 n = atoi(ESC_Buffer);
+
+                    n = n == 0 ? 1 : n;
+
+                    s32 oldsx = TTY_GetSX();
+                    s32 oldsy = TTY_GetSY();
+                    
+                    TTY_MoveCursor(TTY_CURSOR_LEFT, 1);
+
+                    for (u16 i = 0; i < n; i++)
+                    {
+                        TTY_PrintChar(' ');
+                    }
+
+                    TTY_SetSX(oldsx);
+                    TTY_SetSY(oldsy);
+
+                    TTY_MoveCursor(TTY_CURSOR_DUMMY);
+
+                    goto EndEscape;
+                }
+
+                case 'd':   // Line Position Absolute [Row] (VPA)
+                {
+                    u8 n = atoi(ESC_Buffer);
+
+                    TTY_SetSY_A(n-1);
+
+                    goto EndEscape;
+                }
+
+                case 'e':   // Line Position Relative [rows] (VPR)
+                {
+                    u8 n = atoi(ESC_Buffer);
+
+                    TTY_SetSY_A((TTY_GetSY_A() + n) -1);
+
+                    goto EndEscape;
+                }
+
+                case 'm':
+                {
+                    ESC_Param[ESC_ParamSeq++] = atoi(ESC_Buffer);
+
+                    if ((ESC_Param[0] == 38) && (ESC_Param[1] == 5))
+                    {
+                        if (ESC_Param[2] <= 7) TTY_SetAttribute(ESC_Param[2]+30);                                   //   0-  7:  standard colors (as in ESC [ 30–37 m)
+                        else if ((ESC_Param[2] >= 8) && (ESC_Param[2] <= 15)) TTY_SetAttribute(ESC_Param[2]+90);    //   8- 15:  high intensity colors (as in ESC [ 90–97 m)
+                                                                                                                    //  16-231:  6 × 6 × 6 cube (216 colors): 16 + 36 × r + 6 × g + b (0 ≤ r, g, b ≤ 5)
+                                                                                                                    // 232-255:  grayscale from dark to light in 24 steps
+                    }
+                    else if ((ESC_Param[0] == 48) && (ESC_Param[1] == 5))
+                    {
+                        if (ESC_Param[2] <= 7) TTY_SetAttribute(ESC_Param[2]+40);                                   //   0-  7:  standard colors (as in ESC [ 40–47 m)
+                        else if ((ESC_Param[2] >= 8) && (ESC_Param[2] <= 15)) TTY_SetAttribute(ESC_Param[2]+100);   //   8- 15:  high intensity colors (as in ESC [ 100–107 m)
+                                                                                                                    //  16-231:  6 × 6 × 6 cube (216 colors): 16 + 36 × r + 6 × g + b (0 ≤ r, g, b ≤ 5)
+                                                                                                                    // 232-255:  grayscale from dark to light in 24 steps
+                    }
+                    else
+                    {
+                        if (ESC_Param[0] != 255) TTY_SetAttribute(ESC_Param[0]);
+                        if (ESC_Param[1] != 255) TTY_SetAttribute(ESC_Param[1]);
+                        if (ESC_Param[2] != 255) TTY_SetAttribute(ESC_Param[2]);
+                        if (ESC_Param[3] != 255) TTY_SetAttribute(ESC_Param[3]);
+                    }
+
+                    #ifdef ESC_LOGGING
+                    //kprintf("TTY_SetAttribute: 0:<%u> 1:<%u> 2:<%u> 3:<%u>", ESC_Param[0], ESC_Param[1], ESC_Param[2], ESC_Param[3]);
+                    #endif
+
+                    goto EndEscape;
+                }
+
+                case 'n':   // Device Status Report [Dispatch] (DSR)
+                {            
+                    u8 n = atoi(ESC_Buffer);
+                    char str[16] = {'\0'};
+
+                    switch (n)
+                    {
+                        case 5: // Report Operating Status
+                            NET_SendString("[0n");
+                        break;
+
+                        case 6: // Cursor Position Report (CPR)
+                            sprintf(str, "[%ld;%ldR", TTY_GetSY_A(), TTY_GetSX());
+                            NET_SendString(str);
+                        break;
+
+                        case 8: // Set Title to Terminal Name and Version.
+                            // This could easily be set here, however current versions of SMDTC prefixes all titles with this information already
+                        break;
+
+                        default:
+                        break;
+                    }
+
+                    goto EndEscape;
+                }
+
+                case 'p':   // Soft Reset (DECSTR)
+                {            
+                    u8 n = atoi(ESC_Buffer);
+
+                    switch (n)
+                    {
+                        case '!': // Soft Reset.
+                            TELNET_Init();
+                            //TTY_Reset(TRUE);
+                        break;
+
+                        default:
+                        break;
+                    }
+
+                    goto EndEscape;
+                }
+
+                case 'q':   // Select Cursor Style (DECSCUSR) - "ESC [ Ⓝ ␣ q" - (␣ = Space)
+                {            
+                    u8 n = atoi(ESC_Buffer);
+
+                    switch (n)
+                    {
+                        case 0:
+                        case 1: // Select Cursor Style Blinking Block
+                        default:
+                            bDoCursorBlink = TRUE;
+
+                            if (FontSize) LastCursor = 0x13;
+                            else          LastCursor = 0x10;
+                        break;
+                        
+                        case 2: // Select Cursor Style Steady Block
+                            bDoCursorBlink = FALSE;
+                            
+                            if (FontSize) LastCursor = 0x13;
+                            else          LastCursor = 0x10;
+                        break;
+                        
+                        case 3: // Select Cursor Style Blinking Underline
+                            bDoCursorBlink = TRUE;
+
+                            if (FontSize) LastCursor = 0x14;
+                            else          LastCursor = 0x11;
+                        break;
+                        
+                        case 4: // Select Cursor Style Steady Underline
+                            bDoCursorBlink = FALSE;
+                            
+                            if (FontSize) LastCursor = 0x14;
+                            else          LastCursor = 0x11;
+                        break;
+                        
+                        case 5: // Select Cursor Style Blinking Bar
+                            bDoCursorBlink = TRUE;
+
+                            if (FontSize) LastCursor = 0x15;
+                            else          LastCursor = 0x12;
+                        break;
+                        
+                        case 6: // Select Cursor Style Steady Bar
+                            bDoCursorBlink = FALSE;
+                            
+                            if (FontSize) LastCursor = 0x15;
+                            else          LastCursor = 0x12;
+                        break;
+                    }
+
+                    SetSprite_TILE(CURSOR_SPRITE_NUM, LastCursor);
+
+                    //*((vu32*) VDP_CTRL_PORT) = VDP_WRITE_CRAM_ADDR((u32)8); // Cursor CRAM colour address
+                    //*((vu16*) VDP_DATA_PORT) = Cursor_CL;
+
+                    goto EndEscape;
+                }
+
+                case 'r':
+                {
+                    ESC_Param[ESC_ParamSeq++] = atoi(ESC_Buffer);
+                    goto EndEscape;
+                }
+
+                case '_':
+                {
+                    goto EndEscape;
+                }
+
+                case ' ':
+                {
+                    return;
+                }
+
+                default:
+                    if ((byte >= 65) && (byte <= 122)) 
+                    {
+                        #ifdef EMU_BUILD
+                        kprintf("Unhandled $%X  -  u8: %u  -  char: '%c'  -  EscType: %c (EscSeq: %u  -  StreamPos: $%lX)", byte, byte, (char)byte, (char)ESC_Type, ESC_BufferSeq, StreamPos);
+                        #endif
+                        goto EndEscape;
+                    }
                 break;
             }
 
-            SetSprite_TILE(CURSOR_SPRITE_NUM, LastCursor);
-
-            *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_CRAM_ADDR((u32)8); // Cursor CRAM colour address
-            *((vu16*) VDP_DATA_PORT) = Cursor_CL;
-
-            goto EndEscape;
+            ESC_Buffer[ESC_BufferSeq++] = (char)byte;
+            return;
         }
-
-        case 'r':
+    
+        case ']':
         {
-            ESC_Param[ESC_ParamSeq++] = atoi(ESC_Buffer);
-            goto EndEscape;
-        }
+            if (bTitle)
+            {
+                if (byte == 7)
+                {
+                    #ifdef ESC_LOGGING
+                    kprintf("OSC: Change Window Title to %s", ESC_TitleBuffer);
+                    #endif 
 
-        case '_':
-        {
-            goto EndEscape;
-        }
+                    ChangeTitle();
+                    bTitle = FALSE;
+                    goto EndEscape;
+                }
 
-        case ' ':
-        {
+                if (ESC_TitleSeq < 32)
+                {
+                    ESC_TitleBuffer[ESC_TitleSeq++] = byte;
+                }
+
+                return;
+            }
+
+            switch (atoi(ESC_OSCBuffer))
+            {
+                case 2:
+                    #ifdef ESC_LOGGING
+                    kprintf("OSC: Change Window Title");
+                    #endif
+
+                    bTitle = TRUE;
+                break;
+            
+                default:
+                break;
+            }
+
+            switch (byte)
+            {
+                case ';':                    
+                    #ifdef ESC_LOGGING
+                    kprintf("OSC: $%X", atoi(ESC_OSCBuffer));
+                    #endif
+
+                    ESC_OSCBuffer[0] = 0xFF;
+                    ESC_OSCBuffer[1] = '\0';
+                    ESC_OSCSeq = 0;
+                break;
+            
+                default:
+                    if (ESC_OSCSeq < 2)
+                    {
+                        ESC_OSCBuffer[ESC_OSCSeq++] = byte;
+                    }
+                break;
+            }
+
             return;
         }
 
+        case '(':
+        {
+            switch (byte)
+            {
+                case '0':   // DEC Special Character and Line Drawing Set
+                {
+                    CharMapSelection = 1;
+                    #ifdef ESC_LOGGING
+                    kprintf("ESC(0: DEC Special Character and Line Drawing Set");
+                    #endif
+                    break;
+                }
+                
+                case 'B':
+                {
+                    CharMapSelection = 0;
+                    #ifdef ESC_LOGGING
+                    kprintf("ESC(B: United States (USASCII), VT100");
+                    #endif
+                    break;
+                }
+
+                default:
+                {
+                    #ifdef ESC_LOGGING
+                    kprintf("Unknown ESC( sequence - $%X ( %c )", byte, (char)byte);
+                    #endif
+                }
+            }
+
+            goto EndEscape;
+        }
+
+        
         case '?':
         {
-            QSeqNumber = 0;
+            ESC_QBuffer[ESC_QSeq-1] = byte;
+            //kprintf("ESC_Q: $%X - '%c'", ESC_QBuffer[ESC_QSeq-1], (char)ESC_QBuffer[ESC_QSeq-1]);
+
+            if (byte == 'h')
+            {
+                QSeqNumber = atoi16((char*)ESC_QBuffer);
+                //kprintf("QSeqNumber = %u", QSeqNumber);
+
+                switch (QSeqNumber)
+                {
+                    case 6:   // Origin Mode (DECOM), VT100.
+                        vDECOM = TRUE;
+                    break;
+                
+                    case 7:   // Auto-Wrap Mode (DECAWM), VT100.
+                        bWrapAround = TRUE;
+                    break;
+                
+                    case 25:   // Shows the cursor, from the VT220. (DECTCEM)
+                        SetSprite_TILE(CURSOR_SPRITE_NUM, LastCursor);
+                    break;
+
+                    case 69:   // DECSLRM can set margins.
+                        vDECLRMM = TRUE;
+                    break;
+
+                    //case 2004:   // Turn on bracketed paste mode. In bracketed paste mode, text pasted into the terminal will be surrounded by ESC [200~ and ESC [201~; programs running in the terminal should not treat characters bracketed by those sequences as commands (Vim, for example, does not treat them as commands). From xterm
+                    //break;
+
+                    // 1000h = Send Mouse X & Y on button press and release.  See the section Mouse Tracking.  This is the X11 xterm mouse protocol.
+                    // 1006h = Enable SGR Mouse Mode, xterm.
+
+                    // Missing QEsq:
+                    // ?2004h
+                    // ?1049h
+                    // ?1h
+                    // ?25h
+
+                    default:
+                    //kprintf("Got an unknown ?%uh", QSeqNumber);//?%ch", (char)ESC_QBuffer[0]);
+                    break;
+                }
+
+                goto EndEscape;
+            }
+
+            if (byte == 'l')
+            {
+                QSeqNumber = atoi16((char*)ESC_QBuffer);
+                //kprintf("QSeqNumber = %u", QSeqNumber);
+
+                switch (QSeqNumber)
+                {
+                    case 6:   // Normal Cursor Mode (DECOM), VT100.
+                        vDECOM = FALSE;
+                    break;
+                
+                    case 7:   // No Auto-Wrap Mode (DECAWM), VT100.
+                        bWrapAround = FALSE;
+                    break;
+                
+                    case 25:   // Hides the cursor. (DECTCEM)
+                        SetSprite_TILE(CURSOR_SPRITE_NUM, 0x2016);
+                    break;
+
+                    case 69:   // DECSLRM cannot set margins.
+                        vDECLRMM = FALSE;
+                    break;
+
+                    //case 2004:   // Turn off bracketed paste mode. 
+                    //break;
+
+
+                    default:
+                    //kprintf("Got an unknown ?%cl", (char)ESC_QBuffer[0]);
+                    //kprintf("Got an unknown ?%ul", QSeqNumber);//?%ch", (char)ESC_QBuffer[0]);
+                    break;
+                }
+
+                goto EndEscape;
+            }
+
+            if (ESC_QSeq > 5) 
+            {
+                //for (u8 i = 0; i < 6; i++) kprintf("ESC_QBuffer[%u] = $%X (%c)", i, ESC_QBuffer[i], (char)ESC_QBuffer[i]);
+                goto EndEscape;
+            }
+
             ESC_QSeq++;
+
             return;
         }
 
         default:
-            if ((byte >= 65) && (byte <= 122)) 
+            if (ESC_Seq == 1)
             {
-                #ifdef EMU_BUILD
-                kprintf("Unhandled $%X  -  u8: %u  -  char: '%c'  -  EscType: %c (EscSeq: %u  -  StreamPos: $%lX)", byte, byte, (char)byte, (char)ESC_Type, ESC_BufferSeq, StreamPos);
+                ESC_Type = byte;
+                
+                #ifdef ESC_LOGGING
+                kprintf("ESC_Type: $%X ( %c )", ESC_Type, (char)ESC_Type);
                 #endif
-                goto EndEscape;
+
+                switch (ESC_Type)
+                {        
+                    case '=':   // ESC =     Application Keypad (DECKPAM).
+                        goto EndEscape;
+                    break;
+
+                    case '>':   // ESC >     Normal Keypad (DECKPNM), VT100.
+                        goto EndEscape;
+                    break;
+
+                    case 'M':   // ESC M     Reverse Index (RI) https://terminalguide.namepad.de/seq/a_esc_cm/  (Old note: Moves cursor one line up, scrolling if needed)
+                        // Not quite right, but eh
+                        TTY_MoveCursor(TTY_CURSOR_UP, 1);
+                        goto EndEscape;
+                    break;
+                    
+                    case '7':   // Save Cursor (DECSC) (ESC 7)
+                    {
+                        Saved_sx = TTY_GetSX();
+                        Saved_sy = TTY_GetSY();
+                        goto EndEscape;
+                    }
+
+                    case '8':   // Restore Cursor (DECRC) (ESC 8)
+                    {
+                        TTY_SetSX(Saved_sx);
+                        TTY_SetSY(Saved_sy);
+                        goto EndEscape;
+                    }
+                
+                    default:
+                    break;
+                }
+
+                return;
             }
         break;
     }
-
-    ESC_Buffer[ESC_BufferSeq++] = (char)byte;
 
     return;
 
@@ -1160,26 +1147,19 @@ static inline void DoEscape(u8 byte)
         bESCAPE = FALSE;
         ESC_Seq = 0;
         ESC_Type = 0;
+        
         ESC_Param[0] = 0xFF;
         ESC_Param[1] = 0xFF;
         ESC_Param[2] = 0xFF;
         ESC_Param[3] = 0xFF;
+
         ESC_ParamSeq = 0;
         ESC_Buffer[0] = '\0';
         ESC_Buffer[1] = '\0';
-        ESC_Buffer[2] = '\0';
-        ESC_Buffer[3] = '\0';
+        /*ESC_Buffer[2] = '\0';
+        ESC_Buffer[3] = '\0';*/
         ESC_BufferSeq = 0;
-        /*ESC_QBuffer[0] = 0;
-        ESC_QBuffer[1] = 0;
-        ESC_QBuffer[2] = 0;
-        ESC_QBuffer[3] = 0;
-        ESC_QBuffer[4] = 0;
-        ESC_QBuffer[5] = 0;*/
         ESC_QSeq = 0;
-        
-        //ESC_OSCBuffer[0] = 0xFF;
-        //ESC_OSCBuffer[1] = '\0';
         ESC_OSCSeq = 0;
         return;
     }

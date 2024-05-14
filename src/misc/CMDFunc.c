@@ -117,7 +117,7 @@ void CMD_Help(u8 argc, char *argv[])
     while (CMDList[i].id != 0)
     {
         strclr(tmp);
-        sprintf(tmp, "%10s %-30s\n", CMDList[i].id, CMDList[i].desc);
+        sprintf(tmp, "%10s %-28s\n", CMDList[i].id, CMDList[i].desc);
         PrintOutput(tmp);
 
         i++;
