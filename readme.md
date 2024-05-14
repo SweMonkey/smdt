@@ -24,10 +24,10 @@ xPico/RetroLink support as an alternative to the above is being worked on.<br>
 > I (smds) will not take any responsibilities for any failure to read and understand the above warning.<br>
 <br>
 
-## Credits
+## Thanks to:
 b1tsh1ft3r - Testing, improvement ideas and RetroLink/xPico support<br>
 RKT - For creating a 4x8 extended ASCII font tileset<br>
-smds - Code<br>
+Stef - For creating [SGDK](https://github.com/Stephane-D/SGDK)<br>
 <br>
 
 ## Building SMDTC from source
