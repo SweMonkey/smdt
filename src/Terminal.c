@@ -121,8 +121,6 @@ void TTY_Reset(u8 bClearScreen)
     }
 
     TTY_MoveCursor(TTY_CURSOR_DUMMY);
-
-    InactiveCounter = 0;
 }
 
 void TTY_SetColumns(u8 col)
@@ -264,10 +262,10 @@ void TTY_SetFontSize(u8 size)
     spry = spry >= 504 ? 504 : spry;
 
     // Setup cursor sprite
-    SetSprite_Y(CURSOR_SPRITE_NUM, spry);
-    SetSprite_X(CURSOR_SPRITE_NUM, sprx);
-    SetSprite_SIZELINK(CURSOR_SPRITE_NUM, SPR_SIZE_1x1, 0);
-    SetSprite_TILE(CURSOR_SPRITE_NUM, LastCursor);
+    SetSprite_Y(SPRITE_ID_CURSOR, spry);
+    SetSprite_X(SPRITE_ID_CURSOR, sprx);
+    SetSprite_SIZELINK(SPRITE_ID_CURSOR, SPR_SIZE_1x1, 0);
+    SetSprite_TILE(SPRITE_ID_CURSOR, LastCursor);
 }
 
 inline void TTY_PrintChar(u8 c)
@@ -675,7 +673,7 @@ inline void TTY_MoveCursor(u8 dir, u8 num)
                     }
                     
                     spry = (sy << 3) - VScroll + 128;
-                    SetSprite_Y(CURSOR_SPRITE_NUM, spry);
+                    SetSprite_Y(SPRITE_ID_CURSOR, spry);
                 }
                 TTY_SetSX((sx+num)-C_XMAX-2);
             }
@@ -685,7 +683,7 @@ inline void TTY_MoveCursor(u8 dir, u8 num)
             }
 
             sprx = ((FontSize?(sx << 2):(sx << 3))) + HScroll + 128;
-            SetSprite_X(CURSOR_SPRITE_NUM, sprx);
+            SetSprite_X(SPRITE_ID_CURSOR, sprx);
         break;
 
         case TTY_CURSOR_DOWN:
@@ -704,7 +702,7 @@ inline void TTY_MoveCursor(u8 dir, u8 num)
             }
 
             spry = (sy << 3) - VScroll + 128;
-            SetSprite_Y(CURSOR_SPRITE_NUM, spry);
+            SetSprite_Y(SPRITE_ID_CURSOR, spry);
         break;
 
         case TTY_CURSOR_UP:
@@ -719,7 +717,7 @@ inline void TTY_MoveCursor(u8 dir, u8 num)
                 spry = (sy << 3) - VScroll + 128;
             }
 
-            SetSprite_Y(CURSOR_SPRITE_NUM, spry);
+            SetSprite_Y(SPRITE_ID_CURSOR, spry);
         break;
 
         case TTY_CURSOR_LEFT:
@@ -730,7 +728,7 @@ inline void TTY_MoveCursor(u8 dir, u8 num)
                 {
                     sy--;
                     spry = (sy << 3) - VScroll + 128;
-                    SetSprite_Y(CURSOR_SPRITE_NUM, spry);
+                    SetSprite_Y(SPRITE_ID_CURSOR, spry);
                 }
             }
             else
@@ -739,7 +737,7 @@ inline void TTY_MoveCursor(u8 dir, u8 num)
             }
 
             sprx = ((FontSize?(sx << 2):(sx << 3))) + HScroll + 128;
-            SetSprite_X(CURSOR_SPRITE_NUM, sprx);
+            SetSprite_X(SPRITE_ID_CURSOR, sprx);
         break;
 
         default:
@@ -748,11 +746,8 @@ inline void TTY_MoveCursor(u8 dir, u8 num)
             spry = (sy << 3) - VScroll + 128;
 
             // Update sprite position
-            SetSprite_Y(CURSOR_SPRITE_NUM, spry);
-            SetSprite_X(CURSOR_SPRITE_NUM, sprx);
+            SetSprite_Y(SPRITE_ID_CURSOR, spry);
+            SetSprite_X(SPRITE_ID_CURSOR, sprx);
         break;
     }
-
-    // Reset screensaver activation counter
-    InactiveCounter = 0;
 }

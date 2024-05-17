@@ -268,7 +268,7 @@ void DetectDevices()
 }
 
 /// @brief Initialize device manager and find/init devices
-void InitDeviceManager()
+void DeviceManager_Init()
 {
     for (u8 s = 0; s < DEV_MAX; s++)
     {

@@ -84,6 +84,6 @@ extern bool bRLNetwork;
 extern bool bXPNetwork;
 
 void SetDevicePort(SM_Device *d, DevPort p);
-void InitDeviceManager();
+void DeviceManager_Init();
 
 #endif // DEVMGR_H_INCLUDED

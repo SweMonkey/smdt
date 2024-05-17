@@ -1,96 +1,93 @@
 #include "TMBuffer.h"
 #include "Terminal.h"
+#include "Utils.h"
 
 TMBuffer *TMB_Ptr = NULL;   // Work buffer
 
-#define TMBATTR_BGA (FontSize?0x4140:0x2140)
-#define TMBATTR_BGB (FontSize?0x4140:0x4000)
+#define TMBATTR_BGA (FontSize?(0x4100 + AVR_FONT0):(0x2100 + AVR_FONT0))
+#define TMBATTR_BGB (FontSize?(0x4100 + AVR_FONT0):(0x4000 + AVR_FONT0))
 
 
 void TMB_UploadBuffer(TMBuffer *tptr)
 {
-    if (tptr == NULL) return;
-
-    if (tptr->Updates == 0) return;
-
-    vu32 *plctrl = (u32 *)VDP_CTRL_PORT;
-    vu16 *pwdata = (u16 *)VDP_DATA_PORT;
+    if ((tptr == NULL) || (tptr->Updates == 0)) return;
     
-    VDP_setAutoInc(2);
-    
+    *((vu16*) VDP_CTRL_PORT) = 0x8F02;  // Set VDP autoinc to 2
+
+    // Upload/update dirty BGA tilemap in VRAM
     u16 Updates = tptr->Updates;
     u16 Addr = tptr->LastAddr;
 
-    *plctrl = VDP_WRITE_VRAM_ADDR(0xC000 + (Addr<<1));
+    *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(AVR_PLANE_A + (Addr<<1));
     while (Updates--)
     {
-        *pwdata = TMBATTR_BGA + tptr->BufferA[Addr++];
+        *((vu16*) VDP_DATA_PORT) = TMBATTR_BGA + tptr->BufferA[Addr++];
 
         if (Addr > 0xFFF)
         {
             Addr = 0;
-            *plctrl = VDP_WRITE_VRAM_ADDR(0xC000);
+            *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(AVR_PLANE_A);
         }
     }
 
+    // Upload/update dirty BGB tilemap in VRAM
     Updates = tptr->Updates;
     Addr = tptr->LastAddr;
 
-    *plctrl = VDP_WRITE_VRAM_ADDR(0xE000 + (Addr<<1));
+    *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(AVR_PLANE_B + (Addr<<1));
     while (Updates--)
     {
-        *pwdata = TMBATTR_BGB + tptr->BufferB[Addr++];
+        *((vu16*) VDP_DATA_PORT) = TMBATTR_BGB + tptr->BufferB[Addr++];
 
         if (Addr > 0xFFF)
         {
             Addr = 0;
-            *plctrl = VDP_WRITE_VRAM_ADDR(0xE000);
+            *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(AVR_PLANE_B);
         }
     }
 
     tptr->Updates = 0;
 
     // Update vertical scroll
-    *plctrl = VDP_WRITE_VSRAM_ADDR((u32) 0);    // 0x40000010;
-    *pwdata = tptr->VScroll;
-    *plctrl = VDP_WRITE_VSRAM_ADDR((u32) 2);    // 0x40020010;
-    *pwdata = tptr->VScroll;
+    *((vu32*) VDP_CTRL_PORT) = 0x40000010;
+    *((vu16*) VDP_DATA_PORT) = tptr->VScroll;
+    *((vu32*) VDP_CTRL_PORT) = 0x40020010;
+    *((vu16*) VDP_DATA_PORT) = tptr->VScroll;
 }
 
 void TMB_UploadBufferFull(TMBuffer *tptr)
 {
     if (tptr == NULL) return;
-
-    vu32 *plctrl = (u32 *)VDP_CTRL_PORT;
-    vu16 *pwdata = (u16 *)VDP_DATA_PORT;
     
-    VDP_setAutoInc(2);
+    *((vu16*) VDP_CTRL_PORT) = 0x8F02;  // Set VDP autoinc to 2
     
+    // Upload/update full BGA tilemap in VRAM
     u16 Updates = TMB_BUFFER_SIZE;
     u16 Addr = 0;
 
-    *plctrl = VDP_WRITE_VRAM_ADDR(0xC000 + (Addr<<1));
+    *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(AVR_PLANE_A + (Addr<<1));
     while (Updates--)
     {
-        *pwdata = TMBATTR_BGA + tptr->BufferA[Addr++];
+        *((vu16*) VDP_DATA_PORT) = TMBATTR_BGA + tptr->BufferA[Addr++];
     }
 
+    // Upload/update full BGB tilemap in VRAM
     Updates = TMB_BUFFER_SIZE;
     Addr = 0;
 
-    *plctrl = VDP_WRITE_VRAM_ADDR(0xE000 + (Addr<<1));
+    *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(AVR_PLANE_B + (Addr<<1));
     while (Updates--)
     {
-        *pwdata = TMBATTR_BGB + tptr->BufferB[Addr++];
+        *((vu16*) VDP_DATA_PORT) = TMBATTR_BGB + tptr->BufferB[Addr++];
     }
 
     tptr->Updates = 0;
 
     // Update vertical scroll
-    *plctrl = VDP_WRITE_VSRAM_ADDR((u32) 0);    // 0x40000010;
-    *pwdata = tptr->VScroll;
-    *plctrl = VDP_WRITE_VSRAM_ADDR((u32) 2);    // 0x40020010;
-    *pwdata = tptr->VScroll;
+    *((vu32*) VDP_CTRL_PORT) = 0x40000010;
+    *((vu16*) VDP_DATA_PORT) = tptr->VScroll;
+    *((vu32*) VDP_CTRL_PORT) = 0x40020010;
+    *((vu16*) VDP_DATA_PORT) = tptr->VScroll;
 }
 
 u8 TMB_SetActiveBuffer(TMBuffer *b)
@@ -107,11 +104,11 @@ void TMB_PrintChar(u8 c)
 
     u16 addr = 0;
 
-    if (FontSize)
+    if (FontSize)   // 4x8 font
     {
-        addr = ((TMB_Ptr->sy%32) *128) + (TMB_Ptr->sx/2);
+        addr = ((TMB_Ptr->sy & 31) << 7) + (TMB_Ptr->sx >> 1);
 
-        switch (TMB_Ptr->sx % 2)
+        switch (TMB_Ptr->sx & 1)
         {
             case 0: // Plane B
             {
@@ -129,9 +126,9 @@ void TMB_PrintChar(u8 c)
             break;
         }
     }
-    else
+    else    // 8x8 font
     {
-        addr = ((TMB_Ptr->sy%32) *128) + TMB_Ptr->sx;
+        addr = ((TMB_Ptr->sy & 31) << 7) + TMB_Ptr->sx;
         TMB_Ptr->BufferA[addr] = c;
         TMB_Ptr->BufferB[addr] = TMB_Ptr->ColorFG;
     }
@@ -145,18 +142,16 @@ void TMB_PrintChar(u8 c)
 
 void TMB_PrintString(const char *str)
 {
-    for (u16 c = 0; c < strlen(str); c++)
-    {
-        TMB_PrintChar(str[c]);
-    }
+    u16 i = 0;
+    while (str[i] != '\0') TMB_PrintChar(str[i++]);
 }
 
 void TMB_ClearLine(u16 y, u16 line_count)
 {
     if (TMB_Ptr == NULL) return;
 
-    u16 addr = (y%32) * 128;
-    u16 count = line_count * 128;
+    u16 addr = (y & 31) << 7;
+    u16 count = line_count << 7;
 
     memset(TMB_Ptr->BufferA+addr, 0, count);
     memset(TMB_Ptr->BufferB+addr, 0, count);
@@ -189,7 +184,7 @@ void TMB_MoveCursor(u8 dir, u8 num)
             if (TMB_Ptr->sy > (C_YMAX + (TMB_Ptr->VScroll >> 3)))
             {
                 TMB_Ptr->VScroll += 8 * num;
-                TMB_Ptr->VScroll %= 256;
+                TMB_Ptr->VScroll &= 0xFF;
             }
         break;
 
@@ -217,7 +212,7 @@ void TMB_MoveCursor(u8 dir, u8 num)
                     {
                         //TMB_ClearLine(TMB_Ptr->sy, 1);
                         TMB_Ptr->VScroll += 8;
-                        TMB_Ptr->VScroll %= 256;
+                        TMB_Ptr->VScroll &= 0xFF;
                     }
                 }
                 TMB_SetSX((TMB_Ptr->sx+num)-C_XMAX-2);

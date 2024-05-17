@@ -24,3 +24,6 @@ TILESET GFX_POINTER "mouse.png" NONE NONE
 
 # Logo
 IMAGE GFX_LOGO "logo_old.png" BEST ALL
+
+# Screensaver sprite tiles
+TILESET GFX_SCRSAV "screensaverball.png" NONE NONE

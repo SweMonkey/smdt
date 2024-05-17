@@ -400,7 +400,7 @@ static inline void DoEscape(u8 byte)
 
                         case 0x19:
                         case 0xF5: // Make cursor visible   ($F5 is actually ESC[?25h )
-                            SetSprite_TILE(CURSOR_SPRITE_NUM, LastCursor);
+                            SetSprite_TILE(SPRITE_ID_CURSOR, LastCursor);
                         break;
 
                         default:
@@ -422,7 +422,7 @@ static inline void DoEscape(u8 byte)
 
                         case 0x19:
                         case 0xF5: // Make cursor invisible   ($F5 is actually ESC[?25l )
-                            SetSprite_TILE(CURSOR_SPRITE_NUM, 0x16);
+                            SetSprite_TILE(SPRITE_ID_CURSOR, 0x16);
                         break;
 
                         default:
@@ -864,7 +864,7 @@ static inline void DoEscape(u8 byte)
                         break;
                     }
 
-                    SetSprite_TILE(CURSOR_SPRITE_NUM, LastCursor);
+                    SetSprite_TILE(SPRITE_ID_CURSOR, LastCursor);
 
                     //*((vu32*) VDP_CTRL_PORT) = VDP_WRITE_CRAM_ADDR((u32)8); // Cursor CRAM colour address
                     //*((vu16*) VDP_DATA_PORT) = Cursor_CL;
@@ -1018,7 +1018,7 @@ static inline void DoEscape(u8 byte)
                     break;
                 
                     case 25:   // Shows the cursor, from the VT220. (DECTCEM)
-                        SetSprite_TILE(CURSOR_SPRITE_NUM, LastCursor);
+                        SetSprite_TILE(SPRITE_ID_CURSOR, LastCursor);
                     break;
 
                     case 69:   // DECSLRM can set margins.
@@ -1061,7 +1061,7 @@ static inline void DoEscape(u8 byte)
                     break;
                 
                     case 25:   // Hides the cursor. (DECTCEM)
-                        SetSprite_TILE(CURSOR_SPRITE_NUM, 0x2016);
+                        SetSprite_TILE(SPRITE_ID_CURSOR, 0x2016);
                     break;
 
                     case 69:   // DECSLRM cannot set margins.

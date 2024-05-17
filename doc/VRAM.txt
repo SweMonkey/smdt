@@ -6,7 +6,8 @@ $10  - $15      Cursor tiles (Block/Line/Bar 8x8/4x8)
 $16             Blank/invisible cursor tile
 $17             Mouse pointer cursor
 $18  - $1F      Icons
-$20  - $3F      Free (32 tiles) - 16 tiles being eyed for screensaver sprite
+$20  - $2F      Screensaver sprite tiles (16 tiles) - Used by boot logo on startup
+$30  - $3F      Free (16 tiles)                     - Used by boot logo on startup
 $40  - $23F     Terminal ASCII font
 $240 - $43F     Terminal ASCII font duplicate used for 80 column colour support otherwise free (480 tiles)
 $440 - $4FF     Menu ASCII font

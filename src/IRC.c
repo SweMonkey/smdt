@@ -21,16 +21,13 @@ static struct s_linebuf
     char prefix[B_PREFIX_LEN];
     char command[B_COMMAND_LEN];
     char param[16][B_PARAM_LEN];
-} LineBuf =
-{
-    {0}, {0}, {{0}}
-};
+} *LineBuf = NULL;
 
 static bool CR_Set = FALSE;
 static u8 bLookingForCL = 0;
 static u8 NewColor = 0;
 
-static char RXString[1024];
+static char *RXString;
 static u16 RXStringSeq = 0;
 
 bool bFirstRun = TRUE;
@@ -46,8 +43,8 @@ static const u16 pColors[16] =
 
 u8 PG_CurrentIdx = 0;
 u8 PG_OpenPages = 1;
-TMBuffer PG_Buffer[MAX_CHANNELS];
-char PG_UserList[512][16];
+TMBuffer *PG_Buffer[MAX_CHANNELS] = {NULL};
+char *PG_UserList[512] = {NULL};
 u16 PG_UserNum = 0;
 u16 UserIterator = 0;
 
@@ -70,21 +67,56 @@ void IRC_Reset()
     vDoEcho = 1;
     vLineMode = 1;
     bFirstRun = TRUE;
-
     Cursor_CL = 0x0E0;
     LastCursor = 0x12;
 
+    // Allocate and setup channel slots
     for (u8 ch = 0; ch < MAX_CHANNELS; ch++)
     {
-        strcpy(PG_Buffer[ch].Title, PG_EMPTYNAME);
-        PG_Buffer[ch].sy = C_YSTART;
+        if (PG_Buffer[ch] == NULL)
+        {
+            PG_Buffer[ch] = malloc(sizeof(TMBuffer));
+            if (PG_Buffer[ch] == NULL) 
+            {
+                kprintf("Failed to allocate memory for PG_Buffer[%u]", ch);
+                SYS_hardReset();
+            }
+        }
+        
+        memset(PG_Buffer[ch], 0, sizeof(TMBuffer));
 
-        TMB_SetActiveBuffer(&PG_Buffer[ch]);
+        strcpy(PG_Buffer[ch]->Title, PG_EMPTYNAME);
+        PG_Buffer[ch]->sy = C_YSTART;
+
+        TMB_SetActiveBuffer(PG_Buffer[ch]);
         TMB_ClearBuffer();
     }
 
+    // Allocate line buffer
+    if (LineBuf == NULL)
+    {
+        LineBuf = malloc(sizeof(struct s_linebuf));
+        if (LineBuf == NULL) 
+        {
+            kprintf("Failed to allocate memory for LineBuf");
+            SYS_hardReset();
+        }
+    }
+
+    // Allocate RXString buffer
+    if (RXString == NULL)
+    {
+        RXString = malloc(1024);
+        if (RXString == NULL) 
+        {
+            kprintf("Failed to allocate memory for RXString");
+            SYS_hardReset();
+        }
+    }
+
+    // Set defaults
     PG_CurrentIdx = 0;
-    TMB_SetActiveBuffer(&PG_Buffer[PG_CurrentIdx]);
+    TMB_SetActiveBuffer(PG_Buffer[PG_CurrentIdx]);
     PG_OpenPages = 1;
 
     // Setup the cursor for the typing input box at the bottom of the screen
@@ -101,14 +133,51 @@ void IRC_Reset()
 
     // Final 10th textbox
     SetSprite_Y(10, spr_y);
-    SetSprite_SIZELINK(10, SPR_WIDTH_3x1, 0);
+    SetSprite_SIZELINK(10, SPR_WIDTH_3x1, SPRITE_ID_SCRSAV);
     SetSprite_TILE(10, 0x2000+TTS_VRAMIDX+36);
     SetSprite_X(10, spr_x+288);
 
     // Setup cursor sprite y position and tile
-    SetSprite_Y(CURSOR_SPRITE_NUM, spr_y);
-    SetSprite_TILE(CURSOR_SPRITE_NUM, LastCursor);
-    SetSprite_SIZELINK(CURSOR_SPRITE_NUM, 0, 1);
+    SetSprite_Y(SPRITE_ID_CURSOR, spr_y);
+    SetSprite_TILE(SPRITE_ID_CURSOR, LastCursor);
+    SetSprite_SIZELINK(SPRITE_ID_CURSOR, 0, 1);
+}
+
+void IRC_Exit()
+{
+    char buf[64];
+    sprintf(buf, "QUIT %s\n", vQuitStr);
+    NET_SendString(buf);
+
+    for (u8 ch = 0; ch < MAX_CHANNELS; ch++)
+    {
+        if (PG_Buffer[ch] != NULL)
+        {
+            free(PG_Buffer[ch]);
+            PG_Buffer[ch] = NULL;
+        }
+    }
+
+    for (u16 i = 0; i < PG_UserNum; i++)
+    {
+        if (PG_UserList[i] != NULL)
+        {
+            free(PG_UserList[i]);
+            PG_UserList[i] = NULL;
+        }
+    }
+
+    if (LineBuf != NULL) 
+    {
+        free(LineBuf);
+        LineBuf = NULL;
+    }
+
+    if (RXString != NULL) 
+    {
+        free(RXString);
+        RXString = NULL;
+    }
 }
 
 // Text input at bottom of screen
@@ -129,7 +198,7 @@ void PrintTextLine(const u8 *str)
     }
 
     // Update cursor X position
-    SetSprite_X(CURSOR_SPRITE_NUM, (spr_x*8)+136);
+    SetSprite_X(SPRITE_ID_CURSOR, (spr_x*8)+136);
 
     return;
 }
@@ -277,17 +346,17 @@ void IRC_DoCommand()
     char ChanBuf[40];   // Channel name
     
 
-    strncpy(ChanBuf, PG_Buffer[0].Title, 40);
+    strncpy(ChanBuf, PG_Buffer[0]->Title, 40);
 
-    if (LineBuf.param[1][0] == 1)
+    if (LineBuf->param[1][0] == 1)
     {
         u16 end = 1;
-        while ((LineBuf.prefix[end++] != '!') && (end < B_SUBPREFIX_LEN));
-        strncpy(subprefix, LineBuf.prefix, end-1);
+        while ((LineBuf->prefix[end++] != '!') && (end < B_SUBPREFIX_LEN));
+        strncpy(subprefix, LineBuf->prefix, end-1);
 
         end = 1;
-        while (((LineBuf.param[1][end++] != ' ') && (LineBuf.param[1][end++] != 1)) && (end < B_SUBPREFIX_LEN));  // != 1
-        strncpy(subparam, LineBuf.param[1]+1, end-2);
+        while (((LineBuf->param[1][end++] != ' ') && (LineBuf->param[1][end++] != 1)) && (end < B_SUBPREFIX_LEN));  // != 1
+        strncpy(subparam, LineBuf->param[1]+1, end-2);
 
         if (strcmp(subparam, "VERSION") == 0)
         {
@@ -300,11 +369,11 @@ void IRC_DoCommand()
         else if (strcmp(subparam, "ACTION") == 0)
         {
             u16 start = end;
-            while ((LineBuf.param[1][end++] != 1) && (start+end < B_SUBPREFIX_LEN));  // != 1
-            strncpy(subparam, LineBuf.param[1]+start, end-2);
+            while ((LineBuf->param[1][end++] != 1) && (start+end < B_SUBPREFIX_LEN));  // != 1
+            strncpy(subparam, LineBuf->param[1]+start, end-2);
 
             snprintf(PrintBuf, B_PRINTSTR_LEN, "* %s %s\n", subprefix, subparam);
-            strncpy(ChanBuf, LineBuf.param[0], 40);
+            strncpy(ChanBuf, LineBuf->param[0], 40);
         }
         else
         {
@@ -317,75 +386,75 @@ void IRC_DoCommand()
             }
         }
     }
-    else if (strcmp(LineBuf.command, "PING") == 0)
+    else if (strcmp(LineBuf->command, "PING") == 0)
     {
-        snprintf(PrintBuf, B_PRINTSTR_LEN, "PONG %s\n", LineBuf.param[0]);
+        snprintf(PrintBuf, B_PRINTSTR_LEN, "PONG %s\n", LineBuf->param[0]);
         NET_SendString(PrintBuf);
 
         return;
     }
-    else if (strcmp(LineBuf.command, "NOTICE") == 0)
+    else if (strcmp(LineBuf->command, "NOTICE") == 0)
     {
         u16 end = 1;
-        while ((LineBuf.prefix[end++] != '!') && (end < B_SUBPREFIX_LEN));
-        strncpy(subprefix, LineBuf.prefix, end-1);
+        while ((LineBuf->prefix[end++] != '!') && (end < B_SUBPREFIX_LEN));
+        strncpy(subprefix, LineBuf->prefix, end-1);
 
-        snprintf(PrintBuf, B_PRINTSTR_LEN, "[Notice] -%s- %s\n", subprefix, LineBuf.param[1]);
+        snprintf(PrintBuf, B_PRINTSTR_LEN, "[Notice] -%s- %s\n", subprefix, LineBuf->param[1]);
     }
-    else if (strcmp(LineBuf.command, "ERROR") == 0)
+    else if (strcmp(LineBuf->command, "ERROR") == 0)
     {
-        snprintf(PrintBuf, B_PRINTSTR_LEN, "[Error] %s %s\n", LineBuf.prefix, LineBuf.param[0]);
+        snprintf(PrintBuf, B_PRINTSTR_LEN, "[Error] %s %s\n", LineBuf->prefix, LineBuf->param[0]);
     }
-    else if (strcmp(LineBuf.command, "PRIVMSG") == 0)
+    else if (strcmp(LineBuf->command, "PRIVMSG") == 0)
     {
         // Extract nickname from <nick>!<<hostname>
         u16 end = 1;
-        while ((LineBuf.prefix[end++] != '!') && (end < B_SUBPREFIX_LEN));
-        strncpy(subprefix, LineBuf.prefix, end-1);
+        while ((LineBuf->prefix[end++] != '!') && (end < B_SUBPREFIX_LEN));
+        strncpy(subprefix, LineBuf->prefix, end-1);
 
-        snprintf(PrintBuf, B_PRINTSTR_LEN, "%s: %s\n", subprefix, LineBuf.param[1]);
+        snprintf(PrintBuf, B_PRINTSTR_LEN, "%s: %s\n", subprefix, LineBuf->param[1]);
 
-        if (strcmp(LineBuf.param[0], vUsername) == 0)
+        if (strcmp(LineBuf->param[0], vUsername) == 0)
         {
             strncpy(ChanBuf, subprefix, 40);
         }
         else 
         {
-            strncpy(ChanBuf, LineBuf.param[0], 40);
+            strncpy(ChanBuf, LineBuf->param[0], 40);
         }
     }
-    else if (strcmp(LineBuf.command, "JOIN") == 0)
+    else if (strcmp(LineBuf->command, "JOIN") == 0)
     {
         // Extract nickname from <nick>!<<hostname>
         u16 end = 1;
-        while ((LineBuf.prefix[end++] != '!') && (end < B_SUBPREFIX_LEN));
-        strncpy(subprefix, LineBuf.prefix, end-1);
+        while ((LineBuf->prefix[end++] != '!') && (end < B_SUBPREFIX_LEN));
+        strncpy(subprefix, LineBuf->prefix, end-1);
 
         if (strcmp(subprefix, vUsername) != 0)
         {
-            snprintf(PrintBuf, B_PRINTSTR_LEN, "%s has joined the channel\n", LineBuf.prefix);
-            strncpy(ChanBuf, LineBuf.param[0], 40);
+            snprintf(PrintBuf, B_PRINTSTR_LEN, "%s has joined the channel\n", LineBuf->prefix);
+            strncpy(ChanBuf, LineBuf->param[0], 40);
         }
     }
-    else if (strcmp(LineBuf.command, "QUIT") == 0)  // Todo: figure out which channel this user is in
+    else if (strcmp(LineBuf->command, "QUIT") == 0)  // Todo: figure out which channel this user is in
     {
         // Extract nickname from <nick>!<<hostname>
         u16 end = 1;
-        while ((LineBuf.prefix[end++] != '!') && (end < B_SUBPREFIX_LEN));
-        strncpy(subprefix, LineBuf.prefix, end-1);
+        while ((LineBuf->prefix[end++] != '!') && (end < B_SUBPREFIX_LEN));
+        strncpy(subprefix, LineBuf->prefix, end-1);
 
         if (strcmp(subprefix, vUsername) != 0)
         {
-            snprintf(PrintBuf, B_PRINTSTR_LEN, "%s: %s\n", subprefix, LineBuf.param[0]);
+            snprintf(PrintBuf, B_PRINTSTR_LEN, "%s: %s\n", subprefix, LineBuf->param[0]);
         }
     }
-    else if (strcmp(LineBuf.command, "MODE") == 0)
+    else if (strcmp(LineBuf->command, "MODE") == 0)
     {
-        snprintf(PrintBuf, B_PRINTSTR_LEN, "[Mode] You have set personal modes: %s\n", LineBuf.param[1]);
+        snprintf(PrintBuf, B_PRINTSTR_LEN, "[Mode] You have set personal modes: %s\n", LineBuf->param[1]);
     }
     else
     {
-        u16 cmd = atoi16(LineBuf.command);
+        u16 cmd = atoi16(LineBuf->command);
 
         switch (cmd)
         {
@@ -397,19 +466,19 @@ void IRC_DoCommand()
             case 2:
             case 3:
             {
-                snprintf(PrintBuf, B_PRINTSTR_LEN, "[Welcome] %s\n", LineBuf.param[1]);
-                strncpy(ChanBuf, LineBuf.prefix, 40);
+                snprintf(PrintBuf, B_PRINTSTR_LEN, "[Welcome] %s\n", LineBuf->param[1]);
+                strncpy(ChanBuf, LineBuf->prefix, 40);
                 break;
             }
             case 4:
             {
-                snprintf(PrintBuf, B_PRINTSTR_LEN, "[Welcome] Server %s (%s), User modes: %s, Channel modes: %s\n", LineBuf.param[1], LineBuf.param[2], LineBuf.param[3], LineBuf.param[4]);
+                snprintf(PrintBuf, B_PRINTSTR_LEN, "[Welcome] Server %s (%s), User modes: %s, Channel modes: %s\n", LineBuf->param[1], LineBuf->param[2], LineBuf->param[3], LineBuf->param[4]);
                 break;
             }
             case 5:
             {
-                snprintf(PrintBuf, B_PRINTSTR_LEN, "[Support] %s %s %s %s %s %s %s %s %s %s %s %s %s %s\n", LineBuf.param[1], LineBuf.param[2], LineBuf.param[3], LineBuf.param[4], LineBuf.param[5], LineBuf.param[6], LineBuf.param[7], 
-                                                                                                            LineBuf.param[8], LineBuf.param[9], LineBuf.param[10], LineBuf.param[11], LineBuf.param[12], LineBuf.param[13], LineBuf.param[14]);
+                snprintf(PrintBuf, B_PRINTSTR_LEN, "[Support] %s %s %s %s %s %s %s %s %s %s %s %s %s %s\n", LineBuf->param[1], LineBuf->param[2], LineBuf->param[3], LineBuf->param[4], LineBuf->param[5], LineBuf->param[6], LineBuf->param[7], 
+                                                                                                            LineBuf->param[8], LineBuf->param[9], LineBuf->param[10], LineBuf->param[11], LineBuf->param[12], LineBuf->param[13], LineBuf->param[14]);
                 break;
             }
             case 250:
@@ -419,25 +488,25 @@ void IRC_DoCommand()
             case 265:
             case 266:
             {
-                snprintf(PrintBuf, B_PRINTSTR_LEN, "[Users] %s\n", LineBuf.param[1]);
+                snprintf(PrintBuf, B_PRINTSTR_LEN, "[Users] %s\n", LineBuf->param[1]);
                 break;
             }
             case 252:
             case 254:
             {
-                snprintf(PrintBuf, B_PRINTSTR_LEN, "[Users] %s %s\n", LineBuf.param[1], LineBuf.param[2]);
+                snprintf(PrintBuf, B_PRINTSTR_LEN, "[Users] %s %s\n", LineBuf->param[1], LineBuf->param[2]);
                 break;
             }
             case 332:
             {
-                snprintf(PrintBuf, B_PRINTSTR_LEN, "*** The channel topic is \"%s\".\n", LineBuf.param[2]);  // Fixme: multi line topics? if that is even a thing
-                strncpy(ChanBuf, LineBuf.param[1], 40);
+                snprintf(PrintBuf, B_PRINTSTR_LEN, "*** The channel topic is \"%s\".\n", LineBuf->param[2]);  // Fixme: multi line topics? if that is even a thing
+                strncpy(ChanBuf, LineBuf->param[1], 40);
                 break;
             }
             case 333:
             {
-                snprintf(PrintBuf, B_PRINTSTR_LEN, "*** The topic was set by %s on %s.\n", LineBuf.param[2], LineBuf.param[3]);
-                strncpy(ChanBuf, LineBuf.param[1], 40); 
+                snprintf(PrintBuf, B_PRINTSTR_LEN, "*** The topic was set by %s on %s.\n", LineBuf->param[2], LineBuf->param[3]);
+                strncpy(ChanBuf, LineBuf->param[1], 40); 
                 break;
             }
             case 353:   // Command 353 is a list of all users in param[3]
@@ -445,28 +514,40 @@ void IRC_DoCommand()
                 u16 start = 0;
                 u16 end = 0;
 
-                if (strcmp(PG_Buffer[PG_CurrentIdx].Title, LineBuf.param[2]) == 0)
+                if (strcmp(PG_Buffer[PG_CurrentIdx]->Title, LineBuf->param[2]) == 0)
                 {
-                while (1)
-                {
-                    while (LineBuf.param[3][end++] != ' '){if (LineBuf.param[3][end] == 0xD) break;}
-                    strncpy(PG_UserList[UserIterator], LineBuf.param[3]+start, end-start-1);
+                    for (u16 i = 0; i < PG_UserNum; i++)
+                    {
+                        if (PG_UserList[i] != NULL) free(PG_UserList[i]); // Remove old userlist in case it exists (memory fragmentation ahoy?)
+                    }
 
-                    start = end;
+                    while (1)
+                    {
+                        while (LineBuf->param[3][end++] != ' '){if (LineBuf->param[3][end] == 0xD) break;}                    
+                        
+                        PG_UserList[UserIterator] = malloc(end-start-1);  // Allocate a new 16 character string
 
-                    if (end >= 512) break;
+                        if (PG_UserList[UserIterator] == NULL) break;   // Did above allocation fail?
 
-                    UserIterator++;
+                        memset(PG_UserList[UserIterator], 0, end-start-1);   // Clear allocated string
+
+                        strncpy(PG_UserList[UserIterator], LineBuf->param[3]+start, end-start-1);
+
+                        start = end;
+
+                        if (end >= 512) break;
+
+                        UserIterator++;
+                    }
                 }
-                }
 
-                strncpy(ChanBuf, LineBuf.param[2], 40); 
+                strncpy(ChanBuf, LineBuf->param[2], 40); 
                 break;
             }
             case 366:
             {
                 // End of /NAMES list that begins with command 353
-                if (strcmp(PG_Buffer[PG_CurrentIdx].Title, LineBuf.param[1]) == 0)
+                if (strcmp(PG_Buffer[PG_CurrentIdx]->Title, LineBuf->param[1]) == 0)
                 {
                     PG_UserNum = UserIterator;
                     UserIterator = 0;
@@ -477,38 +558,43 @@ void IRC_DoCommand()
             case 375:
             case 376:
             {
-                snprintf(PrintBuf, B_PRINTSTR_LEN, "[MOTD] %s\n", LineBuf.param[1]);
+                snprintf(PrintBuf, B_PRINTSTR_LEN, "[MOTD] %s\n", LineBuf->param[1]);
                 break;
             }
             case 396:   //Reply to a user when user mode +x (host masking) was set successfully 
             {
-                snprintf(PrintBuf, B_PRINTSTR_LEN, "[Info] '%s' is now your hidden host (set by services).\n", LineBuf.param[1]);
+                snprintf(PrintBuf, B_PRINTSTR_LEN, "[Info] '%s' is now your hidden host (set by services).\n", LineBuf->param[1]);
                 break;
             }
             case 401:   // ERR_NOSUCHNICK   RFC1459 <nick> :<reason>    Used to indicate the nickname parameter supplied to a command is currently unused
             {
-                snprintf(PrintBuf, B_PRINTSTR_LEN, "[Error] %s\n", LineBuf.param[2]);
+                snprintf(PrintBuf, B_PRINTSTR_LEN, "[Error] %s\n", LineBuf->param[2]);
                 break;
             }
             case 404:   // ERR_CANNOTSENDTOCHAN RFC1459 <channel> :<reason> Sent to a user who does not have the rights to send a message to a channel
             {
-                snprintf(PrintBuf, B_PRINTSTR_LEN, "[Error] %s\n", LineBuf.param[2]);
-                strncpy(ChanBuf, LineBuf.param[1], 40);
+                snprintf(PrintBuf, B_PRINTSTR_LEN, "[Error] %s\n", LineBuf->param[2]);
+                strncpy(ChanBuf, LineBuf->param[1], 40);
                 break;
             }
             case 412:   // ERR_NOTEXTTOSEND RFC1459 :<reason>   Returned when NOTICE/PRIVMSG is used with no message given
             {
-                snprintf(PrintBuf, B_PRINTSTR_LEN, "[Error] %s\n", LineBuf.param[1]);
+                snprintf(PrintBuf, B_PRINTSTR_LEN, "[Error] %s\n", LineBuf->param[1]);
                 break;
             }
-            case 462:   // 
+            case 462:   // ERR_ALREADYREGISTERED
             {
-                snprintf(PrintBuf, B_PRINTSTR_LEN, "[Error] %s\n", LineBuf.param[1]);
+                snprintf(PrintBuf, B_PRINTSTR_LEN, "[Error] %s\n", LineBuf->param[1]);
+                break;
+            }
+            case 477:   // ERR_NEEDREGGEDNICK
+            {
+                snprintf(PrintBuf, B_PRINTSTR_LEN, "[Channel] %s\n", LineBuf->param[2]);
                 break;
             }
             case 480:   // 
             {
-                snprintf(PrintBuf, B_PRINTSTR_LEN, "[480] %s %s %s\n", vUsername, LineBuf.param[1], LineBuf.param[2]);  // LineBuf.param[3] = Further information (tls required for example etc)
+                snprintf(PrintBuf, B_PRINTSTR_LEN, "[480] %s %s %s\n", vUsername, LineBuf->param[1], LineBuf->param[2]);  // LineBuf->param[3] = Further information (tls required for example etc)
                 break;
             }
         
@@ -523,18 +609,18 @@ void IRC_DoCommand()
 
     for (u8 ch = 0; ch < MAX_CHANNELS; ch++)
     {
-        if (strcmp(PG_Buffer[ch].Title, ChanBuf) == 0) // Find the page this message belongs to
+        if (strcmp(PG_Buffer[ch]->Title, ChanBuf) == 0) // Find the page this message belongs to
         {
-            TMB_SetActiveBuffer(&PG_Buffer[ch]);
+            TMB_SetActiveBuffer(PG_Buffer[ch]);
             break;
         }
-        else if (strcmp(PG_Buffer[ch].Title, PG_EMPTYNAME) == 0) // See if there is an empty page
+        else if (strcmp(PG_Buffer[ch]->Title, PG_EMPTYNAME) == 0) // See if there is an empty page
         {
             char TitleBuf[40];
-            strncpy(PG_Buffer[ch].Title, ChanBuf, 32);
-            TMB_SetActiveBuffer(&PG_Buffer[ch]);
+            strncpy(PG_Buffer[ch]->Title, ChanBuf, 32);
+            TMB_SetActiveBuffer(PG_Buffer[ch]);
 
-            snprintf(TitleBuf, 40, "%s - %-21s", STATUS_TEXT, PG_Buffer[PG_CurrentIdx].Title);
+            snprintf(TitleBuf, 40, "%s - %-21s", STATUS_TEXT, PG_Buffer[PG_CurrentIdx]->Title);
             TRM_SetStatusText(TitleBuf);
             break;
         }
@@ -542,7 +628,6 @@ void IRC_DoCommand()
         {
         }
     }
-
 
     u16 len = strlen(PrintBuf);
     for (u16 i = 0; i < len; i++) IRC_PrintChar(PrintBuf[i]);
@@ -567,7 +652,7 @@ void IRC_ParseString()
                     u16 end = 1;
                     while (RXString[end++] != ' ');
 
-                    strncpy(LineBuf.prefix, RXString+1, (end-2)>=B_PREFIX_LEN?B_PREFIX_LEN-1:(end-2));
+                    strncpy(LineBuf->prefix, RXString+1, (end-2)>=B_PREFIX_LEN?B_PREFIX_LEN-1:(end-2));
                     it = end-1;
                 }
                 else
@@ -575,7 +660,7 @@ void IRC_ParseString()
                     u16 end = it+1;
                     while (RXString[end++] != '\0');
 
-                    strncpy(LineBuf.param[seq-1], RXString+it+1, (end-it-2)>=B_PARAM_LEN?B_PARAM_LEN-1:(end-it-2));                    
+                    strncpy(LineBuf->param[seq-1], RXString+it+1, (end-it-2)>=B_PARAM_LEN?B_PARAM_LEN-1:(end-it-2));                    
                     bBreak = TRUE;
                 }
 
@@ -588,13 +673,13 @@ void IRC_ParseString()
 
                 if (seq == 0)
                 {
-                    strncpy(LineBuf.command, RXString+it+1, (end-it-2)>=B_COMMAND_LEN?B_COMMAND_LEN-1:(end-it-2));
+                    strncpy(LineBuf->command, RXString+it+1, (end-it-2)>=B_COMMAND_LEN?B_COMMAND_LEN-1:(end-it-2));
                     seq++;
                     it = end-1;
                 }
                 else if (RXString[it+1] != ':')
                 {
-                    strncpy(LineBuf.param[seq-1], RXString+it+1, (end-it-2)>=B_PARAM_LEN?B_PARAM_LEN-1:(end-it-2));
+                    strncpy(LineBuf->param[seq-1], RXString+it+1, (end-it-2)>=B_PARAM_LEN?B_PARAM_LEN-1:(end-it-2));
                     seq++;
                     it = end-2;
                 }
@@ -613,7 +698,7 @@ void IRC_ParseString()
                 {
                     u16 end = it+1;
                     while (RXString[end++] != ' ');
-                    strncpy(LineBuf.command, RXString+it, (end-it-1)>=B_COMMAND_LEN?B_COMMAND_LEN-1:(end-it-1));
+                    strncpy(LineBuf->command, RXString+it, (end-it-1)>=B_COMMAND_LEN?B_COMMAND_LEN-1:(end-it-1));
                     seq++;
                 }
 
@@ -627,9 +712,9 @@ void IRC_ParseString()
     }
 
     #ifdef IRC_LOGGING
-    kprintf("Prefix: \"%s\"", LineBuf.prefix);
-    kprintf("Command: \"%s\"", LineBuf.command);
-    for (u8 i = 0; i < 16; i++) if (strlen(LineBuf.param[i]) > 0) kprintf("Param[%u]: \"%s\"", i, LineBuf.param[i]);
+    kprintf("Prefix: \"%s\"", LineBuf->prefix);
+    kprintf("Command: \"%s\"", LineBuf->command);
+    for (u8 i = 0; i < 16; i++) if (strlen(LineBuf->param[i]) > 0) kprintf("Param[%u]: \"%s\"", i, LineBuf->param[i]);
     #endif
 
     IRC_DoCommand();
@@ -653,9 +738,9 @@ void IRC_ParseRX(u8 byte)
     {
         case 0x0A:  // Line feed (new line)
             RXString[RXStringSeq++] = '\0';
-            LineBuf.prefix[0] = '\0';
-            LineBuf.command[0] = '\0';
-            for (u8 i = 0; i < 16; i++){LineBuf.param[i][0] = '\0';}
+            LineBuf->prefix[0] = '\0';
+            LineBuf->command[0] = '\0';
+            for (u8 i = 0; i < 16; i++){LineBuf->param[i][0] = '\0';}
             IRC_ParseString();
             RXStringSeq = 0;
             CR_Set = FALSE;

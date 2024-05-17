@@ -39,7 +39,7 @@ int main(bool hardReset)
     if (!hardReset)
     {
         ChangeState(PS_Dummy, 0, NULL); 
-        SetSprite_Y(CURSOR_SPRITE_NUM, -128);
+        SetSprite_Y(SPRITE_ID_CURSOR, 0);
     }
 
     bPALSystem = IS_PAL_SYSTEM;
@@ -64,14 +64,17 @@ int main(bool hardReset)
     
     PAL_setColor( 1, 0x00e);    // Icon Red
     PAL_setColor( 3, 0x0e0);    // Icon Green
-    PAL_setColor( 4, 0x0e0);    // Cursor (Blink)
+    PAL_setColor( 4, 0x0e0);    // Cursor
     PAL_setColor( 5, 0x000);    // Icon BG
     PAL_setColor( 6, 0xeee);    // Icon Normal
+    PAL_setColor(10, 0x444);    // Screensaver colour 0
+    PAL_setColor(11, 0xeee);    // Screensaver colour 1
     PAL_setColor(17, 0x000);    // Window text BG Normal / Terminal text BG
     PAL_setColor(18, 0xeee);    // Window text FG Normal
     PAL_setColor(49, 0xeee);    // Window text BG Inverted / Terminal text FG? Was used for something there...
     PAL_setColor(50, 0x000);    // Window text FG Inverted
 
+    // Upload and draw boot logo (Area shared with screensaver sprite)
     VDP_drawImageEx(BG_B, &GFX_LOGO, TILE_ATTR_FULL(PAL2, FALSE, 0, 0, 0x20), 27, (bPALSystem ? 19 : 17), TRUE, TRUE);
 
     VDP_loadTileSet(&GFX_BGBLOCKS,   AVR_BGBLOCK, DMA);
@@ -86,9 +89,8 @@ int main(bool hardReset)
     //TRM_ClearTextArea(0, 0, 40, 28);
     TRM_DrawText("Initializing system...", 1, BootNextLine++, PAL1);
 
-
-    VDP_setReg(0xB, 0x8);   // Enable VDP ext interrupt (Enable: 8 - Disable: 0)
-    SYS_setInterruptMaskLevel(0);
+    VDP_setReg(0xB, 0x8);           // Enable VDP ext interrupt (Enable: 8 - Disable: 0)
+    SYS_setInterruptMaskLevel(0);   // Enable all interrupts
     SYS_setExtIntCallback(Ext_IRQ);
 
     Input_Init();
@@ -107,7 +109,7 @@ int main(bool hardReset)
     else TRM_DrawText("Successfully loaded config from SRAM", 1, BootNextLine++, PAL1);
     
     TRM_DrawText("Configuring devices...", 1, BootNextLine++, PAL1);
-    InitDeviceManager();
+    DeviceManager_Init();
 
     bShowHexView = FALSE;
     bShowQMenu = FALSE;
@@ -140,14 +142,15 @@ int main(bool hardReset)
 
     SYS_doVBlankProcess();
 
-    // Show "boot" screen for a second
+    // Show "boot" screen for a few more seconds
     #ifndef EMU_BUILD
     waitMs(2000);
     #endif
 
     waitMs(1000);
 
-    TRM_FillPlane(BG_B, 0);
+    TRM_FillPlane(BG_B, 0); // Clear boot logo
+    VDP_loadTileSet(&GFX_SCRSAV, AVR_SCRSAV, DMA);  // Upload screensaver sprite to VRAM (Area shared with boot logo)
     TRM_ResetWinParam();
     VDP_setHilightShadow(FALSE);
 

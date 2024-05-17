@@ -207,6 +207,14 @@ char *strtok(char *s, char d)
     return result;
 }
 
+#define SYSCALL_RET(x) {n=x;return 0;}
+u32 syscall(register vu32 n, register vu32 a, register vu32 b, register vu32 c, register vu32 d, register vu32 e, register vu32 f)
+{
+    kprintf("syscall\nn = $%lX\na = $%lX\nb = $%lX\nc = $%lX\nd = $%lX\ne = $%lX\nf = $%lX", n, a, b, c, d, e, f);
+
+    return 0;
+}
+
 
 // snprintf, modified sprintf from SGDK
 static const char const uppercase_hexchars[] = "0123456789ABCDEF";

@@ -21,11 +21,11 @@ static u8 bOnce = FALSE;
 static SM_Window UserWin;
 static u16 UserListScroll = 0;
 static u8 KBTxData[40];            // Buffer for the last 40 typed characters from the keyboard
-static bool bOldScrEnable = FALSE; // Backup for screensaver enabled variable
 static u8 OldFontSize = 0;         // Backup for fontsize variable
 
 #ifdef EMU_BUILD
-asm(".global ircdump\nircdump:\n.incbin \"tmp/streams/rx_hmm.log\"");
+#include "kdebug.h"
+asm(".global ircdump\nircdump:\n.incbin \"tmp/streams/rx_noperm.log\"");
 extern const unsigned char ircdump[];
 #endif
 
@@ -34,9 +34,6 @@ void IRC_PrintChar(u8 c);
 
 void Enter_IRC(u8 argc, char *argv[])
 {
-    bOldScrEnable = bScreensaver;     // Remember previous screensaver setting
-    bScreensaver = FALSE;   // Disable screensaver
-
     OldFontSize = FontSize;
     if (FontSize == 1)
     {
@@ -52,11 +49,13 @@ void Enter_IRC(u8 argc, char *argv[])
     TRM_ClearTextArea(26, 1, 14, 2);    // Clear top 2 tile lines above Channel/User window - can contain leftovers from fullscreen windows
 
     memset(KBTxData, 0, 40);
+    PrintTextLine(KBTxData);    // Calling this here to clear VRAM tiles used for textbox
 
     #ifdef EMU_BUILD
     u8 data; 
     u32 p = 0;
-    u32 s = 18853;
+    u32 s = 5392;
+    KDebug_StartTimer();
     while (p < s)
     {
         while(Buffer_Push(&RxBuffer, ircdump[p]) != 0xFF)
@@ -82,8 +81,9 @@ void Enter_IRC(u8 argc, char *argv[])
             }
         }
         
-        TMB_UploadBuffer(&PG_Buffer[PG_CurrentIdx]);
+        TMB_UploadBuffer(PG_Buffer[PG_CurrentIdx]);
     }
+    KDebug_StopTimer();
     #endif
 
     Buffer_Flush(&TxBuffer);
@@ -106,11 +106,8 @@ void ReEnter_IRC()
 
 void Exit_IRC()
 {
-    char buf[64];
-    sprintf(buf, "QUIT %s\n", vQuitStr);
-    NET_SendString(buf);
+    IRC_Exit();
 
-    bScreensaver = bOldScrEnable; // Revert screensaver setting
     FontSize = OldFontSize;
 }
 
@@ -147,7 +144,7 @@ void Run_IRC()
     }
     #endif
 
-    TMB_UploadBuffer(&PG_Buffer[PG_CurrentIdx]);
+    TMB_UploadBuffer(PG_Buffer[PG_CurrentIdx]);
 
     Buffer_PeekLast(&TxBuffer, 38, KBTxData);
     PrintTextLine(KBTxData);
@@ -157,7 +154,7 @@ void Run_IRC()
         TRM_ClearTextArea(26, 1, 14, 2);
         UI_Begin(&UserWin);
         if (PG_UserNum > 0) UI_DrawItemList(25, 0, 14, 25, "User List", PG_UserList, PG_UserNum, UserListScroll);
-        else 
+        else
         {
             //UI_ClearRect(25, 0, 14, 25);
             UI_DrawPanel(25, 0, 14, 25, UC_PANEL_DOUBLE);
@@ -173,14 +170,14 @@ void ChangePage(u8 num)
 {
     char TitleBuf[40];
     PG_CurrentIdx = num;
-    //TMB_SetActiveBuffer(&PG_Buffer[PG_CurrentIdx]);
+    //TMB_SetActiveBuffer(PG_Buffer[PG_CurrentIdx]);
 
     if (PG_CurrentIdx == 0) UI_SetVisible(&UserWin, FALSE);
 
-    sprintf(TitleBuf, "%s - %-21s", STATUS_TEXT, PG_Buffer[PG_CurrentIdx].Title);
+    sprintf(TitleBuf, "%s - %-21s", STATUS_TEXT, PG_Buffer[PG_CurrentIdx]->Title);
     TRM_SetStatusText(TitleBuf);
 
-    TMB_UploadBufferFull(&PG_Buffer[PG_CurrentIdx]);
+    TMB_UploadBufferFull(PG_Buffer[PG_CurrentIdx]);
 }
 
 u8 ParseTx()
@@ -228,24 +225,24 @@ u8 ParseTx()
             // Try to find an unused page or an existing one
             for (u8 ch = 0; ch < MAX_CHANNELS; ch++)
             {
-                if (strcmp(PG_Buffer[ch].Title, command) == 0) // Find the page this message belongs to
+                if (strcmp(PG_Buffer[ch]->Title, command) == 0) // Find the page this message belongs to
                 {
-                    TMB_SetActiveBuffer(&PG_Buffer[ch]);
+                    TMB_SetActiveBuffer(PG_Buffer[ch]);
                     break;
                 }
-                else if (strcmp(PG_Buffer[ch].Title, PG_EMPTYNAME) == 0) // See if there is an empty page
+                else if (strcmp(PG_Buffer[ch]->Title, PG_EMPTYNAME) == 0) // See if there is an empty page
                 {
                     char TitleBuf[40];
-                    strncpy(PG_Buffer[ch].Title, command, 32);
-                    TMB_SetActiveBuffer(&PG_Buffer[ch]);
+                    strncpy(PG_Buffer[ch]->Title, command, 32);
+                    TMB_SetActiveBuffer(PG_Buffer[ch]);
 
-                    snprintf(TitleBuf, 40, "%s - %-21s", STATUS_TEXT, PG_Buffer[PG_CurrentIdx].Title);
+                    snprintf(TitleBuf, 40, "%s - %-21s", STATUS_TEXT, PG_Buffer[PG_CurrentIdx]->Title);
                     TRM_SetStatusText(TitleBuf);
                     break;
                 }
                 else    // No empty pages and no page match, print on overflow page (0)
                 {
-                    TMB_SetActiveBuffer(&PG_Buffer[0]);
+                    TMB_SetActiveBuffer(PG_Buffer[0]);
                 }
             }
 
@@ -254,7 +251,7 @@ u8 ParseTx()
                 IRC_PrintChar(tmbbuf[c]);
             }
 
-            TMB_SetActiveBuffer(&PG_Buffer[last_pg]);
+            TMB_SetActiveBuffer(PG_Buffer[last_pg]);
         }
         else if (strcmp(command, "join") == 0)
         {
@@ -285,9 +282,9 @@ u8 ParseTx()
         
         if (strlen((char*)inbuf) == 0) return 1;  // Dont send empty messages
 
-        TMB_SetActiveBuffer(&PG_Buffer[PG_CurrentIdx]);
+        TMB_SetActiveBuffer(PG_Buffer[PG_CurrentIdx]);
 
-        sprintf((char*)outbuf, "PRIVMSG %s :%s\n", PG_Buffer[PG_CurrentIdx].Title, (char*)inbuf);
+        sprintf((char*)outbuf, "PRIVMSG %s :%s\n", PG_Buffer[PG_CurrentIdx]->Title, (char*)inbuf);
         sprintf((char*)tmbbuf, "%s: %s\n", vUsername, (char*)inbuf);
 
         for (u16 c = 0; c < strlen((char*)tmbbuf); c++)
@@ -407,7 +404,7 @@ void Input_IRC()
                 {
                     TRM_SetWinWidth(13);
 
-                    snprintf(req, 40, "NAMES %s\n", PG_Buffer[PG_CurrentIdx].Title);
+                    snprintf(req, 40, "NAMES %s\n", PG_Buffer[PG_CurrentIdx]->Title);
 
                     Buffer_Flush(&TxBuffer);
 

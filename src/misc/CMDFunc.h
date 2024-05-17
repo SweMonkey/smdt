@@ -26,5 +26,7 @@ void CMD_ClearScreen(u8 argc, char *argv[]);
 void CMD_TestSRAM(u8 argc, char *argv[]);
 void CMD_SetVar(u8 argc, char *argv[]);
 void CMD_GetIP(u8 argc, char *argv[]);
+void CMD_Run(u8 argc, char *argv[]);
+void CMD_Free(u8 argc, char *argv[]);
 
 #endif // CMDFUNC_H_INCLUDED

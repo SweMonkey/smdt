@@ -438,7 +438,7 @@ void UI_DrawVScrollbar(u8 x, u8 y, u8 height, u16 min, u16 max, u16 pos)
 /// @param list Array of 16 character strings to be drawn in list
 /// @param item_count Number of items (in list)
 /// @param scroll Scroll value of item list
-void UI_DrawItemList(u8 x, u8 y, u8 width, u8 height, const char *caption, char list[][16], u16 item_count, u16 scroll)
+void UI_DrawItemList(u8 x, u8 y, u8 width, u8 height, const char *caption, char *list[], u16 item_count, u16 scroll)
 {
     if (Target == NULL) return;
 

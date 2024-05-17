@@ -59,7 +59,7 @@ void set_KeyPress(u16 key, u8 KeyState)
 {
     KeyMap[key & KM_SZ] = KeyState;
 
-    InactiveCounter = 0;
+    InactiveCounter = -1;
 }
 
 void InputTick()

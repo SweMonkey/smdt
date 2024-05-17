@@ -4,7 +4,7 @@
 #include <genesis.h>
 
 extern bool bScreensaver;
-extern u16 InactiveCounter;
+extern s16 InactiveCounter;
 
 void ScreensaverInit();
 void ScreensaverTick();

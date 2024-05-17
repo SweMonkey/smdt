@@ -43,7 +43,7 @@ _Vectors_68K:
         dc.l    _VINT
         dc.l    _INT
         dc.l    _trap_0                 /* Resume supervisor task */
-        dc.l    _INT,_INT,_INT,_INT,_INT,_INT,_INT
+        dc.l    _INT,_trap_2,_INT,_INT,_INT,_INT,_INT
         dc.l    _INT,_INT,_INT,_INT,_INT,_INT,_INT,_INT
         dc.l    _INT,_INT,_INT,_INT,_INT,_INT,_INT,_INT
         dc.l    _INT,_INT,_INT,_INT,_INT,_INT,_INT,_INT
@@ -241,6 +241,13 @@ _VINT:
         addq.l  #1, vtimer                  /* increment frame counter (more a vint counter) */
         btst    #3, VBlankProcess+1         /* PROCESS_XGM_TASK ? (use VBlankProcess+1 as btst is a byte operation) */
         andi.w  #0xFFFE, intTrace           /* out V-Int */
+        movem.l (%sp)+,%d0-%d1/%a0-%a1
+        rte
+
+_trap_2:
+        movem.l %d0-%d1/%a0-%a1,-(%sp)
+        move.l  syscall, %a0
+        jsr    (%a0)
         movem.l (%sp)+,%d0-%d1/%a0-%a1
         rte
 

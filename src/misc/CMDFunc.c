@@ -26,6 +26,8 @@ SM_CMDList CMDList[] =
     {"sram",    CMD_TestSRAM,       "- Test SRAM"},
     {"setvar",  CMD_SetVar,         "- Set variable"},
     {"getip",   CMD_GetIP,          "- Get network IP"},
+    {"run",     CMD_Run,            "- Run binary file"},
+    {"free",    CMD_Free,           "- List free memory"},
     {"help",    CMD_Help,           "- This command"},
     {0, 0, 0}  // Terminator
 };
@@ -519,4 +521,36 @@ void CMD_GetIP(u8 argc, char *argv[])
     }
 
     PrintOutput("Error: Out of RAM!\n");
+}
+
+void CMD_Run(u8 argc, char *argv[])
+{
+    if (argc < 2) return;
+
+    // TTY_Reset(TRUE);
+    /*
+    char tmp[64];
+    sprintf(tmp, "Running %s...\n", argv[1]);
+    PrintOutput(tmp);
+
+    SRAM_enableRO();
+    
+    asm("move.w #0x000, %sr");
+    VAR2REG_L(0x201000, "a5");
+    asm("jsr (%a5)");
+
+    PrintOutput("Ok ....\n");
+
+    SRAM_disable();*/
+}
+
+void CMD_Free(u8 argc, char *argv[])
+{
+    char tmp[64];
+    sprintf(tmp, "%20s %5u bytes\n", "Free:", MEM_getFree());
+    PrintOutput(tmp);
+    sprintf(tmp, "%20s %5u bytes\n", "Largest free block:", MEM_getLargestFreeBlock());
+    PrintOutput(tmp);
+    sprintf(tmp, "%20s %5u bytes\n", "Used:", MEM_getAllocated());
+    PrintOutput(tmp);
 }
