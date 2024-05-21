@@ -92,7 +92,7 @@ u8 DoBackspace()
 
     TTY_MoveCursor(TTY_CURSOR_LEFT, 1);
 
-    if (!FontSize)
+    if (!sv_Font)
     {
         VDP_setTileMapXY(BG_B, TILE_ATTR_FULL(2, 0, 0, 0, 0), TTY_GetSX(), sy);
     }
@@ -114,9 +114,9 @@ void SetupTerminal()
     vDoEcho = 0;
     vLineMode = 1;
     vNewlineConv = 1;
-    bWrapAround = TRUE;
+    sv_bWrapAround = TRUE;
 
-    pFontSize = FontSize;
+    pFontSize = sv_Font;
     TTY_SetFontSize(0);
 
     LastCommand[0] = '\0';
@@ -133,6 +133,8 @@ void Enter_Terminal(u8 argc, char *argv[])
         waitMs(200);
         XPN_ExitMonitorMode();
     }
+
+    MEM_pack();
 
     TELNET_Init();
     SetupTerminal();
@@ -183,7 +185,7 @@ void Input_Terminal()
 
         if (is_KeyDown(KEY_KP4_LEFT))
         {
-            if (!FontSize)
+            if (!sv_Font)
             {
                 HScroll += 8;
                 VDP_setHorizontalScroll(BG_A, HScroll);
@@ -201,7 +203,7 @@ void Input_Terminal()
 
         if (is_KeyDown(KEY_KP6_RIGHT))
         {
-            if (!FontSize)
+            if (!sv_Font)
             {
                 HScroll -= 8;
                 VDP_setHorizontalScroll(BG_A, HScroll);

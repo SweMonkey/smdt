@@ -189,7 +189,7 @@ void Input_Telnet()
 
         if (is_KeyDown(KEY_KP1_END))
         {
-            if (!FontSize)
+            if (!sv_Font)
             {
                 HScroll += 8;
                 VDP_setHorizontalScroll(BG_A, HScroll);
@@ -207,7 +207,7 @@ void Input_Telnet()
 
         if (is_KeyDown(KEY_KP3_PGDN))
         {
-            if (!FontSize)
+            if (!sv_Font)
             {
                 HScroll -= 8;
                 VDP_setHorizontalScroll(BG_A, HScroll);
@@ -274,7 +274,7 @@ void Input_Telnet()
         {            
             TTY_MoveCursor(TTY_CURSOR_LEFT, 1);
 
-            if (!FontSize)
+            if (!sv_Font)
             {
                 VDP_setTileMapXY(BG_B, TILE_ATTR_FULL(2, 0, 0, 0, 0), TTY_GetSX(), sy);
             }

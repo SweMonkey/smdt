@@ -20,19 +20,24 @@
 #define C_YSTART 1  // 0 if no window plane
 
 // Default X/Y Scroll
-extern s8 D_HSCROLL;
 #define D_VSCROLL 0
 
 // Default FG/BG colors
 #define CL_FG 7
 #define CL_BG 0
 
+// Fonts
+#define FONT_8x8_16 0
+#define FONT_4x8_8  1
+#define FONT_4x8_1  2
+
 // Modifiable variables
+extern s8 sv_HSOffset;
+extern u8 sv_TermType;
+extern char sv_Baud[];
 extern u8 vNewlineConv;
-extern u8 vTermType;
 extern u8 vDoEcho;
 extern u8 vLineMode;
-extern char vSpeed[];
 
 // TTY
 extern s32 sy;
@@ -40,19 +45,19 @@ extern s16 HScroll;
 extern s16 VScroll;
 extern u8 C_XMAX;
 extern u8 C_YMAX;
-extern u8 bWrapAround;
-extern u8 TermColumns;
+extern u8 sv_bWrapAround;
+extern u8 sv_TermColumns;
 
-extern u16 Custom_BGCL;
-extern u16 Custom_FG0CL;   // Custom text colour for 4x8 font
-extern u16 Custom_FG1CL;   // Custom text antialiasing colour for 4x8 font 
+extern u16 sv_CBGCL;
+extern u16 sv_CFG0CL;   // Custom text colour for 4x8 font
+extern u16 sv_CFG1CL;   // Custom text antialiasing colour for 4x8 font 
 
 extern const char * const TermTypeList[];
 
 // Font
-extern u8 FontSize;
+extern u8 sv_Font;
 extern u8 EvenOdd;
-extern u8 bHighCL;
+extern u8 sv_bHighCL;
 
 // Statistics
 extern u32 RXBytes;

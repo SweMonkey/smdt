@@ -3,7 +3,7 @@
 
 #include <genesis.h>
 
-extern u32 vConn_time;
+extern u32 sv_ConnTimeout;
 
 
 u8 XPN_Initialize();

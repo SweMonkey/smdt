@@ -79,7 +79,7 @@ typedef struct s_device
 */
 
 extern SM_Device *DevList[DEV_MAX];
-extern DevPort DEV_UART_PORT;   // Default UART port - Read only!
+extern DevPort sv_ListenPort;   // Default UART port to listen on
 extern bool bRLNetwork;
 extern bool bXPNetwork;
 

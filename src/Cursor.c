@@ -2,9 +2,9 @@
 #include "Utils.h"  // bPALSystem
 #include "Terminal.h"
 
-static u8 CursorBlink = 0; // Cursor blink counter
+static u8 CursorBlink = 0;  // Cursor blink counter
 u8 bDoCursorBlink = TRUE;
-u16 Cursor_CL = 0x0E0;
+u16 sv_CursorCL = 0x0E0;    // Cursor colour
 u16 LastCursor = 0x10;      // Last cursor tile used
 
 

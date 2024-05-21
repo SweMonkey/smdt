@@ -1,6 +1,6 @@
 #include "StateCtrl.h"
 #include "IRC.h"
-#include "Terminal.h"   // FontSize, HScroll
+#include "Terminal.h"   // sv_Font, sv_HSOffset
 #include "Buffer.h"
 #include "Input.h"
 #include "Keyboard.h"
@@ -21,11 +21,11 @@ static u8 bOnce = FALSE;
 static SM_Window UserWin;
 static u16 UserListScroll = 0;
 static u8 KBTxData[40];            // Buffer for the last 40 typed characters from the keyboard
-static u8 OldFontSize = 0;         // Backup for fontsize variable
+static u8 OldFontSize = 0;         // Backup for sv_Font variable
 
 #ifdef EMU_BUILD
 #include "kdebug.h"
-asm(".global ircdump\nircdump:\n.incbin \"tmp/streams/rx_noperm.log\"");
+asm(".global ircdump\nircdump:\n.incbin \"tmp/streams/rx_privmsg3.log\"");
 extern const unsigned char ircdump[];
 #endif
 
@@ -34,11 +34,8 @@ void IRC_PrintChar(u8 c);
 
 void Enter_IRC(u8 argc, char *argv[])
 {
-    OldFontSize = FontSize;
-    if (FontSize == 1)
-    {
-        FontSize = 2;
-    }
+    OldFontSize = sv_Font;
+    sv_Font = FONT_4x8_1;
 
     IRC_Init();
 
@@ -54,7 +51,7 @@ void Enter_IRC(u8 argc, char *argv[])
     #ifdef EMU_BUILD
     u8 data; 
     u32 p = 0;
-    u32 s = 5392;
+    u32 s = 4666;
     KDebug_StartTimer();
     while (p < s)
     {
@@ -108,7 +105,7 @@ void Exit_IRC()
 {
     IRC_Exit();
 
-    FontSize = OldFontSize;
+    sv_Font = OldFontSize;
 }
 
 void Reset_IRC()
@@ -217,10 +214,10 @@ u8 ParseTx()
             u8 last_pg = PG_CurrentIdx;
             end_p = end_c;
             while (inbuf[end_c++] != ' ');
-            strncpy(command, (char*)inbuf+end_p, end_c-end_p-1);
+            strncpy(command, (char*)inbuf+end_p, end_c-end_p-1);    // -1 there might be the cause.
 
             sprintf((char*)outbuf, "PRIVMSG %s :%s\n", command, (char*)inbuf+end_c);
-            sprintf((char*)tmbbuf, "%s: %s\n", vUsername, (char*)inbuf+end_c);
+            sprintf((char*)tmbbuf, "%s: %s\n", sv_Username, (char*)inbuf+end_c);
 
             // Try to find an unused page or an existing one
             for (u8 ch = 0; ch < MAX_CHANNELS; ch++)
@@ -263,12 +260,12 @@ u8 ParseTx()
         }
         else if (strcmp(command, "quit") == 0)
         {
-            sprintf((char*)outbuf, "QUIT %s\n", vQuitStr);
+            sprintf((char*)outbuf, "QUIT %s\n", sv_QuitStr);
         } 
         else if (strcmp(command, "nick") == 0)
         {
             sprintf((char*)outbuf, "NICK %s\n", param);
-            strncpy(vUsername, param, 31);
+            strncpy(sv_Username, param, 31);
             SRAM_SaveData();
         } 
         else
@@ -285,7 +282,7 @@ u8 ParseTx()
         TMB_SetActiveBuffer(PG_Buffer[PG_CurrentIdx]);
 
         sprintf((char*)outbuf, "PRIVMSG %s :%s\n", PG_Buffer[PG_CurrentIdx]->Title, (char*)inbuf);
-        sprintf((char*)tmbbuf, "%s: %s\n", vUsername, (char*)inbuf);
+        sprintf((char*)tmbbuf, "%s: %s\n", sv_Username, (char*)inbuf);
 
         for (u16 c = 0; c < strlen((char*)tmbbuf); c++)
         {
@@ -318,7 +315,7 @@ void Input_IRC()
 
         if (is_KeyDown(KEY_KP4_LEFT))
         {
-            if (!FontSize)
+            if (!sv_Font)
             {
                 HScroll += 8;
                 VDP_setHorizontalScroll(BG_A, HScroll);
@@ -334,7 +331,7 @@ void Input_IRC()
 
         if (is_KeyDown(KEY_KP6_RIGHT))
         {
-            if (!FontSize)
+            if (!sv_Font)
             {
                 HScroll -= 8;
                 VDP_setHorizontalScroll(BG_A, HScroll);

@@ -36,8 +36,8 @@ void UpdateWindow()
         break;
 
         case 1:
-            UI_DrawTextInput(2, 2, 34, "IRC Nick", vUsername, (SelectedIdx == 0));
-            UI_DrawTextInput(2, 6, 34, "IRC Exit Message", vQuitStr, (SelectedIdx == 4));
+            UI_DrawTextInput(2, 2, 34, "IRC Nick", sv_Username, (SelectedIdx == 0));
+            UI_DrawTextInput(2, 6, 34, "IRC Exit Message", sv_QuitStr, (SelectedIdx == 4));
             UI_DrawText(2, 10, "Return");
         break;
     
@@ -105,16 +105,16 @@ void Run_Entry()
         }
         else if ((SelectedIdx == 0) && (SubMenuIdx == 1))   // Nick 
         {
-            Buffer_PeekLast(&TxBuffer, 31, (u8*)vUsername);
+            Buffer_PeekLast(&TxBuffer, 31, (u8*)sv_Username);
             UI_Begin(&EntryWindow);
-            UI_DrawTextInput(2, 2, 34, "IRC Nick", vUsername, (SelectedIdx == 0));
+            UI_DrawTextInput(2, 2, 34, "IRC Nick", sv_Username, (SelectedIdx == 0));
             UI_End();
         }
         else if ((SelectedIdx == 4) && (SubMenuIdx == 1))   // Exit Message 
         {
-            Buffer_PeekLast(&TxBuffer, 31, (u8*)vQuitStr);
+            Buffer_PeekLast(&TxBuffer, 31, (u8*)sv_QuitStr);
             UI_Begin(&EntryWindow);
-            UI_DrawTextInput(2, 6, 34, "IRC Exit Message", vQuitStr, (SelectedIdx == 4));
+            UI_DrawTextInput(2, 6, 34, "IRC Exit Message", sv_QuitStr, (SelectedIdx == 4));
             UI_End();
         }
     }
@@ -169,7 +169,7 @@ void Input_Entry()
                     SelectedIdx = 0;
 
                     Buffer_Flush(&TxBuffer);
-                    for (u8 i = 0; i < strlen(vUsername); i++) Buffer_Push(&TxBuffer, vUsername[i]);
+                    for (u8 i = 0; i < strlen(sv_Username); i++) Buffer_Push(&TxBuffer, sv_Username[i]);
                 break;
 
                 case 7: // Return
@@ -224,7 +224,7 @@ void Input_Entry()
                     SelectedIdx = 4;
 
                     Buffer_Flush(&TxBuffer);
-                    for (u8 i = 0; i < strlen(vQuitStr); i++) Buffer_Push(&TxBuffer, vQuitStr[i]);
+                    for (u8 i = 0; i < strlen(sv_QuitStr); i++) Buffer_Push(&TxBuffer, sv_QuitStr[i]);
                 break;
 
                 case 4: // Exit textinput
@@ -298,7 +298,7 @@ void Input_Entry()
                     SelectedIdx = 0;
 
                     Buffer_Flush(&TxBuffer);                    
-                    for (u8 i = 0; i < strlen(vUsername); i++) Buffer_Push(&TxBuffer, vUsername[i]);
+                    for (u8 i = 0; i < strlen(sv_Username); i++) Buffer_Push(&TxBuffer, sv_Username[i]);
 
                     UI_Begin(&EntryWindow);
                     UI_ClearRect(1, 1, 37, 23);

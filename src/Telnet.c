@@ -217,7 +217,7 @@ void TELNET_Init()
     vDoEcho = 0;
     vLineMode = 0;
     vNewlineConv = 0;
-    bWrapAround = TRUE;
+    sv_bWrapAround = TRUE;
 
     // ...
     ESC_OSCBuffer[0] = 0xFF;
@@ -395,7 +395,7 @@ static inline void DoEscape(u8 byte)
                     {
                         case 7:     // Enables line wrapping
                         case 137:   // 7 prefixed with =
-                            bWrapAround = TRUE;
+                            sv_bWrapAround = TRUE;
                         break;
 
                         case 0x19:
@@ -417,7 +417,7 @@ static inline void DoEscape(u8 byte)
                     {
                         case 7:     // Disables line wrapping
                         case 137:   // 7 prefixed with =
-                            bWrapAround = FALSE;    // Was TRUE, copy paste error?
+                            sv_bWrapAround = FALSE;    // Was TRUE, copy paste error?
                         break;
 
                         case 0x19:
@@ -478,7 +478,7 @@ static inline void DoEscape(u8 byte)
                     }
                     else
                     {
-                        if ((TTY_GetSX() == 0) && (bWrapAround))
+                        if ((TTY_GetSX() == 0) && (sv_bWrapAround))
                         {
                             TTY_MoveCursor(TTY_CURSOR_LEFT, 1);
                             goto EndEscape;
@@ -554,12 +554,12 @@ static inline void DoEscape(u8 byte)
                         break;
 
                         case 14:    // Report Terminal Window Size in Pixels ( Needs testing! CMD = "ESC [ 14 ; Ⓝ t"  Ⓝ = 0/2 )
-                            sprintf(str, "[4;%d;%dt", (bPALSystem?232:216), (FontSize==0?320:640));
+                            sprintf(str, "[4;%d;%dt", (bPALSystem?232:216), (sv_Font==FONT_8x8_16?320:640));
                             NET_SendString(str);
                         break;
 
                         case 15:    // Report Screen Size in Pixels ( Needs testing! CMD = "ESC [ 15 t" )
-                            sprintf(str, "[5;%d;%dt", (bPALSystem?232:216), (FontSize==0?320:640));
+                            sprintf(str, "[5;%d;%dt", (bPALSystem?232:216), (sv_Font==FONT_8x8_16?320:640));
                             NET_SendString(str);
                         break;
 
@@ -568,12 +568,12 @@ static inline void DoEscape(u8 byte)
                         break;
 
                         case 18:    // Report Terminal Size ( Needs testing! CMD = "ESC [ 18 t" )
-                            sprintf(str, "[8;%d;%dt", (bPALSystem?0x1D:0x1B), (FontSize==0?0x28:0x50));
+                            sprintf(str, "[8;%d;%dt", (bPALSystem?0x1D:0x1B), (sv_Font==FONT_8x8_16?0x28:0x50));
                             NET_SendString(str);
                         break;
 
                         case 19:    // Report Screen Size ( Needs testing! CMD = "ESC [ 19 t" )
-                            sprintf(str, "[9;%d;%dt", (bPALSystem?0x1D:0x1B), (FontSize==0?0x28:0x50));
+                            sprintf(str, "[9;%d;%dt", (bPALSystem?0x1D:0x1B), (sv_Font==FONT_8x8_16?0x28:0x50));
                             NET_SendString(str);
                         break;
 
@@ -824,50 +824,47 @@ static inline void DoEscape(u8 byte)
                         default:
                             bDoCursorBlink = TRUE;
 
-                            if (FontSize) LastCursor = 0x13;
-                            else          LastCursor = 0x10;
+                            if (sv_Font) LastCursor = 0x13;
+                            else         LastCursor = 0x10;
                         break;
                         
                         case 2: // Select Cursor Style Steady Block
                             bDoCursorBlink = FALSE;
                             
-                            if (FontSize) LastCursor = 0x13;
-                            else          LastCursor = 0x10;
+                            if (sv_Font) LastCursor = 0x13;
+                            else         LastCursor = 0x10;
                         break;
                         
                         case 3: // Select Cursor Style Blinking Underline
                             bDoCursorBlink = TRUE;
 
-                            if (FontSize) LastCursor = 0x14;
-                            else          LastCursor = 0x11;
+                            if (sv_Font) LastCursor = 0x14;
+                            else         LastCursor = 0x11;
                         break;
                         
                         case 4: // Select Cursor Style Steady Underline
                             bDoCursorBlink = FALSE;
                             
-                            if (FontSize) LastCursor = 0x14;
-                            else          LastCursor = 0x11;
+                            if (sv_Font) LastCursor = 0x14;
+                            else         LastCursor = 0x11;
                         break;
                         
                         case 5: // Select Cursor Style Blinking Bar
                             bDoCursorBlink = TRUE;
 
-                            if (FontSize) LastCursor = 0x15;
-                            else          LastCursor = 0x12;
+                            if (sv_Font) LastCursor = 0x15;
+                            else         LastCursor = 0x12;
                         break;
                         
                         case 6: // Select Cursor Style Steady Bar
                             bDoCursorBlink = FALSE;
                             
-                            if (FontSize) LastCursor = 0x15;
-                            else          LastCursor = 0x12;
+                            if (sv_Font) LastCursor = 0x15;
+                            else         LastCursor = 0x12;
                         break;
                     }
 
                     SetSprite_TILE(SPRITE_ID_CURSOR, LastCursor);
-
-                    //*((vu32*) VDP_CTRL_PORT) = VDP_WRITE_CRAM_ADDR((u32)8); // Cursor CRAM colour address
-                    //*((vu16*) VDP_DATA_PORT) = Cursor_CL;
 
                     goto EndEscape;
                 }
@@ -1014,7 +1011,7 @@ static inline void DoEscape(u8 byte)
                     break;
                 
                     case 7:   // Auto-Wrap Mode (DECAWM), VT100.
-                        bWrapAround = TRUE;
+                        sv_bWrapAround = TRUE;
                     break;
                 
                     case 25:   // Shows the cursor, from the VT220. (DECTCEM)
@@ -1057,7 +1054,7 @@ static inline void DoEscape(u8 byte)
                     break;
                 
                     case 7:   // No Auto-Wrap Mode (DECAWM), VT100.
-                        bWrapAround = FALSE;
+                        sv_bWrapAround = FALSE;
                     break;
                 
                     case 25:   // Hides the cursor. (DECTCEM)
@@ -1249,11 +1246,11 @@ static inline void DoIAC(u8 byte)
                         NET_SendChar(TC_SB, TXF_NOBUFFER);
                         NET_SendChar(TO_TERM_TYPE, TXF_NOBUFFER);
                         NET_SendChar(TS_IS, TXF_NOBUFFER);
-                        NET_SendString(TermTypeList[vTermType]);
+                        NET_SendString(TermTypeList[sv_TermType]);
                         NET_SendChar(TC_IAC, TXF_NOBUFFER);
                         NET_SendChar(TC_SE, TXF_NOBUFFER);
                         #ifdef IAC_LOGGING
-                        kprintf("Response: IAC SB TERM_TYPE IS %s IAC SE", TermTypeList[vTermType]);
+                        kprintf("Response: IAC SB TERM_TYPE IS %s IAC SE", TermTypeList[sv_TermType]);
                         #endif
                     }
                     break;
@@ -1298,14 +1295,14 @@ static inline void DoIAC(u8 byte)
                             NET_SendChar(TC_SB, TXF_NOBUFFER);
                             NET_SendChar(TO_TERM_SPEED, TXF_NOBUFFER);
                             NET_SendChar(TS_IS, TXF_NOBUFFER);
-                            NET_SendString(vSpeed);
+                            NET_SendString(sv_Baud);
                             NET_SendChar(',', TXF_NOBUFFER);
-                            NET_SendString(vSpeed);
+                            NET_SendString(sv_Baud);
                             NET_SendChar(TC_IAC, TXF_NOBUFFER);
                             NET_SendChar(TC_SE, TXF_NOBUFFER);
 
                             #ifdef IAC_LOGGING
-                            kprintf("Response: IAC SB TERMINAL-SPEED IS %s,%s IAC SE", vSpeed, vSpeed);
+                            kprintf("Response: IAC SB TERMINAL-SPEED IS %s,%s IAC SE", sv_Baud, sv_Baud);
                             #endif
                         }
                     }
@@ -1533,14 +1530,14 @@ static inline void DoIAC(u8 byte)
                     NET_SendChar(TC_IAC, TXF_NOBUFFER);
                     NET_SendChar(TC_SB, TXF_NOBUFFER);
                     NET_SendChar(0, TXF_NOBUFFER);
-                    NET_SendChar((FontSize==0?0x28:0x50), TXF_NOBUFFER); // Columns - Use internal columns (D_COLUMNS_80/D_COLUMNS_40) here or use font size (4x8=80 & 8x8=40)? - Type? used to be FontSize==3
+                    NET_SendChar((sv_Font==FONT_8x8_16?0x28:0x50), TXF_NOBUFFER); // Columns - Use internal columns (D_COLUMNS_80/D_COLUMNS_40) here or use font size (4x8=80 & 8x8=40)? - Type? used to be sv_Font==3
                     NET_SendChar(0, TXF_NOBUFFER);
                     NET_SendChar((bPALSystem?0x1D:0x1B), TXF_NOBUFFER); // Rows - 29=PAL - 27=NTSC
                     NET_SendChar(TC_IAC, TXF_NOBUFFER);
                     NET_SendChar(TC_SE, TXF_NOBUFFER);
 
                     #ifdef IAC_LOGGING
-                    kprintf("Response: IAC WILL NAWS - IAC SB 0x%04X 0x%04X IAC SE", (FontSize==0?0x28:0x50), (bPALSystem?0x1D:0x1B));
+                    kprintf("Response: IAC WILL NAWS - IAC SB 0x%04X 0x%04X IAC SE", (sv_Font==FONT_8x8_16?0x28:0x50), (bPALSystem?0x1D:0x1B));
                     #endif
                     break;
                 }

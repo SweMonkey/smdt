@@ -4,9 +4,9 @@
 #include <genesis.h>
 
 extern bool bShowQMenu;
-extern u8 QSelected_BGCL;
-extern u8 QSelected_FGCL;
-extern u8 QSelected_CURCL;
+extern u8 sv_QBGCL;
+extern u8 sv_QFGCL;
+extern u8 sv_QCURCL;
 
 void QMenu_Input();
 void SetupQItemTags();

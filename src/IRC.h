@@ -7,8 +7,8 @@
 #define PG_EMPTYNAME "EMPTY PAGE"
 #define MAX_CHANNELS 3
 
-extern char vUsername[];     // IRC username
-extern char vQuitStr[];      // IRC quit message
+extern char sv_Username[];     // IRC username
+extern char sv_QuitStr[];      // IRC quit message
 extern u8 PG_CurrentIdx;
 
 extern TMBuffer *PG_Buffer[];

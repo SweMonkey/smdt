@@ -78,11 +78,63 @@ void CMD_Test(u8 argc, char *argv[])
 void CMD_Echo(u8 argc, char *argv[])
 {
     char tmp[64];
+    
+    if ((strcmp("-help", argv[1]) == 0) || (argc < 2))
+    {
+        PrintOutput("Echo string to screen\n\nUsage:\n");
+        PrintOutput(argv[0]);
+        PrintOutput(" <string>\n");
+        PrintOutput(argv[0]);
+        PrintOutput(" $variable_name\n");
+        
+        return;
+    }
 
-    if (argc < 2) return;
+    if (argv[1][0] == '$')
+    {
+        u16 i = 0;
+        char varname[16] = {'\0'};
+        char tmp[64] = {'\0'};
 
-    sprintf(tmp, "%s\n", argv[1]);
-    PrintOutput(tmp);
+        memcpy(varname, argv[1]+1, strlen(argv[1]-1));
+        
+        while (VarList[i].size)
+        {
+            if (strcmp(VarList[i].name, varname) == 0)
+            {
+                switch (VarList[i].size)
+                {
+                    case ST_BYTE:
+                        sprintf(tmp, "%u\n", *((u8*)VarList[i].ptr));
+                    break;
+                    case ST_WORD:
+                        sprintf(tmp, "%u\n", *((u16*)VarList[i].ptr));
+                    break;
+                    case ST_LONG:
+                        sprintf(tmp, "%lu\n", *((u32*)VarList[i].ptr));
+                    break;        
+                    case ST_SPTR:
+                        sprintf(tmp, "\"%s\"\n", (char*)VarList[i].ptr);
+                    break;
+                    case ST_SARR:
+                        sprintf(tmp, "\"%s\"\n", (char*)VarList[i].ptr);
+                    break;
+                    default:
+                    break;
+                }
+
+                PrintOutput(tmp);
+                break;
+            }
+
+            i++;
+        }
+    }
+    else
+    {
+        sprintf(tmp, "%s\n", argv[1]);
+        PrintOutput(tmp);
+    }
 }
 
 void CMD_KeyboardSend(u8 argc, char *argv[])
@@ -258,12 +310,12 @@ xpico connect <address>\n");
         waitMs(500);
 
         PrintOutput("Received:\n");
-        while ((timeout++ < vConn_time) && ((rxdata != 'C') || (rxdata != 'N')))
+        while ((timeout++ < sv_ConnTimeout) && ((rxdata != 'C') || (rxdata != 'N')))
         {
             if (Buffer_Pop(&RxBuffer, &rxdata) == 0) TELNET_ParseRX(rxdata);
         }
 
-        if (timeout >= vConn_time) PrintOutput("<Connection timed out>");
+        if (timeout >= sv_ConnTimeout) PrintOutput("<Connection timed out>");
 
         PrintOutput("\n");
 
@@ -284,7 +336,7 @@ xpico connect <address>\n");
         waitMs(200);
 
         PrintOutput("Received:\n");
-        while (timeout++ < vConn_time)
+        while (timeout++ < sv_ConnTimeout)
         {
             if (Buffer_Pop(&RxBuffer, &rxdata) == 0) TELNET_ParseRX(rxdata);
         }
@@ -314,7 +366,7 @@ void CMD_UName(u8 argc, char *argv[])
                 strcat(tmp, Krnl_Str);
             break;
             case 'n':
-                strcat(tmp, vUsername);
+                strcat(tmp, sv_Username);
                 strcat(tmp, " ");
             break;
             case 'r':
@@ -331,7 +383,7 @@ void CMD_UName(u8 argc, char *argv[])
             break;
 
             case 'a':
-                sprintf(tmp, "%s%s%s %s", OS_Str, Mach_Str, STATUS_TEXT, vUsername);
+                sprintf(tmp, "%s%s%s %s", OS_Str, Mach_Str, STATUS_TEXT, sv_Username);
             break;
         
             default:
@@ -350,14 +402,14 @@ void CMD_SetConn(u8 argc, char *argv[])
     if (argc < 2) 
     {
         PrintOutput("Set connection time out\n\nUsage:\nsetcon <number of ticks>\n\n");
-        sprintf(tmp, "Current time out: %lu ticks\n", vConn_time);
+        sprintf(tmp, "Current time out: %lu ticks\n", sv_ConnTimeout);
         PrintOutput(tmp);
         return;
     }
 
-    vConn_time = atoi32(argv[1]);
+    sv_ConnTimeout = atoi32(argv[1]);
 
-    sprintf(tmp, "Connection time out set to %lu\n", vConn_time);
+    sprintf(tmp, "Connection time out set to %lu\n", sv_ConnTimeout);
     PrintOutput(tmp);
 }
 
@@ -439,6 +491,9 @@ void CMD_TestSRAM(u8 argc, char *argv[])
     SRAM_disable();
 }
 
+
+
+#define rb(b, d) *b = d
 void CMD_SetVar(u8 argc, char *argv[])
 {
     if ((argc < 3) && (strcmp(argv[1], "-list")))
@@ -486,7 +541,56 @@ void CMD_SetVar(u8 argc, char *argv[])
         return;
     }
 
-    PrintOutput("hi\n");
+    if (argc >= 3)
+    {
+        u16 i = 0;
+        char catbuf[64] = {'\0'};
+        
+        while ((i < 65500) && (VarList[i].size))
+        {
+            if (strcmp(VarList[i].name, argv[1]) == 0)
+            {
+                switch (VarList[i].size)
+                {
+                    case ST_BYTE:
+                        rb((u8*)VarList[i].ptr, atoi(argv[2]));
+                        i = 65534;
+                    break;
+                    case ST_WORD:
+                        rb((u16*)VarList[i].ptr, atoi16(argv[2]));
+                        i = 65534;
+                    break;
+                    case ST_LONG:
+                        rb((u32*)VarList[i].ptr, atoi32(argv[2]));
+                        i = 65534;
+                    break;
+                    case ST_SPTR:
+                    break;
+                    case ST_SARR:
+                        for (u8 a = 0; a < argc-2; a++)
+                        {
+                            strncat(catbuf, argv[a+2], 64);
+
+                            if (a < argc-3)
+                            {
+                                u16 l = strlen(catbuf);
+                                catbuf[l > 62 ? 62 : l] = ' ';
+                                catbuf[l+1 > 63 ? 63 : l+1] = '\0';
+                            }
+                        }
+                        strcpy((char*)VarList[i].ptr, catbuf); // ohboy... lets hope the receiving character array can hold everything :)))
+                        i = 65534;
+                    break;
+                    default:
+                    break;
+                }
+            }
+
+            i++;
+        }
+
+        return;
+    }
 }
 
 void CMD_GetIP(u8 argc, char *argv[])

@@ -7,7 +7,7 @@
 #include "Network.h"
 #include "Utils.h"
 
-u8 vKB_Layout = 0;
+u8 sv_KeyLayout = 0;
 u8 vKB_BATStatus = 0;
 u8 bKB_ExtKey = FALSE;
 u8 bKB_Break = FALSE;
@@ -192,7 +192,7 @@ void KB_Interpret_Scancode(u8 scancode)
     if (bKB_Alt) mod = 2;
     else if (bKB_Shift) mod = 1;
 
-    u8 key = SCTablePtr[vKB_Layout][mod][scancode];
+    u8 key = SCTablePtr[sv_KeyLayout][mod][scancode];
 
     if (isPrintable(key) && !bWindowActive)
     {

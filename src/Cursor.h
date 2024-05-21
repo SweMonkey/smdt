@@ -3,7 +3,7 @@
 
 #include <genesis.h>
 
-extern u16 Cursor_CL;
+extern u16 sv_CursorCL;
 extern u8 bDoCursorBlink;
 extern u16 LastCursor;
 

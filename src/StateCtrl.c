@@ -105,7 +105,7 @@ void ChangeState(State new_state, u8 argc, char *argv[])
 
     ScreensaverInit();
     SetupQItemTags();
-    PAL_setColor(4, Cursor_CL);
+    PAL_setColor(4, sv_CursorCL);
 
     SYS_setVBlankCallback(VBlank);
     SYS_setHIntCallback(CurrentState->HBlank);

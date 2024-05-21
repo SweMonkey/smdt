@@ -158,6 +158,7 @@ int main(bool hardReset)
     //ChangeState(PS_Debug, 0, NULL);
     //ChangeState(PS_Telnet, 0, NULL);
     //ChangeState(PS_Entry, 0, NULL);
+    //ChangeState(PS_IRC, 0, NULL);
     ChangeState(PS_Terminal, 0, NULL);
 
     while(TRUE)

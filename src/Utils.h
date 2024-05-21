@@ -34,7 +34,7 @@
 
 // Sprite indices
 #define SPRITE_ID_CURSOR 0     // Cursor sprite index
-#define SPRITE_ID_SCRSAV 20    // Screensaver sprite index
+#define SPRITE_ID_SCRSAV 1     // Screensaver sprite index
 
 // Check if a character is printable
 #define isPrintable(x) ((x != '\n')&&(x))
@@ -91,6 +91,7 @@ char *strtok(char *s, char d);
 
 u32 syscall(register vu32 n, register vu32 a, register vu32 b, register vu32 c, register vu32 d, register vu32 e, register vu32 f);
 
+char *strncat(char *to, const char *from, u16 num);
 u16 snprintf(char *buffer, u16 size, const char *fmt, ...) __attribute__ ((format (printf, 3, 4)));
 
 #endif // UTILS_H_INCLUDED

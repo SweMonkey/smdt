@@ -4,8 +4,8 @@
 
 TMBuffer *TMB_Ptr = NULL;   // Work buffer
 
-#define TMBATTR_BGA (FontSize?(0x4100 + AVR_FONT0):(0x2100 + AVR_FONT0))
-#define TMBATTR_BGB (FontSize?(0x4100 + AVR_FONT0):(0x4000 + AVR_FONT0))
+#define TMBATTR_BGA (sv_Font?(0x4100 + AVR_FONT0):(0x2100 + AVR_FONT0))
+#define TMBATTR_BGB (sv_Font?(0x4100 + AVR_FONT0):(0x4000 + AVR_FONT0))
 
 
 void TMB_UploadBuffer(TMBuffer *tptr)
@@ -104,7 +104,7 @@ void TMB_PrintChar(u8 c)
 
     u16 addr = 0;
 
-    if (FontSize)   // 4x8 font
+    if (sv_Font)   // 4x8 font
     {
         addr = ((TMB_Ptr->sy & 31) << 7) + (TMB_Ptr->sx >> 1);
 
@@ -192,7 +192,7 @@ void TMB_MoveCursor(u8 dir, u8 num)
             if (TMB_Ptr->sx-num < 0)
             {
                 TMB_SetSX(C_XMAX-(TMB_Ptr->sx-num));
-                if (bWrapAround && (TMB_Ptr->sy > 0)) TMB_Ptr->sy--;
+                if (sv_bWrapAround && (TMB_Ptr->sy > 0)) TMB_Ptr->sy--;
             }
             else
             {
@@ -203,7 +203,7 @@ void TMB_MoveCursor(u8 dir, u8 num)
         case TTY_CURSOR_RIGHT:
             if (TMB_Ptr->sx+num > C_XMAX)
             {
-                if (bWrapAround) 
+                if (sv_bWrapAround) 
                 {
                     TMB_ClearLine(TMB_Ptr->sy+1, 1);
                     TMB_Ptr->sy++;

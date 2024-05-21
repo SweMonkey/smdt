@@ -5,6 +5,7 @@
 #include "Buffer.h"
 #include "Network.h"
 #include "Cursor.h"
+#include "StateCtrl.h"
 #include "../res/system.h"
 
 #define B_PRINTSTR_LEN 512
@@ -13,6 +14,8 @@
 #define B_PREFIX_LEN 256
 #define B_COMMAND_LEN 64
 #define B_PARAM_LEN 512
+
+#define B_RXSTRING_LEN 1024
 
 #define TTS_VRAMIDX 0x240    //0x320 - TODO: find a spot for all the tiles. It requires at least 38 continous tiles in VRAM
 
@@ -27,13 +30,13 @@ static bool CR_Set = FALSE;
 static u8 bLookingForCL = 0;
 static u8 NewColor = 0;
 
-static char *RXString;
+static char *RXString = NULL;
 static u16 RXStringSeq = 0;
 
 bool bFirstRun = TRUE;
 
-char vUsername[32] = "smd_user";
-char vQuitStr[32] = "Mega Drive IRC Client Quit";
+char sv_Username[32] = "smd_user";
+char sv_QuitStr[32] = "Mega Drive IRC Client Quit";
 
 static const u16 pColors[16] =
 {
@@ -48,6 +51,9 @@ char *PG_UserList[512] = {NULL};
 u16 PG_UserNum = 0;
 u16 UserIterator = 0;
 
+// Terminal print function used to return error messages
+extern void PrintOutput(const char *str);
+
 
 void IRC_Init()
 {
@@ -59,7 +65,7 @@ void IRC_Init()
 
 void IRC_Reset()
 {
-    if (!FontSize) PAL_setPalette(PAL2, pColors, DMA);
+    if (!sv_Font) PAL_setPalette(PAL2, pColors, DMA);
 
     TMB_SetColorFG(15);
 
@@ -67,7 +73,7 @@ void IRC_Reset()
     vDoEcho = 1;
     vLineMode = 1;
     bFirstRun = TRUE;
-    Cursor_CL = 0x0E0;
+    sv_CursorCL = 0x0E0;
     LastCursor = 0x12;
 
     // Allocate and setup channel slots
@@ -78,11 +84,13 @@ void IRC_Reset()
             PG_Buffer[ch] = malloc(sizeof(TMBuffer));
             if (PG_Buffer[ch] == NULL) 
             {
+                #ifdef IRC_LOGGING
                 kprintf("Failed to allocate memory for PG_Buffer[%u]", ch);
-                SYS_hardReset();
+                #endif
+                ChangeState(PS_Terminal, 0, NULL);
+                PrintOutput("Failed to allocate memory for PG_Buf!");
             }
-        }
-        
+        }        
         memset(PG_Buffer[ch], 0, sizeof(TMBuffer));
 
         strcpy(PG_Buffer[ch]->Title, PG_EMPTYNAME);
@@ -98,21 +106,29 @@ void IRC_Reset()
         LineBuf = malloc(sizeof(struct s_linebuf));
         if (LineBuf == NULL) 
         {
+            #ifdef IRC_LOGGING
             kprintf("Failed to allocate memory for LineBuf");
-            SYS_hardReset();
+            #endif
+            ChangeState(PS_Terminal, 0, NULL);
+            PrintOutput("Failed to allocate memory for LineBuf!");
         }
     }
+    memset(LineBuf, 0, sizeof(struct s_linebuf));
 
     // Allocate RXString buffer
     if (RXString == NULL)
     {
-        RXString = malloc(1024);
+        RXString = malloc(B_RXSTRING_LEN);
         if (RXString == NULL) 
         {
+            #ifdef IRC_LOGGING
             kprintf("Failed to allocate memory for RXString");
-            SYS_hardReset();
+            #endif
+            ChangeState(PS_Terminal, 0, NULL);
+            PrintOutput("Failed to allocate memory for RXString!");
         }
     }
+    memset(RXString, 0, B_RXSTRING_LEN);
 
     // Set defaults
     PG_CurrentIdx = 0;
@@ -120,33 +136,34 @@ void IRC_Reset()
     PG_OpenPages = 1;
 
     // Setup the cursor for the typing input box at the bottom of the screen
-    s16 spr_x = 8 + 128, spr_y = (bPALSystem?232:216) + 128;
+    s16 spr_x = 8 + 128;
+    s16 spr_y = (bPALSystem?232:216) + 128;
 
     // First 9 textboxes
     for (u8 i = 0; i < 9; i++)
     {
-        SetSprite_Y(i+1, spr_y);
-        SetSprite_SIZELINK(i+1, SPR_WIDTH_4x1, i+2);
-        SetSprite_TILE(i+1, 0x2000+TTS_VRAMIDX+(i*4));
-        SetSprite_X(i+1, spr_x+(i*32));
+        SetSprite_Y(i+2, spr_y);
+        SetSprite_SIZELINK(i+2, SPR_WIDTH_4x1, i+3);
+        SetSprite_TILE(i+2, 0x2000+TTS_VRAMIDX+(i*4));
+        SetSprite_X(i+2, spr_x+(i*32));
     }
 
     // Final 10th textbox
-    SetSprite_Y(10, spr_y);
-    SetSprite_SIZELINK(10, SPR_WIDTH_3x1, SPRITE_ID_SCRSAV);
-    SetSprite_TILE(10, 0x2000+TTS_VRAMIDX+36);
-    SetSprite_X(10, spr_x+288);
+    SetSprite_Y(11, spr_y);
+    SetSprite_SIZELINK(11, SPR_WIDTH_3x1, 0);
+    SetSprite_TILE(11, 0x2000+TTS_VRAMIDX+36);
+    SetSprite_X(11, spr_x+288);
 
     // Setup cursor sprite y position and tile
     SetSprite_Y(SPRITE_ID_CURSOR, spr_y);
     SetSprite_TILE(SPRITE_ID_CURSOR, LastCursor);
-    SetSprite_SIZELINK(SPRITE_ID_CURSOR, 0, 1);
+    //SetSprite_SIZELINK(SPRITE_ID_CURSOR, 0, 1);
 }
 
 void IRC_Exit()
 {
     char buf[64];
-    sprintf(buf, "QUIT %s\n", vQuitStr);
+    sprintf(buf, "QUIT %s\n", sv_QuitStr);
     NET_SendString(buf);
 
     for (u8 ch = 0; ch < MAX_CHANNELS; ch++)
@@ -414,7 +431,7 @@ void IRC_DoCommand()
 
         snprintf(PrintBuf, B_PRINTSTR_LEN, "%s: %s\n", subprefix, LineBuf->param[1]);
 
-        if (strcmp(LineBuf->param[0], vUsername) == 0)
+        if (strcmp(LineBuf->param[0], sv_Username) == 0)
         {
             strncpy(ChanBuf, subprefix, 40);
         }
@@ -430,7 +447,7 @@ void IRC_DoCommand()
         while ((LineBuf->prefix[end++] != '!') && (end < B_SUBPREFIX_LEN));
         strncpy(subprefix, LineBuf->prefix, end-1);
 
-        if (strcmp(subprefix, vUsername) != 0)
+        if (strcmp(subprefix, sv_Username) != 0)
         {
             snprintf(PrintBuf, B_PRINTSTR_LEN, "%s has joined the channel\n", LineBuf->prefix);
             strncpy(ChanBuf, LineBuf->param[0], 40);
@@ -443,7 +460,7 @@ void IRC_DoCommand()
         while ((LineBuf->prefix[end++] != '!') && (end < B_SUBPREFIX_LEN));
         strncpy(subprefix, LineBuf->prefix, end-1);
 
-        if (strcmp(subprefix, vUsername) != 0)
+        if (strcmp(subprefix, sv_Username) != 0)
         {
             snprintf(PrintBuf, B_PRINTSTR_LEN, "%s: %s\n", subprefix, LineBuf->param[0]);
         }
@@ -594,7 +611,7 @@ void IRC_DoCommand()
             }
             case 480:   // 
             {
-                snprintf(PrintBuf, B_PRINTSTR_LEN, "[480] %s %s %s\n", vUsername, LineBuf->param[1], LineBuf->param[2]);  // LineBuf->param[3] = Further information (tls required for example etc)
+                snprintf(PrintBuf, B_PRINTSTR_LEN, "[480] %s %s %s\n", sv_Username, LineBuf->param[1], LineBuf->param[2]);  // LineBuf->param[3] = Further information (tls required for example etc)
                 break;
             }
         
@@ -622,6 +639,7 @@ void IRC_DoCommand()
 
             snprintf(TitleBuf, 40, "%s - %-21s", STATUS_TEXT, PG_Buffer[PG_CurrentIdx]->Title);
             TRM_SetStatusText(TitleBuf);
+
             break;
         }
         else    // No empty pages and no page match, bail.
@@ -727,9 +745,9 @@ void IRC_ParseRX(u8 byte)
     if (bFirstRun)
     {
         char buf[64];
-        sprintf(buf, "NICK %s\n", vUsername);
+        sprintf(buf, "NICK %s\n", sv_Username);
         NET_SendString(buf);
-        sprintf(buf, "USER %s m68k smdnet :Mega Drive\n", vUsername); 
+        sprintf(buf, "USER %s m68k smdnet :Mega Drive\n", sv_Username); 
         NET_SendString(buf);
         bFirstRun = FALSE;
     }
@@ -741,7 +759,9 @@ void IRC_ParseRX(u8 byte)
             LineBuf->prefix[0] = '\0';
             LineBuf->command[0] = '\0';
             for (u8 i = 0; i < 16; i++){LineBuf->param[i][0] = '\0';}
+
             IRC_ParseString();
+
             RXStringSeq = 0;
             CR_Set = FALSE;
         break;
@@ -750,7 +770,7 @@ void IRC_ParseRX(u8 byte)
         break;
 
         default:
-            if (RXStringSeq < 1023) RXString[RXStringSeq++] = byte;
+            if (RXStringSeq < (B_RXSTRING_LEN-1)) RXString[RXStringSeq++] = byte;
             else RXStringSeq--;
         break;
     }

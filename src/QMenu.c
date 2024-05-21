@@ -5,10 +5,10 @@
 #include "StateCtrl.h"
 #include "Utils.h"
 #include "SRAM.h"
-#include "Cursor.h"         // Cursor_CL
-#include "Network.h"        // DEV_UART
-#include "Keyboard.h"       // vKB_Layout
-#include "Screensaver.h"    // bScreensaver
+#include "Cursor.h"         // sv_CursorCL
+#include "Network.h"        // sv_ListenPort
+#include "Keyboard.h"       // sv_KeyLayout
+#include "Screensaver.h"    // sv_bScreensaver
 
 // Forward decl.
 void WINFN_Reset();
@@ -337,9 +337,9 @@ static u8 SelectedIdx = 0;
 static u8 MenuIdx = 0;
 static const u8 MenuPosX = 1, MenuPosY = 0;
 bool bShowQMenu = FALSE;
-u8 QSelected_BGCL = 0;
-u8 QSelected_FGCL = 1;
-u8 QSelected_CURCL = 0;
+u8 sv_QBGCL  = 0;    // Selected BG colour entry in quick menu
+u8 sv_QFGCL  = 1;    // Selected FG colour entry in quick menu
+u8 sv_QCURCL = 0;    // Selected cursor colour entry in quick menu
 
 
 void QMenu_Input()
@@ -367,18 +367,18 @@ void QMenu_Input()
 void SetupQItemTags()
 {
     MainMenu[ 5].tagged_entry = vNewlineConv;
-    MainMenu[ 9].tagged_entry = vTermType;
-    MainMenu[11].tagged_entry = FontSize;
-    MainMenu[12].tagged_entry = vKB_Layout;
-    MainMenu[16].tagged_entry = DEV_UART_PORT;
-    MainMenu[17].tagged_entry = QSelected_BGCL;
-    MainMenu[18].tagged_entry = QSelected_FGCL;
+    MainMenu[ 9].tagged_entry = sv_TermType;
+    MainMenu[11].tagged_entry = sv_Font;
+    MainMenu[12].tagged_entry = sv_KeyLayout;
+    MainMenu[16].tagged_entry = sv_ListenPort;
+    MainMenu[17].tagged_entry = sv_QBGCL;
+    MainMenu[18].tagged_entry = sv_QFGCL;
     MainMenu[21].tagged_entry = vDoEcho;
     MainMenu[22].tagged_entry = vLineMode>1?0:vLineMode;
-    MainMenu[24].tagged_entry = bHighCL;
-    MainMenu[25].tagged_entry = bScreensaver;
+    MainMenu[24].tagged_entry = sv_bHighCL;
+    MainMenu[25].tagged_entry = sv_bScreensaver;
 
-    switch (vSpeed[0])
+    switch (sv_Baud[0])
     {
         case '4':
         MainMenu[10].tagged_entry = 0;
@@ -398,7 +398,7 @@ void SetupQItemTags()
         break;
     }
     
-    switch (D_HSCROLL)
+    switch (sv_HSOffset)
     {
         case 0:
         MainMenu[19].tagged_entry = 0;
@@ -577,75 +577,75 @@ void WINFN_BGColor()
     switch (SelectedIdx)
     {
         case 0:
-            Custom_BGCL = 0;
+            sv_CBGCL = 0;
         break;
         case 1:
-            Custom_BGCL = 0xEEE;
+            sv_CBGCL = 0xEEE;
         break;
         case 2:
-            Custom_BGCL = random();
+            sv_CBGCL = random();
         break;
     
         default:
-            Custom_BGCL = 0;
+            sv_CBGCL = 0;
         break;
     }
     
-    QSelected_BGCL = SelectedIdx;
-    PAL_setColor( 0, Custom_BGCL);
-    PAL_setColor( 5, Custom_BGCL);
-    PAL_setColor(17, Custom_BGCL);
-    PAL_setColor(50, Custom_BGCL);
+    sv_QBGCL = SelectedIdx;
+    PAL_setColor( 0, sv_CBGCL);
+    PAL_setColor( 5, sv_CBGCL);
+    PAL_setColor(17, sv_CBGCL);
+    PAL_setColor(50, sv_CBGCL);
 }
 
 void WINFN_FGColor()
 {
-    if (FontSize != 2) return;
+    if (sv_Font != FONT_4x8_1) return;
     u16 r = random();
 
     switch (SelectedIdx)
     {
         case 0: // Black
-            Cursor_CL = 0x0E0;
-            Custom_FG0CL = 0;
-            Custom_FG1CL = 0x222;
+            sv_CursorCL = 0x0E0;
+            sv_CFG0CL = 0;
+            sv_CFG1CL = 0x222;
         break;
         case 1: // White
-            Cursor_CL = 0x0E0;
-            Custom_FG0CL = 0xEEE;
-            Custom_FG1CL = 0x666;
+            sv_CursorCL = 0x0E0;
+            sv_CFG0CL = 0xEEE;
+            sv_CFG1CL = 0x666;
         break;
         case 2: // Amber
-            Cursor_CL = 0x0AE;
-            Custom_FG0CL = 0x0AE;
-            Custom_FG1CL = 0x046;
+            sv_CursorCL = 0x0AE;
+            sv_CFG0CL = 0x0AE;
+            sv_CFG1CL = 0x046;
         break;
         case 3: // Green
-            Cursor_CL = 0x0E0;
-            Custom_FG0CL = 0x0A0;
-            Custom_FG1CL = 0x040;
+            sv_CursorCL = 0x0E0;
+            sv_CFG0CL = 0x0A0;
+            sv_CFG1CL = 0x040;
         break;
         case 4: // Random
-            Cursor_CL = r;
-            Custom_FG0CL = r;
-            Custom_FG1CL = r & 0x666;
+            sv_CursorCL = r;
+            sv_CFG0CL = r;
+            sv_CFG1CL = r & 0x666;
         break;
     
         default:
-            Cursor_CL = 0x0E0;
-            Custom_FG0CL = 0xEEE;
-            Custom_FG1CL = 0x666;
+            sv_CursorCL = 0x0E0;
+            sv_CFG0CL = 0xEEE;
+            sv_CFG1CL = 0x666;
         break;
     }
     
-    QSelected_FGCL = SelectedIdx;
-    PAL_setColor(47, Custom_FG0CL);
-    PAL_setColor(46, Custom_FG1CL);
+    sv_QFGCL = SelectedIdx;
+    PAL_setColor(47, sv_CFG0CL);
+    PAL_setColor(46, sv_CFG0CL);
 }
 
 void WINFN_TERMTYPE()
 {
-    vTermType = SelectedIdx;
+    sv_TermType = SelectedIdx;
 }
 
 void WINFN_SERIALSPEED()
@@ -656,19 +656,19 @@ void WINFN_SERIALSPEED()
     {
         case 0: // 4800
             *PSCTRL = 0x38;
-            strcpy(vSpeed, "4800");
+            strcpy(sv_Baud, "4800");
         break;
         case 1: // 2400
             *PSCTRL = 0x78;
-            strcpy(vSpeed, "2400");
+            strcpy(sv_Baud, "2400");
         break;
         case 2: // 1200
             *PSCTRL = 0xB8;
-            strcpy(vSpeed, "1200");
+            strcpy(sv_Baud, "1200");
         break;
         case 3: // 300
             *PSCTRL = 0xF8;
-            strcpy(vSpeed, "300");
+            strcpy(sv_Baud, "300");
         break;
     
         default:
@@ -678,7 +678,7 @@ void WINFN_SERIALSPEED()
 
 void WINFN_FONTSIZE()
 {
-    TTY_SetFontSize(SelectedIdx);
+    if (getState() != PS_IRC) TTY_SetFontSize(SelectedIdx);
 }
 
 void WINFN_KBLayoutSel()
@@ -687,10 +687,10 @@ void WINFN_KBLayoutSel()
     {
         default:
         case 0: // US (English)
-            vKB_Layout = 0;
+            sv_KeyLayout = 0;
         break;
         case 1: // SE (Swedish)
-            vKB_Layout = 1;
+            sv_KeyLayout = 1;
         break;
     }
 }
@@ -734,7 +734,7 @@ void WINFN_DEBUGSEL()
 void WINFN_SERIALPORTSEL()
 {
     SetDevicePort(&DEV_UART, (DevPort)SelectedIdx);
-    DEV_UART_PORT = (DevPort)SelectedIdx;
+    sv_ListenPort = (DevPort)SelectedIdx;
     
     vu8 *SCtrl;
     SCtrl = (vu8 *)DEV_UART.SCtrl;
@@ -780,27 +780,27 @@ void WINFN_HSCOFF()
     switch (SelectedIdx)
     {
         case 0: // None
-            D_HSCROLL = 0;
+            sv_HSOffset = 0;
         break;
         case 1: // -8
-            D_HSCROLL = -8;
+            sv_HSOffset = -8;
         break;
         case 2: // -16
-            D_HSCROLL = -16;
+            sv_HSOffset = -16;
         break;
         case 3: // +8
-            D_HSCROLL = 8;
+            sv_HSOffset = 8;
         break;
         case 4: // +16
-            D_HSCROLL = 16;
+            sv_HSOffset = 16;
         break;
     
         default:
         break;
     }
 
-    HScroll = D_HSCROLL;
-    if (!FontSize)
+    HScroll = sv_HSOffset;
+    if (!sv_Font)
     {
         VDP_setHorizontalScroll(BG_A, HScroll);
         VDP_setHorizontalScroll(BG_B, HScroll);
@@ -829,10 +829,10 @@ void WINFN_CUSTOM_FGCL()
     switch (SelectedIdx)
     {
         case 0: // Normal
-            bHighCL = FALSE;
+            sv_bHighCL = FALSE;
         break;
         case 1: // Highlighted
-            bHighCL = TRUE;
+            sv_bHighCL = TRUE;
         break;
         case 2: // Custom
         break;
@@ -846,7 +846,7 @@ void WINFN_CUSTOM_FGCL()
 
 void WINFN_SCREENSAVER()
 {
-    bScreensaver = SelectedIdx;
+    sv_bScreensaver = SelectedIdx;
 }
 
 void WINFN_CURSOR_CL()
@@ -854,23 +854,23 @@ void WINFN_CURSOR_CL()
     switch (SelectedIdx)
     {
         case 0:
-            Cursor_CL = 0x0E0;
+            sv_CursorCL = 0x0E0;
         break;
         case 1:
-            Cursor_CL = 0;
+            sv_CursorCL = 0;
         break;
         case 2:
-            Cursor_CL = 0xEEE;
+            sv_CursorCL = 0xEEE;
         break;
         case 3:
-            Cursor_CL = random();
+            sv_CursorCL = random();
         break;
     
         default:
-            Cursor_CL = 0;
+            sv_CursorCL = 0;
         break;
     }
     
-    QSelected_CURCL = SelectedIdx;
-    PAL_setColor(4, Cursor_CL);
+    sv_QCURCL = SelectedIdx;
+    PAL_setColor(4, sv_CursorCL);
 }

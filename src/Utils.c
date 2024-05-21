@@ -215,6 +215,23 @@ u32 syscall(register vu32 n, register vu32 a, register vu32 b, register vu32 c, 
     return 0;
 }
 
+// strncat, modified strcat from SGDK
+char *strncat(char *to, const char *from, u16 num)
+{
+    const char *src;
+    char *dst;
+    u16 i = strlen(to) + strlen(from);
+    i = (i > num ? num : i);
+
+    src = from;
+    dst = to;
+    while (*dst++){i--;}
+
+    --dst;
+    while ((i--) && (*dst++ = *src++));
+
+    return to;
+}
 
 // snprintf, modified sprintf from SGDK
 static const char const uppercase_hexchars[] = "0123456789ABCDEF";

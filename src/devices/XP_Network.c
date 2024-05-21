@@ -6,7 +6,7 @@
 
 // Time out and wait values are prelimiary and needs more calibration.
 
-u32 vConn_time = 500000; // Connection timeout (waiting for connection to remote server)
+u32 sv_ConnTimeout = 500000; // Connection timeout (waiting for connection to remote server)
 
 
 u8 XPN_Initialize()
@@ -106,7 +106,7 @@ bool XPN_Connect(char *str)
     XPN_SendMessage(str);
     XPN_SendByte(0x0A);
 
-    while (timeout < vConn_time)
+    while (timeout < sv_ConnTimeout)
     {
         if (Buffer_Pop(&RxBuffer, &byte) == 0)
         {

@@ -3,7 +3,7 @@
 
 #include <genesis.h>
 
-extern u8 vKB_Layout;        // Selected keyboard layout
+extern u8 sv_KeyLayout;        // Selected keyboard layout
 extern u8 vKB_BATStatus;
 extern u8 bKB_ExtKey;
 extern u8 bKB_Break;

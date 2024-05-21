@@ -42,7 +42,7 @@ SM_Device *DevList[DEV_MAX];        // Device list
 u8 DevSeq = 0;                      // Number of devices
 bool bRLNetwork = FALSE;            // Use RetroLink cartridge instead of built-in UART
 bool bXPNetwork = FALSE;            // Use XPort network adapter
-DevPort DEV_UART_PORT = DP_Port2;   // Default UART port - Read only!
+DevPort sv_ListenPort = DP_Port2;   // Default UART port to listen on
 
 /// @brief Get four bit device identifier (Sega devices only)
 /// @param p Port to check (DP_Port1, DP_Port2, DP_Port3)
@@ -202,7 +202,7 @@ void DetectDevices()
     DEV_UART.Id.Mode = DEVMODE_SERIAL | DEVMODE_PARALLEL;
     
     DevList[DevSeq++] = &DEV_UART;
-    SetDevicePort(&DEV_UART, DEV_UART_PORT);
+    SetDevicePort(&DEV_UART, sv_ListenPort);
     vu8 *SCtrl;
     SCtrl = (vu8 *)DEV_UART.SCtrl;
     *SCtrl = 0x38;

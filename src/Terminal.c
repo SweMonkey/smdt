@@ -18,20 +18,20 @@
 #define DCOL8_128 126   // Using 8x8 font with 128 wide tilemap
 
 // Modifiable variables
-u8 vNewlineConv = 0;    // 0 = none (\n = \n) -- 1 = \n becomes \n\r
-u8 vTermType = 0;       // See TermType table further down
-u8 vDoEcho = 0;         // 0 = Rely on remote server to echo back typed characters -- 1 = Do echo typed characters back to screen
-u8 vLineMode = 0;       // Line edit mode
-char vSpeed[5] = "4800";// Report this baud speed to remote servers if they ask
+u8 vNewlineConv = 0;     // 0 = none (\n = \n) -- 1 = \n becomes \n\r
+u8 sv_TermType = 0;      // Terminal type. See TermType table further down
+u8 vDoEcho = 0;          // 0 = Rely on remote server to echo back typed characters -- 1 = Do echo typed characters back to screen
+u8 vLineMode = 0;        // Line edit mode
+char sv_Baud[5] = "4800";// Report this baud speed to remote servers if they ask
 
 // Font
-u8 FontSize = 1;        // 0=8x8 16 colour - 1=4x8 8 colour AA - 2=4x8 monochrome AA
-u8 EvenOdd = 0;         // Even/Odd character being printed
+u8 sv_Font = FONT_4x8_8; // Font size. 0=8x8 16 colour - 1=4x8 8 colour AA - 2=4x8 monochrome AA
+u8 EvenOdd = 0;          // Even/Odd character being printed
 static u8 LastPlane = 0;
 
 // TTY
 s32 sx = 0, sy = C_YSTART;              // Character x and y output position
-s8 D_HSCROLL = 0;                       // Default HScroll offset
+s8 sv_HSOffset = 0;                     // HScroll offset
 s16 HScroll = 0;                        // VDP horizontal scroll position
 s16 VScroll = 0;                        // VDP vertical scroll position
 u8 C_XMAX = 63;                         // Cursor max X position
@@ -39,14 +39,14 @@ u8 C_YMAX = C_YMAX_PAL;                 // Cursor max Y position
 u8 ColorBG = CL_BG, ColorFG = CL_FG;    // Selected BG/FG colour
 u8 bIntense = FALSE;                    // Text highlighed
 u8 bInverse = FALSE;                    // Text BG/FG reversed
-u8 bWrapAround = TRUE;                  // Force wrap around at column 40/80
-u8 TermColumns = D_COLUMNS_80;          // Number of terminal character columns (40/80)
+u8 sv_bWrapAround = TRUE;               // Force wrap around at column 40/80
+u8 sv_TermColumns = D_COLUMNS_80;       // Number of terminal character columns (40/80)
 
 // Colours
-u16 Custom_BGCL = 0;
-u16 Custom_FG0CL = 0xEEE;   // Custom text colour for 4x8 font
-u16 Custom_FG1CL = 0x666;   // Custom text antialiasing colour for 4x8 font
-u8 bHighCL = TRUE;          // Use the upper 8 colours instead when using FontSize=1
+u16 sv_CBGCL = 0;       // Custom BG colour
+u16 sv_CFG0CL = 0xEEE;  // Custom text colour for 4x8 font
+u16 sv_CFG1CL = 0x666;  // Custom text antialiasing colour for 4x8 font
+u8 sv_bHighCL = TRUE;   // Use the upper 8 colours instead when using sv_Font=1
 
 static const u16 pColors[16] =
 {
@@ -85,7 +85,7 @@ void TTY_Init(u8 bHardReset)
 {
     if (bHardReset)
     {
-        TTY_SetColumns(TermColumns);
+        TTY_SetColumns(sv_TermColumns);
         RXBytes = 0;
         TXBytes = 0;
     }
@@ -98,7 +98,7 @@ void TTY_Reset(u8 bClearScreen)
     TTY_SetSX(0);
     sy = C_YSTART;
     C_YMAX = IS_PAL_SYSTEM ? C_YMAX_PAL : C_YMAX_NTSC;
-    HScroll = D_HSCROLL;
+    HScroll = sv_HSOffset;
     VScroll = D_VSCROLL;
     ColorBG = CL_BG;
     ColorFG = CL_FG;
@@ -106,7 +106,7 @@ void TTY_Reset(u8 bClearScreen)
     bInverse = FALSE;
     bDoCursorBlink = TRUE;
 
-    TTY_SetFontSize(FontSize);
+    TTY_SetFontSize(sv_Font);
 
     VDP_setVerticalScroll(BG_A, VScroll);
     VDP_setVerticalScroll(BG_B, VScroll);
@@ -125,15 +125,15 @@ void TTY_Reset(u8 bClearScreen)
 
 void TTY_SetColumns(u8 col)
 {
-    TermColumns = col;
+    sv_TermColumns = col;
 
-    switch (TermColumns)
+    switch (sv_TermColumns)
     {
         case D_COLUMNS_80:
         {
             VDP_setPlaneSize(128, 32, FALSE);
 
-            if (!FontSize) C_XMAX = DCOL8_128;
+            if (!sv_Font) C_XMAX = DCOL8_128;
             else C_XMAX = DCOL4_128;
 
             break;
@@ -143,7 +143,7 @@ void TTY_SetColumns(u8 col)
             //VDP_setPlaneSize(64, 32, FALSE);
             VDP_setPlaneSize(128, 32, FALSE);
 
-            if (!FontSize) C_XMAX = DCOL8_64;
+            if (!sv_Font) C_XMAX = DCOL8_64;
             else C_XMAX = DCOL4_64;
             
             break;
@@ -153,63 +153,63 @@ void TTY_SetColumns(u8 col)
 
 void TTY_ReloadPalette()
 {
-    if (FontSize == 1)   // 4x8
+    if (sv_Font == FONT_4x8_8)   // 4x8
     {
         // Font glyph set 0 (Colours 0-3)
         PAL_setColor(0x0C, pColorsHalf[0]);
-        PAL_setColor(0x0D, pColors[(bHighCL ?  8 : 8)]);    // Always use the bright colour here
+        PAL_setColor(0x0D, pColors[(sv_bHighCL ?  8 : 8)]);    // Always use the bright colour here
 
         PAL_setColor(0x1C, pColorsHalf[1]);
-        PAL_setColor(0x1D, pColors[(bHighCL ?  9 : 1)]);
+        PAL_setColor(0x1D, pColors[(sv_bHighCL ?  9 : 1)]);
 
         PAL_setColor(0x2C, pColorsHalf[2]);
-        PAL_setColor(0x2D, pColors[(bHighCL ? 10 : 2)]);
+        PAL_setColor(0x2D, pColors[(sv_bHighCL ? 10 : 2)]);
 
         PAL_setColor(0x3C, pColorsHalf[3]);
-        PAL_setColor(0x3D, pColors[(bHighCL ? 11 : 3)]);
+        PAL_setColor(0x3D, pColors[(sv_bHighCL ? 11 : 3)]);
 
         // Font glyph set 1 (Colours 4-7)
         PAL_setColor(0x0E, pColorsHalf[4]);
-        PAL_setColor(0x0F, pColors[(bHighCL ? 12 : 4)]);
+        PAL_setColor(0x0F, pColors[(sv_bHighCL ? 12 : 4)]);
 
         PAL_setColor(0x1E, pColorsHalf[5]);
-        PAL_setColor(0x1F, pColors[(bHighCL ? 13 : 5)]);
+        PAL_setColor(0x1F, pColors[(sv_bHighCL ? 13 : 5)]);
 
         PAL_setColor(0x2E, pColorsHalf[6]);
-        PAL_setColor(0x2F, pColors[(bHighCL ? 14 : 6)]);
+        PAL_setColor(0x2F, pColors[(sv_bHighCL ? 14 : 6)]);
 
         PAL_setColor(0x3E, pColorsHalf[7]);
-        PAL_setColor(0x3F, pColors[(bHighCL ? 15 : 7)]);
+        PAL_setColor(0x3F, pColors[(sv_bHighCL ? 15 : 7)]);
 
-        //Cursor_CL = 0x0E0;
+        //sv_CursorCL = 0x0E0;
     }
-    else if (FontSize == 2)   // 4x8 AA
+    else if (sv_Font == FONT_4x8_1)   // 4x8 AA
     {
-        PAL_setColor(47, Custom_FG0CL);    // FG colour
-        PAL_setColor(46, Custom_FG1CL);    // AA colour
+        PAL_setColor(47, sv_CFG0CL);    // FG colour
+        PAL_setColor(46, sv_CFG0CL);    // AA colour
 
-        //Cursor_CL = Custom_FG0CL;
+        //sv_CursorCL = sv_CFG0CL;
     }
     else        // 8x8
     {
         PAL_setPalette(PAL2, pColors, DMA);
-        //Cursor_CL = 0x0E0;
+        //sv_CursorCL = 0x0E0;
     }
     
-    PAL_setColor( 0, Custom_BGCL);
-    PAL_setColor( 5, Custom_BGCL);
-    PAL_setColor(17, Custom_BGCL);
-    PAL_setColor(50, Custom_BGCL);
+    PAL_setColor( 0, sv_CBGCL);
+    PAL_setColor( 5, sv_CBGCL);
+    PAL_setColor(17, sv_CBGCL);
+    PAL_setColor(50, sv_CBGCL);
 }
 
 // Todo: Clean up plane A/B when switching
 void TTY_SetFontSize(u8 size)
 {
-    FontSize = size;
+    sv_Font = size;
 
     TTY_ReloadPalette();
 
-    if (FontSize == 1)   // 4x8 colour AA
+    if (sv_Font == FONT_4x8_8)   // 4x8 colour AA
     {
         VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA, AVR_FONT0, DMA);
         VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA_ALT, AVR_FONT1, DMA);
@@ -222,10 +222,10 @@ void TTY_SetFontSize(u8 size)
         EvenOdd = 1;
         LastPlane = 0;
 
-        if (TermColumns == D_COLUMNS_80) C_XMAX = DCOL4_128;
+        if (sv_TermColumns == D_COLUMNS_80) C_XMAX = DCOL4_128;
         else C_XMAX = DCOL4_64;
     }
-    else if (FontSize == 2)   // 4x8 mono AA
+    else if (sv_Font == FONT_4x8_1)   // 4x8 mono AA
     {
         VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA, AVR_FONT0, DMA);
 
@@ -237,7 +237,7 @@ void TTY_SetFontSize(u8 size)
         EvenOdd = 1;
         LastPlane = 0;
 
-        if (TermColumns == D_COLUMNS_80) C_XMAX = DCOL4_128;
+        if (sv_TermColumns == D_COLUMNS_80) C_XMAX = DCOL4_128;
         else C_XMAX = DCOL4_64;
     }
     else        // 8x8
@@ -249,12 +249,12 @@ void TTY_SetFontSize(u8 size)
 
         LastCursor = 0x10;
         
-        if (TermColumns == D_COLUMNS_80) C_XMAX = DCOL8_128;
+        if (sv_TermColumns == D_COLUMNS_80) C_XMAX = DCOL8_128;
         else C_XMAX = DCOL8_64;
     }
 
     // Update visual cursor position    
-    u16 sprx = ((FontSize?(sx << 2):(sx << 3))) + HScroll + 128;
+    u16 sprx = ((sv_Font?(sx << 2):(sx << 3))) + HScroll + 128;
     u16 spry = (sy << 3) - VScroll + 128;
 
     // Clamp position
@@ -272,9 +272,9 @@ inline void TTY_PrintChar(u8 c)
 {
     u16 addr = 0;
 
-    switch (FontSize)
+    switch (sv_Font)
     {
-        case 0: // 8x8
+        case FONT_8x8_16: // 8x8
         {
             addr = ((sx & 127) << 1) + YAddr_Table[sy & 31];
 
@@ -285,7 +285,7 @@ inline void TTY_PrintChar(u8 c)
             *((vu16*) VDP_DATA_PORT) = 0x4000 + ColorFG;
             break;
         }
-        case 1: // 4x8 Colour
+        case FONT_4x8_8: // 4x8 Colour
         {
             addr = (((sx >> 1) & 127) << 1) + YAddr_Table[sy & 31];
 
@@ -311,7 +311,7 @@ inline void TTY_PrintChar(u8 c)
             EvenOdd = sx & 1;            
             break;
         }
-        case 2: // 4x8 Mono
+        case FONT_4x8_1: // 4x8 Mono
         {
             addr = (((sx >> 1) & 127) << 1) + YAddr_Table[sy & 31];
 
@@ -374,7 +374,7 @@ inline void TTY_ClearLine(u16 y, u16 line_count)
     }
 
     // Clear BGA too if using 4x8 font
-    if (FontSize)
+    if (sv_Font)
     {
         *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR((u32) AVR_PLANE_A + addr);
 
@@ -412,7 +412,7 @@ inline void TTY_ClearLineSingle(u16 y)
     }
 
     // Clear BGA too if using 4x8 font
-    if (FontSize)
+    if (sv_Font)
     {
         *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR((u32) AVR_PLANE_A + addr);
 
@@ -433,9 +433,9 @@ inline void TTY_ClearPartialLine(u16 y, u16 from_x, u16 to_x)
 
     *((vu16*) VDP_CTRL_PORT) = 0x8F02;  // Set VDP autoinc to 2
 
-    switch (FontSize)
+    switch (sv_Font)
     {
-        case 0: // 8x8
+        case FONT_8x8_16: // 8x8
         {
             *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR((u32) AVR_PLANE_B + (((from_x & 127) + ((y & 31) << 7)) << 1));
 
@@ -450,8 +450,8 @@ inline void TTY_ClearPartialLine(u16 y, u16 from_x, u16 to_x)
             break;
         }
 
-        case 1: // 4x8 Colour
-        case 2: // 4x8 Mono
+        case FONT_4x8_8: // 4x8 Colour
+        case FONT_4x8_1: // 4x8 Mono
         {
             u16 from_x_ = from_x >> 1;
             u16 to_x_ = to_x >> 1;
@@ -656,7 +656,7 @@ inline void TTY_MoveCursor(u8 dir, u8 num)
         case TTY_CURSOR_RIGHT:
             if (sx+num > C_XMAX)
             {
-                if (bWrapAround) 
+                if (sv_bWrapAround) 
                 {
                     sy++;
 
@@ -682,7 +682,7 @@ inline void TTY_MoveCursor(u8 dir, u8 num)
                 TTY_SetSX(sx+num);
             }
 
-            sprx = ((FontSize?(sx << 2):(sx << 3))) + HScroll + 128;
+            sprx = ((sv_Font?(sx << 2):(sx << 3))) + HScroll + 128;
             SetSprite_X(SPRITE_ID_CURSOR, sprx);
         break;
 
@@ -724,7 +724,7 @@ inline void TTY_MoveCursor(u8 dir, u8 num)
             if (sx-num < 0)
             {
                 TTY_SetSX(C_XMAX-(sx-num));
-                if (bWrapAround && (sy > 0)) 
+                if (sv_bWrapAround && (sy > 0)) 
                 {
                     sy--;
                     spry = (sy << 3) - VScroll + 128;
@@ -736,13 +736,13 @@ inline void TTY_MoveCursor(u8 dir, u8 num)
                 TTY_SetSX(sx-num);
             }
 
-            sprx = ((FontSize?(sx << 2):(sx << 3))) + HScroll + 128;
+            sprx = ((sv_Font?(sx << 2):(sx << 3))) + HScroll + 128;
             SetSprite_X(SPRITE_ID_CURSOR, sprx);
         break;
 
         default:
             // Update visual cursor position
-            sprx = ((FontSize?(sx << 2):(sx << 3))) + HScroll + 128;
+            sprx = ((sv_Font?(sx << 2):(sx << 3))) + HScroll + 128;
             spry = (sy << 3) - VScroll + 128;
 
             // Update sprite position
