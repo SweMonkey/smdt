@@ -29,5 +29,5 @@ SM_VarList VarList[] =
     {ST_LONG, &sv_ConnTimeout,  "conntime"},
     {ST_WORD, &sv_CursorCL,     "cursorcl"},
     {ST_BYTE, &sv_QCURCL,       "qselcrcl"},
-    {0, 0, 0}  // Save terminator
+    {0, 0, 0}  // List terminator
 };

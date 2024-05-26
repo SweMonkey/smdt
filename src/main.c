@@ -89,9 +89,10 @@ int main(bool hardReset)
     //TRM_ClearTextArea(0, 0, 40, 28);
     TRM_DrawText("Initializing system...", 1, BootNextLine++, PAL1);
 
-    VDP_setReg(0xB, 0x8);           // Enable VDP ext interrupt (Enable: 8 - Disable: 0)
-    SYS_setInterruptMaskLevel(0);   // Enable all interrupts
-    SYS_setExtIntCallback(Ext_IRQ);
+    VDP_setReg(0xB, 0x8);               // Enable VDP ext interrupt (Enable: 8 - Disable: 0)
+    SYS_setInterruptMaskLevel(0);       // Enable all interrupts
+    SYS_setExtIntCallback(NET_RxIRQ);   // Set external IRQ callback
+    SYS_setVBlankCallback(VBlank);      // Set VBlank IRQ callback
 
     Input_Init();
 
@@ -144,14 +145,14 @@ int main(bool hardReset)
 
     // Show "boot" screen for a few more seconds
     #ifndef EMU_BUILD
-    waitMs(2000);
+    //waitMs(2000);
     #endif
 
     waitMs(1000);
 
-    TRM_FillPlane(BG_B, 0); // Clear boot logo
+    TRM_FillPlane(BG_B, 0);                         // Clear boot logo
     VDP_loadTileSet(&GFX_SCRSAV, AVR_SCRSAV, DMA);  // Upload screensaver sprite to VRAM (Area shared with boot logo)
-    TRM_ResetWinParam();
+    TRM_ResetWinParam();                            // Reset window to defaults set earlier
     VDP_setHilightShadow(FALSE);
 
     

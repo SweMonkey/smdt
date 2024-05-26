@@ -117,18 +117,26 @@ P3:1 = Port 3 @ pin 3+4<br>
 P3:S = Port 3 UART<br>
 P3:D = Port 3 Parallel+UART Mode<br>
 
-## Keyboard shortcuts
+## Quick menu shortcuts
 Right windows key OR F8 = Open the Quick menu<br>
 Enter = Enter submenu and activate a choice<br>
 Escape = Back out of current menu<br>
 Up cursor = Move selector up<br>
 Down cursor = Move selector down<br>
 
-## IRC Client shortcuts
+## IRC client shortcuts
 F1 = Channel 1 tab<br>
 F2 = Channel 2 tab<br>
 F3 = Channel 3 tab<br>
 F5 = Toggle channel user list<br>
+Numpad 4 = Scroll left<br>
+Numpad 6 = Scroll right<br>
+
+## Telnet client shortcuts
+F11 = Send ^C to remote server<br>
+F12 = Send ^X to remote server<br>
+Numpad 1 = Scroll left<br>
+Numpad 3 = Scroll right<br>
 
 ## Terminal emulator
 Type `help` for a list of all available built in commands.<br>

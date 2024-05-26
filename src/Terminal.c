@@ -186,7 +186,7 @@ void TTY_ReloadPalette()
     else if (sv_Font == FONT_4x8_1)   // 4x8 AA
     {
         PAL_setColor(47, sv_CFG0CL);    // FG colour
-        PAL_setColor(46, sv_CFG0CL);    // AA colour
+        PAL_setColor(46, sv_CFG1CL);    // AA colour
 
         //sv_CursorCL = sv_CFG0CL;
     }

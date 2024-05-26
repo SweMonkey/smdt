@@ -48,9 +48,9 @@ void ChangeState(State new_state, u8 argc, char *argv[])
     PrevState = CurrentState;
     PrevStateEnum = CurrentStateEnum;
 
-    CurrentState->Exit();
-
     SYS_disableInts();
+
+    CurrentState->Exit();
 
     InputTick();    // Flush input queue to prevent inputs "leaking" into new state
 
@@ -107,7 +107,6 @@ void ChangeState(State new_state, u8 argc, char *argv[])
     SetupQItemTags();
     PAL_setColor(4, sv_CursorCL);
 
-    SYS_setVBlankCallback(VBlank);
     SYS_setHIntCallback(CurrentState->HBlank);
     SYS_enableInts();
 }

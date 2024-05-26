@@ -12,6 +12,20 @@
 #include "Screensaver.h"
 #include "HexView.h"
 
+/*
+    USERLIST WARNING:
+
+    DO NOT TRY TO DEBUG THE USER LIST WINDOW IN AN EMULATOR. IT WILL MISLEAD AND CAUSE YOU HARM.
+    IT WILL REPORT VERY WEIRD BEHAVIOURS WHEN ALLOCATING/FREEING MEMORY AND WHEN TRYING TO SHOW
+    THE USERLIST WINDOW.
+
+    IRC CMD 353 (START OF NAMES LIST FOLLOWED BY NICK LIST) AND IRC CMD 366 (END OF NAMES LIST)
+    REQUIRES SOME SPECIAL "ASYNCHRONUS" HANDLING, DUE TO BEING RECEIVED AT COMPLETELY DIFFERENT
+    TIMES SOME TIME AFTER A "NAMES" COMMAND HAS BEEN SENT TO THE REMOTE SERVER FROM SMDT.
+
+    THIS SEQUENCE OF EVENTS CANNOT BE EMULATED BY REPLAYING A LOGGED STREAM!
+*/
+
 #ifndef EMU_BUILD
 static u8 rxdata;
 #endif
@@ -25,7 +39,7 @@ static u8 OldFontSize = 0;         // Backup for sv_Font variable
 
 #ifdef EMU_BUILD
 #include "kdebug.h"
-asm(".global ircdump\nircdump:\n.incbin \"tmp/streams/rx_privmsg3.log\"");
+asm(".global ircdump\nircdump:\n.incbin \"tmp/streams/rx_names.log\"");
 extern const unsigned char ircdump[];
 #endif
 
@@ -51,7 +65,7 @@ void Enter_IRC(u8 argc, char *argv[])
     #ifdef EMU_BUILD
     u8 data; 
     u32 p = 0;
-    u32 s = 4666;
+    u32 s = 24975;//0x252C;//
     KDebug_StartTimer();
     while (p < s)
     {
@@ -217,10 +231,10 @@ u8 ParseTx()
             strncpy(command, (char*)inbuf+end_p, end_c-end_p-1);    // -1 there might be the cause.
 
             sprintf((char*)outbuf, "PRIVMSG %s :%s\n", command, (char*)inbuf+end_c);
-            sprintf((char*)tmbbuf, "%s: %s\n", sv_Username, (char*)inbuf+end_c);
+            sprintf((char*)tmbbuf, "%s: %s\n", v_UsernameReset, (char*)inbuf+end_c);
 
             // Try to find an unused page or an existing one
-            for (u8 ch = 0; ch < MAX_CHANNELS; ch++)
+            for (u8 ch = 0; ch < IRC_MAX_CHANNELS; ch++)
             {
                 if (strcmp(PG_Buffer[ch]->Title, command) == 0) // Find the page this message belongs to
                 {
@@ -266,6 +280,9 @@ u8 ParseTx()
         {
             sprintf((char*)outbuf, "NICK %s\n", param);
             strncpy(sv_Username, param, 31);
+
+            // TODO: CHECK RESPONSE, NICK MAY NOT BE VALID!
+
             SRAM_SaveData();
         } 
         else
@@ -282,7 +299,7 @@ u8 ParseTx()
         TMB_SetActiveBuffer(PG_Buffer[PG_CurrentIdx]);
 
         sprintf((char*)outbuf, "PRIVMSG %s :%s\n", PG_Buffer[PG_CurrentIdx]->Title, (char*)inbuf);
-        sprintf((char*)tmbbuf, "%s: %s\n", sv_Username, (char*)inbuf);
+        sprintf((char*)tmbbuf, "%s: %s\n", v_UsernameReset, (char*)inbuf);
 
         for (u16 c = 0; c < strlen((char*)tmbbuf); c++)
         {
@@ -382,7 +399,7 @@ void Input_IRC()
 
         if (is_KeyDown(KEY_RIGHT))
         {
-            if (PG_CurrentIdx < MAX_CHANNELS-1) PG_CurrentIdx++;
+            if (PG_CurrentIdx < IRC_MAX_CHANNELS-1) PG_CurrentIdx++;
 
             ChangePage(PG_CurrentIdx);
         }
@@ -393,8 +410,10 @@ void Input_IRC()
             char req[40];
             u16 i = 0;
 
+            UserListScroll = 0;
+
             if (PG_CurrentIdx != 0)
-            { 
+            {
                 UI_ToggleVisible(&UserWin);
 
                 if (UserWin.bVisible)

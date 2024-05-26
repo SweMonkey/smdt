@@ -49,7 +49,7 @@ void TRM_ResetWinParam()
 inline void TRM_SetStatusIcon(const char icon, u16 pos)
 {
     *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(VDP_WINDOW + ((pos & 63) * 2));
-    *((vu16*) VDP_DATA_PORT) = TILE_ATTR_FULL(PAL0, 0, 0, 0, icon);
+    *((vu16*) VDP_DATA_PORT) = icon;
 }
 
 void TRM_DrawChar(const u8 c, u8 x, u8 y, u8 palette)

@@ -22,6 +22,7 @@ typedef struct s_state
 
 extern bool bWindowActive;
 
+void VBlank();
 void ChangeState(State new_state, u8 argc, char *argv[]);
 void RevertState();
 bool isCurrentState(State this);

@@ -8,6 +8,20 @@
 #include "StateCtrl.h"
 #include "../res/system.h"
 
+/*
+    USERLIST WARNING:
+
+    DO NOT TRY TO DEBUG THE USER LIST WINDOW IN AN EMULATOR. IT WILL MISLEAD AND CAUSE YOU HARM.
+    IT WILL REPORT VERY WEIRD BEHAVIOURS WHEN ALLOCATING/FREEING MEMORY AND WHEN TRYING TO SHOW
+    THE USERLIST WINDOW.
+
+    IRC CMD 353 (START OF NAMES LIST FOLLOWED BY NICK LIST) AND IRC CMD 366 (END OF NAMES LIST)
+    REQUIRES SOME SPECIAL "ASYNCHRONUS" HANDLING, DUE TO BEING RECEIVED AT COMPLETELY DIFFERENT
+    TIMES SOME TIME AFTER A "NAMES" COMMAND HAS BEEN SENT TO THE REMOTE SERVER FROM SMDT.
+
+    THIS SEQUENCE OF EVENTS CANNOT BE EMULATED BY REPLAYING A LOGGED STREAM!
+*/
+
 #define B_PRINTSTR_LEN 512
 #define B_SUBPREFIX_LEN 256
 
@@ -17,7 +31,7 @@
 
 #define B_RXSTRING_LEN 1024
 
-#define TTS_VRAMIDX 0x240    //0x320 - TODO: find a spot for all the tiles. It requires at least 38 continous tiles in VRAM
+#define TTS_VRAMIDX 0x240    // TODO: find a spot for all the tiles. It requires at least 38 continous tiles in VRAM
 
 static struct s_linebuf
 {
@@ -33,10 +47,12 @@ static u8 NewColor = 0;
 static char *RXString = NULL;
 static u16 RXStringSeq = 0;
 
-bool bFirstRun = TRUE;
+static bool bFirstRun = TRUE;
+static u8 NickReRegisterCount = 0;
 
-char sv_Username[32] = "smd_user";
-char sv_QuitStr[32] = "Mega Drive IRC Client Quit";
+char sv_Username[32] = "smd_user";                  // Saved preferred IRC nickname
+char v_UsernameReset[32] = "ERROR_NOTSET";              // Your IRC nickname modified to suit the server (nicklen etc)
+char sv_QuitStr[32] = "Mega Drive IRC Client Quit"; // IRC quit message
 
 static const u16 pColors[16] =
 {
@@ -46,8 +62,8 @@ static const u16 pColors[16] =
 
 u8 PG_CurrentIdx = 0;
 u8 PG_OpenPages = 1;
-TMBuffer *PG_Buffer[MAX_CHANNELS] = {NULL};
-char *PG_UserList[512] = {NULL};
+TMBuffer *PG_Buffer[IRC_MAX_CHANNELS] = {NULL};
+char **PG_UserList = {NULL};
 u16 PG_UserNum = 0;
 u16 UserIterator = 0;
 
@@ -67,32 +83,32 @@ void IRC_Reset()
 {
     if (!sv_Font) PAL_setPalette(PAL2, pColors, DMA);
 
+    memset(v_UsernameReset, 0, 32);
+    strcpy(v_UsernameReset, sv_Username);
+
     TMB_SetColorFG(15);
 
     // Variable overrides
     vDoEcho = 1;
     vLineMode = 1;
     bFirstRun = TRUE;
+    NickReRegisterCount = 0;
     sv_CursorCL = 0x0E0;
     LastCursor = 0x12;
 
     // Allocate and setup channel slots
-    for (u8 ch = 0; ch < MAX_CHANNELS; ch++)
+    for (u8 ch = 0; ch < IRC_MAX_CHANNELS; ch++)
     {
-        if (PG_Buffer[ch] == NULL)
+        PG_Buffer[ch] = malloc(sizeof(TMBuffer));
+        if (PG_Buffer[ch] == NULL) 
         {
-            PG_Buffer[ch] = malloc(sizeof(TMBuffer));
-            if (PG_Buffer[ch] == NULL) 
-            {
-                #ifdef IRC_LOGGING
-                kprintf("Failed to allocate memory for PG_Buffer[%u]", ch);
-                #endif
-                ChangeState(PS_Terminal, 0, NULL);
-                PrintOutput("Failed to allocate memory for PG_Buf!");
-            }
-        }        
+            #ifdef IRC_LOGGING
+            kprintf("Failed to allocate memory for PG_Buffer[%u]", ch);
+            #endif
+            ChangeState(PS_Terminal, 0, NULL);
+            PrintOutput("Failed to allocate memory for PG_Buf!");
+        }
         memset(PG_Buffer[ch], 0, sizeof(TMBuffer));
-
         strcpy(PG_Buffer[ch]->Title, PG_EMPTYNAME);
         PG_Buffer[ch]->sy = C_YSTART;
 
@@ -101,34 +117,56 @@ void IRC_Reset()
     }
 
     // Allocate line buffer
-    if (LineBuf == NULL)
+    LineBuf = malloc(sizeof(struct s_linebuf));
+    if (LineBuf == NULL) 
     {
-        LineBuf = malloc(sizeof(struct s_linebuf));
-        if (LineBuf == NULL) 
-        {
-            #ifdef IRC_LOGGING
-            kprintf("Failed to allocate memory for LineBuf");
-            #endif
-            ChangeState(PS_Terminal, 0, NULL);
-            PrintOutput("Failed to allocate memory for LineBuf!");
-        }
+        #ifdef IRC_LOGGING
+        kprintf("Failed to allocate memory for LineBuf");
+        #endif
+        ChangeState(PS_Terminal, 0, NULL);
+        PrintOutput("Failed to allocate memory for LineBuf!");
     }
     memset(LineBuf, 0, sizeof(struct s_linebuf));
 
     // Allocate RXString buffer
-    if (RXString == NULL)
+    RXString = malloc(B_RXSTRING_LEN);
+    if (RXString == NULL) 
     {
-        RXString = malloc(B_RXSTRING_LEN);
-        if (RXString == NULL) 
-        {
-            #ifdef IRC_LOGGING
-            kprintf("Failed to allocate memory for RXString");
-            #endif
-            ChangeState(PS_Terminal, 0, NULL);
-            PrintOutput("Failed to allocate memory for RXString!");
-        }
+        #ifdef IRC_LOGGING
+        kprintf("Failed to allocate memory for RXString");
+        #endif
+        ChangeState(PS_Terminal, 0, NULL);
+        PrintOutput("Failed to allocate memory for RXString!");
     }
     memset(RXString, 0, B_RXSTRING_LEN);
+
+    // Allocate UserList pointers and UserList strings
+    PG_UserList = malloc(IRC_MAX_USERLIST * sizeof(char*));
+    if (PG_UserList != NULL)
+    {
+        for (u16 i = 0; i < IRC_MAX_USERLIST; i++)
+        {
+            PG_UserList[i] = (char*)malloc(IRC_MAX_USERNAME_LEN);
+            
+            if (PG_UserList[i] == NULL)
+            {
+                #ifdef IRC_LOGGING
+                kprintf("Failed to allocate memory for PG_UserList[%u]", i);
+                #endif
+                ChangeState(PS_Terminal, 0, NULL);
+                PrintOutput("Failed to allocate memory for PG_UserList[x]!");
+            }
+            memset(PG_UserList[i], 0, IRC_MAX_USERNAME_LEN);
+        }
+    }
+    else
+    {
+        #ifdef IRC_LOGGING
+        kprintf("Failed to allocate memory for PG_UserList");
+        #endif
+        ChangeState(PS_Terminal, 0, NULL);
+        PrintOutput("Failed to allocate memory for PG_UserList!");
+    }
 
     // Set defaults
     PG_CurrentIdx = 0;
@@ -166,35 +204,27 @@ void IRC_Exit()
     sprintf(buf, "QUIT %s\n", sv_QuitStr);
     NET_SendString(buf);
 
-    for (u8 ch = 0; ch < MAX_CHANNELS; ch++)
+    // Free previously allocated memory. DO NOT TRY TO DEBUG IN EMULATORS, IT WILL MISLEAD AND CAUSE YOU HARM.
+    for (u8 ch = 0; ch < IRC_MAX_CHANNELS; ch++)
     {
-        if (PG_Buffer[ch] != NULL)
-        {
-            free(PG_Buffer[ch]);
-            PG_Buffer[ch] = NULL;
-        }
+        free(PG_Buffer[ch]);
+        PG_Buffer[ch] = NULL;
     }
 
-    for (u16 i = 0; i < PG_UserNum; i++)
+    free(LineBuf);
+    LineBuf = NULL;
+
+    free(RXString);
+    RXString = NULL;
+
+    for (u16 i = 0; i < IRC_MAX_USERLIST; i++)
     {
-        if (PG_UserList[i] != NULL)
-        {
-            free(PG_UserList[i]);
-            PG_UserList[i] = NULL;
-        }
+        free(PG_UserList[i]);
+        PG_UserList[i] = NULL;
     }
 
-    if (LineBuf != NULL) 
-    {
-        free(LineBuf);
-        LineBuf = NULL;
-    }
-
-    if (RXString != NULL) 
-    {
-        free(RXString);
-        RXString = NULL;
-    }
+    free(PG_UserList);
+    PG_UserList = NULL;
 }
 
 // Text input at bottom of screen
@@ -431,7 +461,7 @@ void IRC_DoCommand()
 
         snprintf(PrintBuf, B_PRINTSTR_LEN, "%s: %s\n", subprefix, LineBuf->param[1]);
 
-        if (strcmp(LineBuf->param[0], sv_Username) == 0)
+        if (strcmp(LineBuf->param[0], v_UsernameReset) == 0)
         {
             strncpy(ChanBuf, subprefix, 40);
         }
@@ -447,7 +477,7 @@ void IRC_DoCommand()
         while ((LineBuf->prefix[end++] != '!') && (end < B_SUBPREFIX_LEN));
         strncpy(subprefix, LineBuf->prefix, end-1);
 
-        if (strcmp(subprefix, sv_Username) != 0)
+        if (strcmp(subprefix, v_UsernameReset) != 0)
         {
             snprintf(PrintBuf, B_PRINTSTR_LEN, "%s has joined the channel\n", LineBuf->prefix);
             strncpy(ChanBuf, LineBuf->param[0], 40);
@@ -460,7 +490,7 @@ void IRC_DoCommand()
         while ((LineBuf->prefix[end++] != '!') && (end < B_SUBPREFIX_LEN));
         strncpy(subprefix, LineBuf->prefix, end-1);
 
-        if (strcmp(subprefix, sv_Username) != 0)
+        if (strcmp(subprefix, v_UsernameReset) != 0)
         {
             snprintf(PrintBuf, B_PRINTSTR_LEN, "%s: %s\n", subprefix, LineBuf->param[0]);
         }
@@ -496,6 +526,26 @@ void IRC_DoCommand()
             {
                 snprintf(PrintBuf, B_PRINTSTR_LEN, "[Support] %s %s %s %s %s %s %s %s %s %s %s %s %s %s\n", LineBuf->param[1], LineBuf->param[2], LineBuf->param[3], LineBuf->param[4], LineBuf->param[5], LineBuf->param[6], LineBuf->param[7], 
                                                                                                             LineBuf->param[8], LineBuf->param[9], LineBuf->param[10], LineBuf->param[11], LineBuf->param[12], LineBuf->param[13], LineBuf->param[14]);
+
+                // Check for NICKLEN < your_nickname_len. If true then resize the temporary v_UsernameReset to be smaller
+                char n[8] = {0};
+                char l[4] = {0};
+                u8 len = 0;
+                
+                strncpy(n, LineBuf->param[5], 7);
+
+                if (strcmp(n, "NICKLEN") == 0)
+                {
+                    strncpy(l, LineBuf->param[5]+8, 4);
+                    len = atoi(l);
+
+                    if ((len > 0) && (len >= strlen(v_UsernameReset)-1))
+                    {
+                        strclr(v_UsernameReset);
+                        strcpy(v_UsernameReset, LineBuf->param[0]);
+                    }
+                }
+
                 break;
             }
             case 250:
@@ -530,29 +580,40 @@ void IRC_DoCommand()
             {
                 u16 start = 0;
                 u16 end = 0;
+                u8 len = 16;
 
                 if (strcmp(PG_Buffer[PG_CurrentIdx]->Title, LineBuf->param[2]) == 0)
                 {
-                    for (u16 i = 0; i < PG_UserNum; i++)
-                    {
-                        if (PG_UserList[i] != NULL) free(PG_UserList[i]); // Remove old userlist in case it exists (memory fragmentation ahoy?)
-                    }
-
                     while (1)
                     {
-                        while (LineBuf->param[3][end++] != ' '){if (LineBuf->param[3][end] == 0xD) break;}                    
+                        if (PG_UserList == NULL) break;
+
+                        // Find the end of a nick or break on CR
+                        while (LineBuf->param[3][end++] != ' ')
+                        {
+                            if (LineBuf->param[3][end] == 0xD)
+                            {
+                                if (UserIterator) UserIterator--;
+                                break;
+                            }
+                        }
+
+                        // Detect end of line space (not a valid nick)
+                        if (strcmp(LineBuf->param[3]+start, "") == 0)
+                        {
+                            if (UserIterator) UserIterator--;
+                            break;
+                        }
                         
-                        PG_UserList[UserIterator] = malloc(end-start-1);  // Allocate a new 16 character string
+                        // Cap nick length
+                        len = (end-start-1) > (IRC_MAX_USERNAME_LEN-1) ? (IRC_MAX_USERNAME_LEN-1) : (end-start-1);
 
-                        if (PG_UserList[UserIterator] == NULL) break;   // Did above allocation fail?
-
-                        memset(PG_UserList[UserIterator], 0, end-start-1);   // Clear allocated string
-
-                        strncpy(PG_UserList[UserIterator], LineBuf->param[3]+start, end-start-1);
+                        memset(PG_UserList[UserIterator], 0, IRC_MAX_USERNAME_LEN);         // Clear old userlist nick string
+                        strncpy(PG_UserList[UserIterator], LineBuf->param[3]+start, len);   // Copy new user nick to userlist
 
                         start = end;
 
-                        if (end >= 512) break;
+                        if (end >= IRC_MAX_USERLIST) break;
 
                         UserIterator++;
                     }
@@ -583,20 +644,34 @@ void IRC_DoCommand()
                 snprintf(PrintBuf, B_PRINTSTR_LEN, "[Info] '%s' is now your hidden host (set by services).\n", LineBuf->param[1]);
                 break;
             }
-            case 401:   // ERR_NOSUCHNICK   RFC1459 <nick> :<reason>    Used to indicate the nickname parameter supplied to a command is currently unused
+            case 401:   // ERR_NOSUCHNICK   RFC1459 <nick> :<reason>   -- Used to indicate the nickname parameter supplied to a command is currently unused
             {
                 snprintf(PrintBuf, B_PRINTSTR_LEN, "[Error] %s\n", LineBuf->param[2]);
                 break;
             }
-            case 404:   // ERR_CANNOTSENDTOCHAN RFC1459 <channel> :<reason> Sent to a user who does not have the rights to send a message to a channel
+            case 404:   // ERR_CANNOTSENDTOCHAN RFC1459 <channel> :<reason>   -- Sent to a user who does not have the rights to send a message to a channel
             {
                 snprintf(PrintBuf, B_PRINTSTR_LEN, "[Error] %s\n", LineBuf->param[2]);
                 strncpy(ChanBuf, LineBuf->param[1], 40);
                 break;
             }
-            case 412:   // ERR_NOTEXTTOSEND RFC1459 :<reason>   Returned when NOTICE/PRIVMSG is used with no message given
+            case 412:   // ERR_NOTEXTTOSEND RFC1459 :<reason>   -- Returned when NOTICE/PRIVMSG is used with no message given
             {
                 snprintf(PrintBuf, B_PRINTSTR_LEN, "[Error] %s\n", LineBuf->param[1]);
+                break;
+            }
+            case 433:   // ERR_NICKNAMEINUSE RFC1459 <nick> :<reason>   -- Returned by the NICK command when the given nickname is already in use 
+            {
+                snprintf(PrintBuf, B_PRINTSTR_LEN, "[Error] %s\n", LineBuf->param[2]);
+
+                // Attempt to re-register with a new nick 
+                if (NickReRegisterCount < 2)
+                {
+                    snprintf(v_UsernameReset, 32, "_%s_", sv_Username);
+                    IRC_RegisterNick();
+
+                    NickReRegisterCount++;
+                }
                 break;
             }
             case 462:   // ERR_ALREADYREGISTERED
@@ -611,7 +686,7 @@ void IRC_DoCommand()
             }
             case 480:   // 
             {
-                snprintf(PrintBuf, B_PRINTSTR_LEN, "[480] %s %s %s\n", sv_Username, LineBuf->param[1], LineBuf->param[2]);  // LineBuf->param[3] = Further information (tls required for example etc)
+                snprintf(PrintBuf, B_PRINTSTR_LEN, "[480] %s %s %s\n", v_UsernameReset, LineBuf->param[1], LineBuf->param[2]);  // LineBuf->param[3] = Further information (tls required for example etc)
                 break;
             }
         
@@ -624,7 +699,7 @@ void IRC_DoCommand()
         }     
     }
 
-    for (u8 ch = 0; ch < MAX_CHANNELS; ch++)
+    for (u8 ch = 0; ch < IRC_MAX_CHANNELS; ch++)
     {
         if (strcmp(PG_Buffer[ch]->Title, ChanBuf) == 0) // Find the page this message belongs to
         {
@@ -744,12 +819,7 @@ void IRC_ParseRX(u8 byte)
 
     if (bFirstRun)
     {
-        char buf[64];
-        sprintf(buf, "NICK %s\n", sv_Username);
-        NET_SendString(buf);
-        sprintf(buf, "USER %s m68k smdnet :Mega Drive\n", sv_Username); 
-        NET_SendString(buf);
-        bFirstRun = FALSE;
+        IRC_RegisterNick();
     }
 
     switch (byte)
@@ -773,5 +843,20 @@ void IRC_ParseRX(u8 byte)
             if (RXStringSeq < (B_RXSTRING_LEN-1)) RXString[RXStringSeq++] = byte;
             else RXStringSeq--;
         break;
+    }
+}
+
+void IRC_RegisterNick()
+{
+    char buf[64];
+    sprintf(buf, "NICK %s\n", v_UsernameReset);
+    NET_SendString(buf);
+
+    if (bFirstRun)
+    {
+        sprintf(buf, "USER %s m68k smdnet :Mega Drive\n", v_UsernameReset); 
+        NET_SendString(buf);
+
+        bFirstRun = FALSE;
     }
 }

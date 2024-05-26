@@ -12,7 +12,12 @@ Improved the screensaver. It now has its own 32x32 sprite.
 IRC: Fixed some hardcoded addresses that should be using the common address macros.
 IRC: More dynamic allocations to free up more RAM outside of the IRC client. malloc / free was not used before because it was broken.
 Misc: Renamed save variables.
-IRC: Weird bug where the last character in the users nickname gets clipped remains unsolved (nickname limits? but no such errors are received however). This bug only happens with efnet (specifically efnet.portlane.se @ port 6667).
+Misc: A few commands finalized (echo $variables, setting variable values).
+IRC: Wrong font applied at IRC init resulting in a hard to read mess.
+IRC: Fixed bug where the client did not account for NICKLEN being smaller than your chosen nickname, which caused some issues with private messages.
+IRC: Will now attempt to re-register your nick with added underscores in case your nickname is already in use on a server.
+IRC: Userlist fixes. x.x
+Terminal: Will now properly revert font back when switching state.
 
 v0.28:
 Added initial support for b1tsh1ft3r's network cartridge 'RetroLink', allowing much faster network speeds and a MD to be completely stand alone.

@@ -60,10 +60,7 @@ u8 KB_Saturn_Poll(u8 *data)
         UnsetDevData(DEV_KBSATURN);
         while ((GetDevData(DEV_KBSATURN, 0x10) & 0x10) != 0)
         {
-            if (timeout++ >= TIMEOUT)
-            {
-                return 0;
-            }
+            if (timeout++ >= TIMEOUT) return 0;
         }
 
         timeout = 0;
@@ -75,10 +72,7 @@ u8 KB_Saturn_Poll(u8 *data)
         
         while (GetDevData(DEV_KBSATURN, 0x10) != 0x10)
         {
-            if (timeout++ >= TIMEOUT)
-            {
-                return 0;
-            }
+            if (timeout++ >= TIMEOUT) return 0;
         }
 
         timeout = 0;

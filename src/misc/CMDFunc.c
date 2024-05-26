@@ -10,6 +10,7 @@
 #include "misc/VarList.h"
 
 void PrintOutput(const char *str);
+extern u8 vFontTemp;
 
 SM_CMDList CMDList[] =
 {
@@ -29,22 +30,25 @@ SM_CMDList CMDList[] =
     {"run",     CMD_Run,            "- Run binary file"},
     {"free",    CMD_Free,           "- List free memory"},
     {"help",    CMD_Help,           "- This command"},
-    {0, 0, 0}  // Terminator
+    {0, 0, 0}  // List terminator
 };
 
 
 void CMD_LaunchTelnet(u8 argc, char *argv[]) 
-{ 
+{
+    sv_Font = vFontTemp;
     ChangeState(PS_Telnet, argc, argv); 
 }
 
 void CMD_LaunchIRC(u8 argc, char *argv[])
-{ 
+{
+    sv_Font = vFontTemp;
     ChangeState(PS_IRC, argc, argv);
 }
 
 void CMD_LaunchMenu(u8 argc, char *argv[])
 {
+    sv_Font = vFontTemp;
     ChangeState(PS_Entry, argc, argv);
 }
 
@@ -491,9 +495,6 @@ void CMD_TestSRAM(u8 argc, char *argv[])
     SRAM_disable();
 }
 
-
-
-#define rb(b, d) *b = d
 void CMD_SetVar(u8 argc, char *argv[])
 {
     if ((argc < 3) && (strcmp(argv[1], "-list")))
@@ -553,15 +554,15 @@ void CMD_SetVar(u8 argc, char *argv[])
                 switch (VarList[i].size)
                 {
                     case ST_BYTE:
-                        rb((u8*)VarList[i].ptr, atoi(argv[2]));
+                        *(u8*)VarList[i].ptr = atoi(argv[2]);
                         i = 65534;
                     break;
                     case ST_WORD:
-                        rb((u16*)VarList[i].ptr, atoi16(argv[2]));
+                        *(u16*)VarList[i].ptr = atoi16(argv[2]);
                         i = 65534;
                     break;
                     case ST_LONG:
-                        rb((u32*)VarList[i].ptr, atoi32(argv[2]));
+                        *(u32*)VarList[i].ptr = atoi32(argv[2]);
                         i = 65534;
                     break;
                     case ST_SPTR:

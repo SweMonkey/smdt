@@ -191,8 +191,9 @@ u8 KB_PS2_SendCommand(u8 cmd)
     // Release
     if (KB_PS2_WaitClockLow()) goto Error;
 
+    // Get response from keyboard
     u8 ret = 0;
-    KB_PS2_Poll(&ret);
+    KB_PS2_Poll(&ret);  // This will also call KB_Lock() on exit
     return ret;
 
     Error:

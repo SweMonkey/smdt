@@ -15,7 +15,7 @@
 #define INPUT_SIZE_ARGV 64
 
 static u8 kbdata;
-static u8 pFontSize = 0;
+u8 vFontTemp = 0;
 static char LastCommand[INPUT_SIZE] = {'\0'};
 
 
@@ -66,7 +66,7 @@ u8 ParseInputString()
         {
             CMDList[l].fptr(argc, argv);
 
-            for (u8 a = 0; a < argc; a++) if (argv[a] != NULL) free(argv[a]);                // !!!
+            for (u8 a = 0; a < argc; a++) free(argv[a]);                // !!!
 
             return 1;
         }
@@ -116,7 +116,7 @@ void SetupTerminal()
     vNewlineConv = 1;
     sv_bWrapAround = TRUE;
 
-    pFontSize = sv_Font;
+    vFontTemp = sv_Font;
     TTY_SetFontSize(0);
 
     LastCommand[0] = '\0';
@@ -126,15 +126,13 @@ void Enter_Terminal(u8 argc, char *argv[])
 {
     if ((argc > 0) && (strcmp(argv[0], "reset") == 0) && (bXPNetwork))
     {
-        // Mainly meant to make sure an emulated Xport module disconnects and closes the current socket (if there is one)
-        // Xport emulator listens for a "enter monitor mode" to close any open connections/sockets
-        // TODO: How does a real Xport module do disconnect?
+        // Mainly meant to make sure an emulated xPico module disconnects and closes the current socket (if there is one)
+        // xPico emulator listens for a "enter monitor mode" to close any open connections/sockets
+        // TODO: How does a real xPico module do disconnect?
         XPN_EnterMonitorMode();
         waitMs(200);
         XPN_ExitMonitorMode();
     }
-
-    MEM_pack();
 
     TELNET_Init();
     SetupTerminal();
@@ -149,7 +147,7 @@ void ReEnter_Terminal()
 
 void Exit_Terminal()
 {
-    TTY_SetFontSize(pFontSize);
+    sv_Font = vFontTemp;
 }
 
 void Reset_Terminal()
@@ -243,7 +241,7 @@ void Input_Terminal()
             DoBackspace();
         }
 
-        if (is_KeyDown(KEY_F9))
+        /*if (is_KeyDown(KEY_F9))
         {
             ChangeState(PS_Telnet, 0, NULL);
         }
@@ -261,7 +259,7 @@ void Input_Terminal()
         if (is_KeyDown(KEY_F12))
         {
             ChangeState(PS_Debug, 0, NULL);
-        }
+        }*/
     }
 }
 

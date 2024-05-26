@@ -545,20 +545,20 @@ void WINFN_Reset()
 
     switch (SelectedIdx)
     {
-        case 0:
+        case 0: // Exit
             ChangeState(PS_Terminal, 1, argv);
         break;
-        case 1:
+        case 1: // Hard reset
             ChangeState(PS_Dummy, 0, NULL);
             SYS_hardReset();
         break;
-        case 2:
+        case 2: // Soft reset
             ChangeState(getState(), 0, NULL);
         break;
-        case 3:
+        case 3: // Save config to SRAM
             SRAM_SaveData();
         break;
-        case 4:
+        case 4: // Erase SRAM
             SRAM_ClearSRAM();
         break;
     

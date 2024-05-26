@@ -16,30 +16,15 @@ NET_Connect_CB *ConnectCB = NULL;
 
 
 // Rx IRQ
-void Ext_IRQ()
+void NET_RxIRQ()
 {
-    vu8 *PSCTRL = (vu8*)DEV_UART.SCtrl;
-    if ((*PSCTRL & 6) != 2) return;
+    if ((*(vu8*)DEV_UART.SCtrl & 6) != 2) return;
 
     SYS_setInterruptMaskLevel(7);
-
-    vu8 *byte = (vu8*)DEV_UART.RxData;
-    Buffer_Push(&RxBuffer, *byte);
-    //RXBytes++;
-
+    Buffer_Push(&RxBuffer, *(vu8*)DEV_UART.RxData);
     SYS_setInterruptMaskLevel(0);
-}
 
-void NET_SetConnectFunc(NET_Connect_CB *cb)
-{
-    ConnectCB = cb;
-}
-
-bool NET_Connect(char *str)
-{
-    if (ConnectCB == NULL) return FALSE;
-
-    return ConnectCB(str);
+    //RXBytes++;
 }
 
 // Send byte to remote machine or buffer it depending on linemode
@@ -64,15 +49,9 @@ void NET_SendChar(const u8 c, u8 flags)
     }
     else
     {
-        vu8 *PTX = (vu8 *)DEV_UART.TxData;
-        vu8 *PSCTRL = (vu8 *)DEV_UART.SCtrl;
+        while (*(vu8*)DEV_UART.SCtrl & 1); // while Txd full = 1
 
-        while (*PSCTRL & 1) // while Txd full = 1
-        {
-            PSCTRL = (vu8 *)DEV_UART.SCtrl;
-        }
-
-        *PTX = c;
+        *(vu8*)DEV_UART.TxData = c;
     }
 
     TXBytes++;
@@ -102,18 +81,13 @@ void NET_TransmitBuffer()
     }
     else
     {
-        vu8 *PTX = (vu8 *)DEV_UART.TxData;
-        vu8 *PSCTRL = (vu8 *)DEV_UART.SCtrl;
         u8 data;
 
         while (Buffer_Pop(&TxBuffer, &data) != 0xFF)
         {
-            while (*PSCTRL & 1) // while Txd full = 1
-            {
-                PSCTRL = (vu8 *)DEV_UART.SCtrl;
-            }
+            while (*(vu8*)DEV_UART.SCtrl & 1); // while Txd full = 1
 
-            *PTX = data;
+            *(vu8*)DEV_UART.TxData = data;
 
             TXBytes++;
         }
@@ -128,4 +102,16 @@ void NET_SendString(const char *str)
     {
         NET_SendChar(str[c], TXF_NOBUFFER);
     }
+}
+
+void NET_SetConnectFunc(NET_Connect_CB *cb)
+{
+    ConnectCB = cb;
+}
+
+bool NET_Connect(char *str)
+{
+    if (ConnectCB == NULL) return FALSE;
+
+    return ConnectCB(str);
 }

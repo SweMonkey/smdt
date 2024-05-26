@@ -44,6 +44,7 @@ bool bRLNetwork = FALSE;            // Use RetroLink cartridge instead of built-
 bool bXPNetwork = FALSE;            // Use XPort network adapter
 DevPort sv_ListenPort = DP_Port2;   // Default UART port to listen on
 
+
 /// @brief Get four bit device identifier (Sega devices only)
 /// @param p Port to check (DP_Port1, DP_Port2, DP_Port3)
 /// @return Four bit device identifier
@@ -139,10 +140,6 @@ void DetectDevices()
         TRM_SetStatusIcon(ICO_KB_OK, ICO_POS_0);
         bNoKeyboard = FALSE;
     }
-    else
-    {
-        bNoKeyboard = TRUE;
-    }
 
     // -- Saturn Keyboard setup ------------------------
     if (bNoKeyboard && ((DevId0 == DEVICE_SATURN_PERIPHERAL) || (DevId1 == DEVICE_SATURN_PERIPHERAL) || (DevId2 == DEVICE_SATURN_PERIPHERAL)))
@@ -156,10 +153,6 @@ void DetectDevices()
             DevList[DevSeq++] = &DEV_KBSATURN;
             TRM_SetStatusIcon(ICO_KB_OK, ICO_POS_0);
             bNoKeyboard = FALSE;
-        }
-        else
-        {
-            bNoKeyboard = TRUE;
         }
     }
 
@@ -207,8 +200,8 @@ void DetectDevices()
     SCtrl = (vu8 *)DEV_UART.SCtrl;
     *SCtrl = 0x38;
 
+    // Check if xPico device is present
     u8 xpn_r = XPN_Initialize();
-
     switch (xpn_r)
     {
         /*case 0:
@@ -225,8 +218,7 @@ void DetectDevices()
         break;
     }
 
-    // RetroLink Network
-    if (RLN_Initialize())
+    if (RLN_Initialize())   // Check if RetroLink network adapter is present
     {
         bRLNetwork = TRUE;
 
@@ -239,7 +231,7 @@ void DetectDevices()
         TRM_DrawText("RetroLink MAC: ", 1, BootNextLine++, PAL1);
         RLN_PrintMAC(1, BootNextLine++);
     }
-    else if (xpn_r)
+    else if (xpn_r) // Was something resembling an xPico module found earlier?
     {
         DEV_UART.Id.sName = "XPICO UART";
 
@@ -255,7 +247,7 @@ void DetectDevices()
         //TRM_DrawText("xPico MAC: <not implemented>", 1, BootNextLine++, PAL1);
         //XPN_PrintMAC(1, BootNextLine++);
     }
-    else
+    else    // No external network adapters found
     {
         bRLNetwork = FALSE;
         bXPNetwork = FALSE;
