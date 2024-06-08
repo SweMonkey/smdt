@@ -87,6 +87,16 @@ void Buffer_Flush(Buffer *b)
     b->tail = 0;
 }
 
+/// @brief Clear the buffer and fill the first 32 entries with 0
+/// @param b Pointer to buffer
+void Buffer_Flush0(Buffer *b)
+{
+    b->head = 0;
+    b->tail = 0;
+
+    for (u8 i = 0; i < 32; i++) b->data[i] = 0;
+}
+
 /// @brief Get the last <num> of bytes up to head
 /// @param b Pointer to buffer
 /// @param num Number of bytes to return

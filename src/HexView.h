@@ -6,6 +6,6 @@
 extern bool bShowHexView;
 
 void HexView_Input();
-void HexView_Toggle();
+void HexView_Toggle(u8 bufnum);
 
 #endif // HEXVIEW_H_INCLUDED

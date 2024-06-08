@@ -19,6 +19,7 @@ u8 Buffer_Pop(Buffer *b, u8 *data);
 u8 Buffer_ReversePop(Buffer *b);
 
 void Buffer_Flush(Buffer *b);
+void Buffer_Flush0(Buffer *b);
 void Buffer_PeekLast(Buffer *b, u16 num, u8 r[]);
 
 #endif // BUFFER_H_INCLUDED

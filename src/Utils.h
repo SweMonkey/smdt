@@ -4,7 +4,7 @@
 #include <genesis.h>
 
 // Title bar prefix
-#define STATUS_TEXT "SMDTC v0.29"
+#define STATUS_TEXT "SMDTC v0.30"
 
 // VRAM memory addresses for various graphics in tile units (/32)
 #define AVR_BGBLOCK 0       // $0000 - $01FF
@@ -65,6 +65,7 @@
 //#define KB_DEBUG    // Log keyboard debug messages
 
 extern bool bPALSystem;
+extern bool bHardReset;
 extern u8 BootNextLine;     // Bootscreen text y position
 
 void TRM_SetStatusText(const char *t);

@@ -3,7 +3,6 @@
 #include "Terminal.h"   // sv_Font, sv_HSOffset
 #include "Buffer.h"
 #include "Input.h"
-#include "Keyboard.h"
 #include "Utils.h"
 #include "UI.h"
 #include "Network.h"
@@ -30,12 +29,11 @@
 static u8 rxdata;
 #endif
 
-static u8 kbdata;
 static u8 bOnce = FALSE;
 static SM_Window UserWin;
 static u16 UserListScroll = 0;
 static u8 KBTxData[40];            // Buffer for the last 40 typed characters from the keyboard
-static u8 OldFontSize = 0;         // Backup for sv_Font variable
+u8 sv_IRCFont = FONT_4x8_1;
 
 #ifdef EMU_BUILD
 #include "kdebug.h"
@@ -48,8 +46,7 @@ void IRC_PrintChar(u8 c);
 
 void Enter_IRC(u8 argc, char *argv[])
 {
-    OldFontSize = sv_Font;
-    sv_Font = FONT_4x8_1;
+    sv_Font = sv_IRCFont;
 
     IRC_Init();
 
@@ -119,7 +116,7 @@ void Exit_IRC()
 {
     IRC_Exit();
 
-    sv_Font = OldFontSize;
+    NET_Disconnect();
 }
 
 void Reset_IRC()
@@ -142,10 +139,6 @@ void Run_IRC()
     }
     #endif
 
-    while (KB_Poll(&kbdata))
-    {
-        KB_Interpret_Scancode(kbdata);
-    }
     
     #ifndef EMU_BUILD
     if (!bOnce)
@@ -169,9 +162,9 @@ void Run_IRC()
         {
             //UI_ClearRect(25, 0, 14, 25);
             UI_DrawPanel(25, 0, 14, 25, UC_PANEL_DOUBLE);
-            UI_DrawText(26, 10, "Requesting");
-            UI_DrawText(26, 11, "user list.");
-            UI_DrawText(26, 13, "Please wait");
+            UI_DrawText(26, 10, PAL1, "Requesting");
+            UI_DrawText(26, 11, PAL1, "user list.");
+            UI_DrawText(26, 13, PAL1, "Please wait");
         }
         UI_End();
     }

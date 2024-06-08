@@ -23,7 +23,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-Modified for use in SMDTC by smds
+Modified for use in SMDTC by smds.
+Originial source at: https://github.com/b1tsh1ft3r/retro.link/tree/main/sega_genesis/sgdk_example
 */
 
 #define UART_BASE   0xA130C1
@@ -37,6 +38,11 @@ Modified for use in SMDTC by smds
 #define UART_DLL    (*((volatile uint8_t*)(UART_BASE+0)))  // Divisor latch LSB. Acessed only when LCR[7] = 1
 #define UART_DLM    (*((volatile uint8_t*)(UART_BASE+2)))  // Divisor latch MSB. Acessed only when LCR[7] = 1
 #define UART_DVID   (*((volatile uint8_t*)(UART_BASE+2)))  // Device ID 
+
+#define RL_REPORT_BAUD "9600"
+
+extern u8 sv_DLM;
+extern u8 sv_DLL;
 
 u8   RLN_ReadByte(void);
 
@@ -57,6 +63,7 @@ void RLN_BlockConnections(void);
 void RLN_ResetAdapter(void);
 void RLN_Update(void);
 
+u8 RLN_GetIP(char *ret);
 void RLN_PrintIP(int x, int y);
 void RLN_PrintMAC(int x, int y);
-void RLN_PingIP(int x, int y, int ping_count, char *ip);
+void RLN_PingIP(char *ip);

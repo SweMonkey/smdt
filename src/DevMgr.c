@@ -199,24 +199,8 @@ void DetectDevices()
     vu8 *SCtrl;
     SCtrl = (vu8 *)DEV_UART.SCtrl;
     *SCtrl = 0x38;
-
-    // Check if xPico device is present
-    u8 xpn_r = XPN_Initialize();
-    switch (xpn_r)
-    {
-        /*case 0:
-            TRM_DrawText("XPN: Device not found", 1, BootNextLine++, PAL1);
-        break;*/
-        case 1:
-            TRM_DrawText("XPN: xPico module OK", 1, BootNextLine++, PAL1);
-        break;
-        case 2:
-            TRM_DrawText("XPN: Error", 1, BootNextLine++, PAL1);
-        break;
     
-        default:
-        break;
-    }
+    u8 xpn_r = 0;
 
     if (RLN_Initialize())   // Check if RetroLink network adapter is present
     {
@@ -225,13 +209,13 @@ void DetectDevices()
         VDP_setReg(0xB, 0);   // Disable VDP ext interrupt (Enable: 8 - Disable: 0)
 
         NET_SetConnectFunc(RLN_Connect);
-
-        TRM_DrawText("RetroLink IP: ", 1, BootNextLine++, PAL1);
-        RLN_PrintIP(1, BootNextLine++);
-        TRM_DrawText("RetroLink MAC: ", 1, BootNextLine++, PAL1);
-        RLN_PrintMAC(1, BootNextLine++);
+        NET_SetDisconnectFunc(RLN_BlockConnections);
+        NET_SetGetIPFunc(RLN_GetIP);
+        NET_SetPingFunc(RLN_PingIP);
+        
+        TRM_DrawText("RLN: RetroLink found", 1, BootNextLine++, PAL1);
     }
-    else if (xpn_r) // Was something resembling an xPico module found earlier?
+    else if ((xpn_r = XPN_Initialize())) // Check if xPico device is present
     {
         DEV_UART.Id.sName = "XPICO UART";
 
@@ -241,18 +225,28 @@ void DetectDevices()
         bXPNetwork = TRUE;
 
         NET_SetConnectFunc(XPN_Connect);
+        NET_SetDisconnectFunc(XPN_Disconnect);
+        NET_SetGetIPFunc(XPN_GetIP);
+        NET_SetPingFunc(XPN_PingIP);
 
-        //TRM_DrawText("xPico IP: <not implemented>", 1, BootNextLine++, PAL1);
-        //XPN_PrintIP(1, BootNextLine++);
-        //TRM_DrawText("xPico MAC: <not implemented>", 1, BootNextLine++, PAL1);
-        //XPN_PrintMAC(1, BootNextLine++);
+        switch (xpn_r)
+        {
+            case 1:
+                TRM_DrawText("XPN: xPico module OK", 1, BootNextLine++, PAL1);
+            break;
+            case 2:
+                TRM_DrawText("XPN: Error", 1, BootNextLine++, PAL1);
+            break;
+        
+            default:
+            break;
+        }
     }
     else    // No external network adapters found
     {
         bRLNetwork = FALSE;
         bXPNetwork = FALSE;
 
-        //TRM_DrawText("RetroLink Network Adapter not found", 1, BootNextLine++, PAL1);
         TRM_DrawText("No network adapters found", 1, BootNextLine++, PAL1);
         TRM_DrawText("Listening on built in UART", 1, BootNextLine++, PAL1);
     }

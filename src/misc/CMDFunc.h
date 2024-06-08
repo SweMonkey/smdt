@@ -15,7 +15,7 @@ extern SM_CMDList CMDList[];
 void CMD_LaunchTelnet(u8 argc, char *argv[]);
 void CMD_LaunchIRC(u8 argc, char *argv[]);
 void CMD_LaunchMenu(u8 argc, char *argv[]);
-void CMD_Test(u8 argc, char *argv[]);
+void CMD_SetAttr(u8 argc, char *argv[]);
 void CMD_Echo(u8 argc, char *argv[]);
 void CMD_KeyboardSend(u8 argc, char *argv[]);
 void CMD_Help(u8 argc, char *argv[]);
@@ -28,5 +28,11 @@ void CMD_SetVar(u8 argc, char *argv[]);
 void CMD_GetIP(u8 argc, char *argv[]);
 void CMD_Run(u8 argc, char *argv[]);
 void CMD_Free(u8 argc, char *argv[]);
+void CMD_Reboot(u8 argc, char *argv[]);
+void CMD_SaveCFG(u8 argc, char *argv[]);
+void CMD_Test(u8 argc, char *argv[]);
+void CMD_FlushBuffer(u8 argc, char *argv[]);
+void CMD_PrintBuffer(u8 argc, char *argv[]);
+void CMD_Ping(u8 argc, char *argv[]);
 
 #endif // CMDFUNC_H_INCLUDED

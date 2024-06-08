@@ -8,6 +8,8 @@
 #define LMSM_TRAPSIG 2
 #define LMSM_MODEACK 4
 
+extern u8 sv_AllowRemoteEnv;
+
 void TELNET_Init();
 void TELNET_ParseRX(u8 byte);
 

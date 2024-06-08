@@ -3,29 +3,17 @@
 #include "Terminal.h"
 #include "Buffer.h"
 #include "Input.h"
-#include "Keyboard.h"
 #include "Utils.h"
 #include "Network.h"
 #include "misc/CMDFunc.h"
+#include "misc/Stdout.h"
 
-#include "DevMgr.h"
-#include "devices/XP_Network.h"
-
-#define INPUT_SIZE 96
+#define INPUT_SIZE 128
 #define INPUT_SIZE_ARGV 64
 
-static u8 kbdata;
-u8 vFontTemp = 0;
+u8 sv_TerminalFont = FONT_8x8_16;
 static char LastCommand[INPUT_SIZE] = {'\0'};
 
-
-void PrintOutput(const char *str)
-{
-    for (u16 c = 0; c < strlen(str); c++)
-    {
-        TELNET_ParseRX((u8)str[c]);
-    }
-}
 
 u8 ParseInputString()
 {
@@ -39,14 +27,14 @@ u8 ParseInputString()
     memset(inbuf, 0, INPUT_SIZE);
 
     // Pop the TxBuffer back into inbuf
-    while ((Buffer_Pop(&TxBuffer, &data) != 0xFF) && (i < INPUT_SIZE))
+    while ((Buffer_Pop(&TxBuffer, &data) != 0xFF) && (i < INPUT_SIZE-1))
     {
         inbuf[i] = data;
         i++;
     }
 
     // Clear TxBuffer input
-    Buffer_Flush(&TxBuffer);
+    Buffer_Flush0(&TxBuffer);
 
     // Copy the current input string into last command string
     if (strlen((char*)inbuf) > 0) strncpy(LastCommand, (char*)inbuf, INPUT_SIZE);
@@ -78,8 +66,8 @@ u8 ParseInputString()
     if (strlen(argv[0]) > 0)
     {
         char tmp[64];
-        sprintf(tmp, "Command \"%s\" not found...\n", argv[0]);
-        PrintOutput(tmp);
+        sprintf(tmp, "Command \"[36m%s[0m\" not found...\n", argv[0]);
+        Stdout_Push(tmp);
         return 1;
     }
 
@@ -108,6 +96,7 @@ u8 DoBackspace()
 
 void SetupTerminal()
 {
+    TELNET_Init();
     TRM_SetStatusText(STATUS_TEXT);
 
     // Variable overrides
@@ -116,38 +105,33 @@ void SetupTerminal()
     vNewlineConv = 1;
     sv_bWrapAround = TRUE;
 
-    vFontTemp = sv_Font;
-    TTY_SetFontSize(0);
+    TTY_SetFontSize(sv_TerminalFont);
 
     LastCommand[0] = '\0';
+
+    C_XMAX = DCOL8_64;  // Make the cursor wrap at screen edge
 }
 
 void Enter_Terminal(u8 argc, char *argv[])
 {
-    if ((argc > 0) && (strcmp(argv[0], "reset") == 0) && (bXPNetwork))
-    {
-        // Mainly meant to make sure an emulated xPico module disconnects and closes the current socket (if there is one)
-        // xPico emulator listens for a "enter monitor mode" to close any open connections/sockets
-        // TODO: How does a real xPico module do disconnect?
-        XPN_EnterMonitorMode();
-        waitMs(200);
-        XPN_ExitMonitorMode();
-    }
 
-    TELNET_Init();
     SetupTerminal();
-    PrintOutput("SMDTC Command Interpreter v0.2\nType \"help\" for available commands\n\n>");
+    Stdout_Push("SMDTC Command Interpreter v0.2\nType \"[32mhelp[0m\" for available commands\n\n");
+
+    Stdout_Push(">");
 }
 
 void ReEnter_Terminal()
 {
     SetupTerminal();
-    TTY_PrintChar('>');
+    if (Buffer_IsEmpty(&stdout))
+    {
+        Stdout_Push(">");
+    }
 }
 
 void Exit_Terminal()
 {
-    sv_Font = vFontTemp;
 }
 
 void Reset_Terminal()
@@ -157,10 +141,7 @@ void Reset_Terminal()
 
 void Run_Terminal()
 {
-    while (KB_Poll(&kbdata))
-    {
-        KB_Interpret_Scancode(kbdata);
-    }
+    Stdout_Flush();
 }
 
 void Input_Terminal()
@@ -171,7 +152,7 @@ void Input_Terminal()
         {
             while (DoBackspace());
 
-            PrintOutput(LastCommand);
+            Stdout_Push(LastCommand);
 
             for (u16 i = 0; i < strlen(LastCommand); i++) Buffer_Push(&TxBuffer, LastCommand[i]);
         }
@@ -231,35 +212,23 @@ void Input_Terminal()
             TTY_SetSX(0);
             TTY_MoveCursor(TTY_CURSOR_DUMMY);
 
-            if ((ParseInputString()) && (isCurrentState(PS_Terminal))) TELNET_ParseRX(0xA);
+            if (ParseInputString())
+            {
+                Stdout_Flush();     // Flush stdout before printing the newline below, otherwise it might get caught up in the "More" prompt
+                
+                if (isCurrentState(PS_Terminal)) Stdout_Push("\n");
+            }
             
-            if (isCurrentState(PS_Terminal)) TTY_PrintChar('>');
+            if (isCurrentState(PS_Terminal))
+            {
+                Stdout_Push(">");
+            }
         }
 
         if (is_KeyDown(KEY_BACKSPACE))
         {
             DoBackspace();
         }
-
-        /*if (is_KeyDown(KEY_F9))
-        {
-            ChangeState(PS_Telnet, 0, NULL);
-        }
-
-        if (is_KeyDown(KEY_F10))
-        {
-            ChangeState(PS_IRC, 0, NULL);
-        }
-
-        if (is_KeyDown(KEY_F11))
-        {
-            ChangeState(PS_Entry, 0, NULL);
-        }
-
-        if (is_KeyDown(KEY_F12))
-        {
-            ChangeState(PS_Debug, 0, NULL);
-        }*/
     }
 }
 

@@ -1,6 +1,7 @@
 #include "Utils.h"
 
 bool bPALSystem;
+bool bHardReset;
 static u8 WinBottom = 0, WinRight = 1;
 static u8 WinWidth = 0, WinHeight = 1;
 static char StatusText[36];

@@ -1,5 +1,5 @@
 
-# SMD Terminal emulator, Telnet and IRC client v0.29+
+# SMD Terminal emulator, Telnet and IRC client v0.30+
 A terminal emulator, telnet and IRC client for the Sega Mega Drive/Genesis with support for PS/2 keyboards and RS-232 communication.<br>
 ![Screenshot of the telnet client](https://deceptsoft.com/smdtc_extra_git/telnet_small.png)
 ![Screenshot of the IRC client](https://deceptsoft.com/smdtc_extra_git/irc_small.png)

@@ -40,7 +40,7 @@
 #define TO_APPROX_MSG_SZ_NEGOTIATION    4
 #define TO_STATUS                       5
 #define TO_TIMING_MARK                  6
-
+//...
 #define TO_OUT_LINEWIDTH                8
 #define TO_OUT_PAGESIZE                 9
 #define TO_OUT_CR_DISPOS                10  // Carriage-Return disposition
@@ -53,7 +53,7 @@
 #define TO_EXT_ASCII                    17
 #define TO_LOGOUT                       18
 #define TO_BYTE_MACRO                   19
-
+//...
 #define TO_SEND_LOCATION                23  // $17
 #define TO_TERM_TYPE                    24  // $18
 #define TO_END_REC                      25
@@ -63,8 +63,8 @@
 #define TO_RFLOW_CTRL                   33
 #define TO_LINEMODE                     34
 #define TO_XDISP                        35
-#define TO_ENV                          36
-#define TO_ENV_OP                       39
+#define TO_ENV                          36  // ENVIRON
+#define TO_ENV_OP                       39  // NEW-ENVIRON
 
 // Telnet Linemode mode commands
 #define LM_MODE         1
@@ -74,6 +74,13 @@
 // Telnet subnegotiations commands
 #define TS_IS   0
 #define TS_SEND 1
+#define TS_INFO 2
+
+// Telnet environment codes
+#define TENV_VAR     0 
+#define TENV_VALUE   1 
+#define TENV_ESC     2
+#define TENV_USERVAR 3
 
 static inline void DoEscape(u8 byte);
 static inline void DoIAC(u8 byte);
@@ -82,6 +89,7 @@ static inline void DoIAC(u8 byte);
 static u8 vDoGA = 0;        // Use Go-Ahead
 static u8 vDECOM = FALSE;   // DEC Origin Mode
 static u8 vDECLRMM = 0;     // This control function defines whether or not the set left and right margins (DECSLRM) control function can set margins.
+u8 sv_AllowRemoteEnv = FALSE;
 
 // DECSTBM
 static s16 DMarginTop = 0;
@@ -1082,7 +1090,7 @@ static inline void DoEscape(u8 byte)
                 ESC_Type = byte;
                 
                 #ifdef ESC_LOGGING
-                kprintf("ESC_Type: $%X ( %c )", ESC_Type, (char)ESC_Type);
+                //kprintf("ESC_Type: $%X ( %c )", ESC_Type, (char)ESC_Type);
                 #endif
 
                 switch (ESC_Type)
@@ -1163,6 +1171,13 @@ static inline void IAC_SuggestEcho(u8 enable)
     NET_SendChar(TC_IAC, TXF_NOBUFFER);
     NET_SendChar((enable?TC_DO:TC_DONT), TXF_NOBUFFER);
     NET_SendChar(TO_ECHO, TXF_NOBUFFER);
+}
+
+static inline void IAC_SuggestTermSpeed()
+{
+    NET_SendChar(TC_IAC, TXF_NOBUFFER);
+    NET_SendChar(TC_DO, TXF_NOBUFFER);
+    NET_SendChar(TO_TERM_SPEED, TXF_NOBUFFER);
 }
 
 static inline void DoIAC(u8 byte)
@@ -1265,14 +1280,14 @@ static inline void DoIAC(u8 byte)
                             NET_SendChar(TC_SB, TXF_NOBUFFER);
                             NET_SendChar(TO_TERM_SPEED, TXF_NOBUFFER);
                             NET_SendChar(TS_IS, TXF_NOBUFFER);
-                            NET_SendString("921600");
+                            NET_SendString(RL_REPORT_BAUD);
                             NET_SendChar(',', TXF_NOBUFFER);
-                            NET_SendString("921600");
+                            NET_SendString(RL_REPORT_BAUD);
                             NET_SendChar(TC_IAC, TXF_NOBUFFER);
                             NET_SendChar(TC_SE, TXF_NOBUFFER);
 
                             #ifdef IAC_LOGGING
-                            kprintf("Response: IAC SB TERMINAL-SPEED IS 921600,921600 IAC SE");
+                            kprintf("Response: IAC SB TERMINAL-SPEED IS %s,%s IAC SE", RL_REPORT_BAUD, RL_REPORT_BAUD);
                             #endif
                         }
                         else
@@ -1352,6 +1367,40 @@ static inline void DoIAC(u8 byte)
                         kprintf("Error: Unhandled Linemode. case (IAC_SubNegotiationBytes[0] = $%X)", IAC_SubNegotiationBytes[0]);
                         #endif
                         break;
+                    }
+                    break;
+                }
+
+                case TO_ENV:
+                {
+                    if (IAC_SubNegotiationBytes[0] == TS_IS)
+                    {
+                        #ifdef IAC_LOGGING
+                        kprintf("Server: IAC SB ENVIRON IS type ... [ VALUE ... ] [ type ... [ VALUE ... ] [");
+                        kprintf("Response: IAC SB ... IAC SE");
+                        #endif
+                    }
+                    else if (IAC_SubNegotiationBytes[0] == TS_SEND)
+                    {
+                        /*NET_SendChar(TC_IAC, TXF_NOBUFFER);
+                        NET_SendChar(TC_SB, TXF_NOBUFFER);
+                        NET_SendChar(TO_ENV, TXF_NOBUFFER);
+                        NET_SendChar(TS_IS, TXF_NOBUFFER);
+                        NET_SendChar(0, TXF_NOBUFFER);
+                        NET_SendChar(TC_IAC, TXF_NOBUFFER);
+                        NET_SendChar(TC_SE, TXF_NOBUFFER);*/
+
+                        #ifdef IAC_LOGGING
+                        kprintf("Server: IAC SB ENVIRON SEND [ type ... [ type ... [ ... ] ] ] IAC SE");
+                        kprintf("Response: IAC SB ENVIRON IS ... IAC SE");
+                        #endif
+                    }
+                    else if (IAC_SubNegotiationBytes[0] == TS_INFO)
+                    {
+                        #ifdef IAC_LOGGING
+                        kprintf("Server: IAC SB ENVIRON INFO type ... [ VALUE ... ] [ type ... [ VALUE ... ] [");
+                        kprintf("Response: IAC SB ... IAC SE");
+                        #endif
                     }
                     break;
                 }
@@ -1591,14 +1640,26 @@ static inline void DoIAC(u8 byte)
                 // rfc1408
                 case TO_ENV:
                 {
-                    // Just refuse for now
-                    NET_SendChar(TC_IAC, TXF_NOBUFFER);
-                    NET_SendChar(TC_WONT, TXF_NOBUFFER);
-                    NET_SendChar(TO_ENV, TXF_NOBUFFER);
-                    
-                    #ifdef IAC_LOGGING
-                    kprintf("Response: IAC WONT ENV");
-                    #endif
+                    if (sv_AllowRemoteEnv)
+                    {
+                        NET_SendChar(TC_IAC, TXF_NOBUFFER);
+                        NET_SendChar(TC_WILL, TXF_NOBUFFER);
+                        NET_SendChar(TO_ENV, TXF_NOBUFFER);
+                        
+                        #ifdef IAC_LOGGING
+                        kprintf("Response: IAC WILL ENV");
+                        #endif
+                    }
+                    else
+                    {
+                        NET_SendChar(TC_IAC, TXF_NOBUFFER);
+                        NET_SendChar(TC_WONT, TXF_NOBUFFER);
+                        NET_SendChar(TO_ENV, TXF_NOBUFFER);
+                        
+                        #ifdef IAC_LOGGING
+                        kprintf("Response: IAC WONT ENV");
+                        #endif
+                    }
 
                     break;
                 }      
@@ -1606,14 +1667,26 @@ static inline void DoIAC(u8 byte)
                 // https://datatracker.ietf.org/doc/html/rfc1572
                 case TO_ENV_OP:
                 {
-                    // Just refuse to send enviroment variables
-                    NET_SendChar(TC_IAC, TXF_NOBUFFER);
-                    NET_SendChar(TC_WONT, TXF_NOBUFFER);
-                    NET_SendChar(TO_ENV_OP, TXF_NOBUFFER);
-                    
-                    #ifdef IAC_LOGGING
-                    kprintf("Response: IAC WONT ENV_OP");
-                    #endif
+                    if (sv_AllowRemoteEnv)
+                    {
+                        NET_SendChar(TC_IAC, TXF_NOBUFFER);
+                        NET_SendChar(TC_WILL, TXF_NOBUFFER);
+                        NET_SendChar(TO_ENV_OP, TXF_NOBUFFER);
+                        
+                        #ifdef IAC_LOGGING
+                        kprintf("Response: IAC WILL ENV_OP");
+                        #endif
+                    }
+                    else
+                    {
+                        NET_SendChar(TC_IAC, TXF_NOBUFFER);
+                        NET_SendChar(TC_WONT, TXF_NOBUFFER);
+                        NET_SendChar(TO_ENV_OP, TXF_NOBUFFER);
+                        
+                        #ifdef IAC_LOGGING
+                        kprintf("Response: IAC WONT ENV_OP");
+                        #endif
+                    }
 
                     break;
                 }

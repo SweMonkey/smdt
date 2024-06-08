@@ -1,3 +1,19 @@
+v0.30.0:
+Terminal: Added bold variant of the 8x8 font.
+Terminal: More colours in text output.
+Terminal: Added "savecfg" command for saving config to sram.
+Terminal: Added "reboot" command to reboot the system, with optional -soft parameter for soft reset instead of the default hard reset.
+Terminal: Now wraps at screen edge instead of at column 80.
+Terminal: Removed unused leftover variables.
+Terminal: Fixed command parser reading some extra garbage if the inputted string was too long for the internal buffer.
+Terminal: More stdout work. Automatic "less/more" when more than a full screen worth of text tries to print to the screen in one go.
+Telnet/IRC/Terminal now has their own font selection setting, no more keeping track of state should use what font.
+IRC: Fixed a leftover inverted check that caused the irc client to quit prematurely when initializing.
+Net: More network callbacks.
+XPN: More work done to support b1tsh1ft3r's controller port network adapter. Ping/Get IP/Transmit data/Receive data works good enough.
+RLN: More work done to support b1tsh1ft3r's cartridge network adapter. Ping/Get IP/Transmit data works good enough, Receive data does not work correctly (lots of dropped/unprinted bytes?).
+Hex viewer can now show the rx buffer, tx buffer and stdout buffer.
+
 v0.29:
 IRC: Cursor fix.
 Added initial support for xPico module connected to an MD UART port.

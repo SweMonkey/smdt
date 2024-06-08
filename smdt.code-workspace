@@ -48,7 +48,9 @@
 			"cstddef": "c",
 			"cursor.h": "c",
 			"irc.h": "c",
-			"atomic": "c"
+			"atomic": "c",
+			"sram.h": "c",
+			"kdebug.h": "c"
 		}
 	}
 }

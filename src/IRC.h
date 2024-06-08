@@ -6,7 +6,7 @@
 
 #define PG_EMPTYNAME "EMPTY PAGE"
 #define IRC_MAX_CHANNELS 3
-#define IRC_MAX_USERLIST 384    //512
+#define IRC_MAX_USERLIST 320    //512
 #define IRC_MAX_USERNAME_LEN 12 //11
 
 extern char sv_Username[];     // Saved preferred IRC nickname

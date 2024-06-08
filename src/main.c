@@ -29,14 +29,16 @@ int main(bool hardReset)
 
     DMA_setBufferSize(DMA_BUFFER_SIZE_MIN);
 
-    VDP_setHScrollTableAddress(AVR_HSCROLL); 
-    VDP_setSpriteListAddress(AVR_SAT);   
-    VDP_setWindowAddress(AVR_WINDOW);       
-    VDP_setBGAAddress(AVR_PLANE_A);          
-    VDP_setBGBAddress(AVR_PLANE_B);          
+    VDP_setHScrollTableAddress(AVR_HSCROLL);
+    VDP_setSpriteListAddress(AVR_SAT);
+    VDP_setWindowAddress(AVR_WINDOW);
+    VDP_setBGAAddress(AVR_PLANE_A);
+    VDP_setBGBAddress(AVR_PLANE_B);
+
+    bHardReset = hardReset;
 
     // Make sure that previous State.Exit() is called if this is a soft reset
-    if (!hardReset)
+    if (!bHardReset)
     {
         ChangeState(PS_Dummy, 0, NULL); 
         SetSprite_Y(SPRITE_ID_CURSOR, 0);

@@ -50,6 +50,16 @@ bool is_KeyUp(u16 key)
     return (KeyMap[key & KM_SZ] == KEYSTATE_UP)?TRUE:FALSE;
 }
 
+bool is_AnyKey()
+{
+    for (u16 i = 0; i < KM_SZ; i++)
+    {
+        if (KeyMap[i] == KEYSTATE_DOWN) return TRUE;
+    }
+
+    return FALSE;
+}
+
 u16 get_KeyPress(u8 KeyState)
 {
     return 0;//KeyMap[KeyState & KM_SZ];

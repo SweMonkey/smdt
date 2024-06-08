@@ -31,6 +31,10 @@ void WINFN_CUSTOM_FGCL();
 void WINFN_SCREENSAVER();
 void WINFN_CURSOR_CL();
 
+extern u8 sv_IRCFont;
+extern u8 sv_TelnetFont;
+extern u8 sv_TerminalFont;
+
 static struct s_menu
 {
     u8 num_entries;                 // Number of entries in menu
@@ -187,14 +191,16 @@ static struct s_menu
      "SV (SWEDISH)"}
 },
 {//13
-    3,
+    5,
     0, 255, 0,
     NULL, WINFN_DEBUGSEL, NULL,
     "DEBUG",
-    {15, 23, 255},
+    {15, 23, 255, 255, 255},
     {"TX/RX STATS",
      "RX BUFFER STATS",
-     "HEX VIEW - RX"}
+     "HEX VIEW - RX",
+     "HEX VIEW - TX",
+     "HEX VIEW - STDOUT"}
 },
 {//14
     3,
@@ -539,14 +545,12 @@ void ChangeText(u8 menu_idx, u8 entry_idx, const char *new_text)
 
 void WINFN_Reset()
 {
-    char *argv[1] = {"reset"};
-
     QMenu_Toggle();
 
     switch (SelectedIdx)
     {
         case 0: // Exit
-            ChangeState(PS_Terminal, 1, argv);
+            if (getState() != PS_Terminal) RevertState();
         break;
         case 1: // Hard reset
             ChangeState(PS_Dummy, 0, NULL);
@@ -678,7 +682,25 @@ void WINFN_SERIALSPEED()
 
 void WINFN_FONTSIZE()
 {
-    if (getState() != PS_IRC) TTY_SetFontSize(SelectedIdx);
+    State ps = getState();
+
+    switch (ps)
+    {
+        case PS_Telnet:
+        sv_TelnetFont = SelectedIdx;
+        TTY_SetFontSize(SelectedIdx);
+        break;
+        //case PS_IRC:
+        //sv_IRCFont = SelectedIdx;
+        //break;
+        case PS_Terminal:
+        sv_TerminalFont = SelectedIdx;
+        TTY_SetFontSize(SelectedIdx);
+        break;
+    
+        default:
+        break;
+    }
 }
 
 void WINFN_KBLayoutSel()
@@ -724,10 +746,23 @@ void WINFN_RXBUFSTATS()
 
 void WINFN_DEBUGSEL()
 {
-    if (SelectedIdx == 2)
+    switch (SelectedIdx)
     {
-        QMenu_Toggle();
-        HexView_Toggle();
+        case 2:
+            QMenu_Toggle();
+            HexView_Toggle(0);
+        break;
+        case 3:
+            QMenu_Toggle();
+            HexView_Toggle(1);
+        break;
+        case 4:
+            QMenu_Toggle();
+            HexView_Toggle(2);
+        break;
+    
+        default:
+        break;
     }
 }
 

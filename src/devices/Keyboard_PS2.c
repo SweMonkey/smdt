@@ -8,12 +8,13 @@
 #include "Buffer.h"
 #include "Utils.h"
 
-#define KB_CL 0
-#define KB_DT 1
+#define KB_CL 0 // Control pin shift
+#define KB_DT 1 // Data pin shift
 
 SM_Device DEV_KBPS2;
 
 
+// Find & initialize keyboard
 bool KB_PS2_Init()
 {
     u8 ret = 0;
@@ -22,6 +23,7 @@ bool KB_PS2_Init()
     DEV_KBPS2.Id.sName = "PS/2 KEYBOARD";
     DEV_KBPS2.Id.Mode = DEVMODE_PARALLEL;
 
+    // Iterate through all ports/pins in search for a keyboard. First found keyboard will be used
     for (u8 s = 0; s < 6; s++)
     {
         switch (s)
@@ -64,9 +66,10 @@ bool KB_PS2_Init()
         }
         
         #ifndef EMU_BUILD        
-        ret = KB_PS2_SendCommand(0xEE);
+        ret = KB_PS2_SendCommand(0xEE); // Send echo command to keyboard
         #endif
 
+        // Did we receive an echo back from the keyboard?
         if ((ret == 0xFE) || (ret == 0xEE)) // FE = Fail+Resend, EE = Successfull echo back
         {
             sprintf(FStringTemp, "Found PS/2 KB @ slot %u:%u (r=$%X)", DEV_FULL(DEV_KBPS2), ret);
@@ -74,13 +77,14 @@ bool KB_PS2_Init()
 
             KB_SetKeyboard(&KB_PS2_Poll);
 
-            return 1;
+            return TRUE;
         }
     }
 
-    return 0;
+    return FALSE;
 }
 
+// Stop keyboard from transmitting data
 inline void KB_Lock()
 {
     SetDevCtrl(DEV_KBPS2, 0x3); // Set pin 0 and 1 as output (smd->kb)
@@ -88,6 +92,7 @@ inline void KB_Lock()
     SetDevData(DEV_KBPS2, 0x2); // Set clock low, data high - Stop kb sending data
 }
 
+// Allow keyboard to transmit data
 inline void KB_Unlock()
 {
     UnsetDevData(DEV_KBPS2);    
@@ -95,7 +100,8 @@ inline void KB_Unlock()
     UnsetDevCtrl(DEV_KBPS2);    // Set pin 0 and 1 as input (kb->smd)
 }
 
-inline u8 KB_PS2_WaitClockLow()
+// Wait for transmit clock cycle
+inline u8 KB_WaitClockLow()
 {
     u16 timeout = 0;
 
@@ -110,6 +116,7 @@ inline u8 KB_PS2_WaitClockLow()
     return 1;
 }
 
+// Check if a byte is available and read it from keyboard if it is
 u8 KB_PS2_Poll(u8 *r)
 {
     u8 bit = 0;
@@ -119,29 +126,29 @@ u8 KB_PS2_Poll(u8 *r)
     KB_Unlock();
 
     // Start bit
-    if (KB_PS2_WaitClockLow()) goto Error;
+    if (KB_WaitClockLow()) goto Error;
 
-    for (u8 b = 0; b < 8; b++)  // Recieve byte
+    for (u8 b = 0; b < 8; b++)  // Receive 8 data bits (bit 1-8)
     {
-        if (KB_PS2_WaitClockLow()) goto Error;
+        if (KB_WaitClockLow()) goto Error;
 
-        bit = GetDevData(DEV_KBPS2, 0x2) >> KB_DT;
+        bit = GetDevData(DEV_KBPS2, 0x2) >> KB_DT;  // Read bit from keyboard
 
-        data |= bit << b;
+        data |= bit << b;   // Shift bit into data buffer
         parity += bit;
     }
 
-    // Parity bit
-    if (KB_PS2_WaitClockLow()) goto Error;
+    // Parity bit (bit 9)
+    if (KB_WaitClockLow()) goto Error;
     
-    parity += GetDevData(DEV_KBPS2, 0x2) >> KB_DT;
+    parity += GetDevData(DEV_KBPS2, 0x2) >> KB_DT;  // Read parity bit
 
-    // Stop bit
-    if (KB_PS2_WaitClockLow()) goto Error;
+    // Stop bit (bit 10)
+    if (KB_WaitClockLow()) goto Error;
 
-    u8 stop = GetDevData(DEV_KBPS2, 0x2) >> KB_DT;
+    u8 stop = GetDevData(DEV_KBPS2, 0x2) >> KB_DT;  // Read stop bit
 
-    // Check parity
+    // Check parity (Odd)
     if ((parity & 1) && (stop == 1))
     {
         KB_Lock();
@@ -155,7 +162,7 @@ u8 KB_PS2_Poll(u8 *r)
     return 0;
 }
 
-//https://www.burtonsys.com/ps2_chapweske.htm
+// Send a command byte to the keyboard and read the response
 // Todo: Send multi byte commands/receive multi byte responses
 u8 KB_PS2_SendCommand(u8 cmd)
 {
@@ -170,26 +177,26 @@ u8 KB_PS2_SendCommand(u8 cmd)
     UnsetDevData(DEV_KBPS2);    // (2) Set data(2) and clock(1) low
     AndDevCtrl(DEV_KBPS2, 0x2); // (3) Release clock line (data output - clock input)
 
-    for (u8 b = 0; b < 8; b++)  // Send byte
+    for (u8 b = 0; b < 8; b++)  // // Send 8 data bits
     {
-        if (KB_PS2_WaitClockLow()) goto Error;
+        if (KB_WaitClockLow()) goto Error;
 
         bit = ((cmd >> (b)) & 1) << KB_DT;
         UnsetDevData(DEV_KBPS2);
         OrDevData(DEV_KBPS2, bit);  // Send bits in reverse order (Least significant bit first)
     }
 
-    if (KB_PS2_WaitClockLow()) goto Error;
+    if (KB_WaitClockLow()) goto Error;  // Extract current data bit from cmd
     UnsetDevData(DEV_KBPS2);
     OrDevData(DEV_KBPS2, parity);    // Send parity bit
 
     UnsetDevCtrl(DEV_KBPS2);    // (9) Set data(2) and clock(1) as input
     
     // Ack
-    if (KB_PS2_WaitClockLow()) goto Error;
+    if (KB_WaitClockLow()) goto Error;
 
     // Release
-    if (KB_PS2_WaitClockLow()) goto Error;
+    if (KB_WaitClockLow()) goto Error;
 
     // Get response from keyboard
     u8 ret = 0;
@@ -202,6 +209,8 @@ u8 KB_PS2_SendCommand(u8 cmd)
 }
 
 /*
+https://www.burtonsys.com/ps2_chapweske.htm
+
 SendCommand:
 
 1)   Bring the Clock line low for at least 100 microseconds.

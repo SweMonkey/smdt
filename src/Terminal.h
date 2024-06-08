@@ -3,14 +3,22 @@
 
 #include "DevMgr.h"
 
+// Cursor movement direction
 #define TTY_CURSOR_UP 0
 #define TTY_CURSOR_DOWN 1
 #define TTY_CURSOR_LEFT 2
 #define TTY_CURSOR_RIGHT 3
 #define TTY_CURSOR_DUMMY 4, 0
 
+// VDP tilemap width
 #define D_COLUMNS_80 128
 #define D_COLUMNS_40 64
+
+// Max number of columns available
+#define DCOL4_64  126   // Using 4x8 font with 64 wide tilemap
+#define DCOL4_128 254   // Using 4x8 font with 128 wide tilemap
+#define DCOL8_64  39    // Using 8x8 font with 64 wide tilemap
+#define DCOL8_128 126   // Using 8x8 font with 128 wide tilemap
 
 // Default cursor minmaxing
 #define C_YMAX_PAL 29
@@ -56,6 +64,7 @@ extern const char * const TermTypeList[];
 
 // Font
 extern u8 sv_Font;
+extern u8 sv_BoldFont;
 extern u8 EvenOdd;
 extern u8 sv_bHighCL;
 

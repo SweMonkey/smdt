@@ -8,9 +8,10 @@
 #include "devices/XP_Network.h"
 #include "devices/Keyboard_PS2.h"
 #include "misc/VarList.h"
+#include "SRAM.h"
+#include "misc/Stdout.h"
 
-void PrintOutput(const char *str);
-extern u8 vFontTemp;
+//void PrintOutput(const char *str);
 
 SM_CMDList CMDList[] =
 {
@@ -19,7 +20,7 @@ SM_CMDList CMDList[] =
     {"echo",    CMD_Echo,           "- Echo string to screen"},
     {"kbc",     CMD_KeyboardSend,   "- Send command to keyboard"},
     {"menu",    CMD_LaunchMenu,     "- Run graphical start menu"},
-    {"setattr", CMD_Test,           "- Set terminal attributes"},
+    {"setattr", CMD_SetAttr,        "- Set terminal attributes"},
     {"xpico",   CMD_xpico,          "- Send command to xpico"},
     {"uname",   CMD_UName,          "- Print system information"},
     {"setcon",  CMD_SetConn,        "- Set connection timeout"},
@@ -29,6 +30,12 @@ SM_CMDList CMDList[] =
     {"getip",   CMD_GetIP,          "- Get network IP"},
     {"run",     CMD_Run,            "- Run binary file"},
     {"free",    CMD_Free,           "- List free memory"},
+    {"reboot",  CMD_Reboot,         "- Reboot system"},
+    {"savecfg", CMD_SaveCFG,        "- Save confg to SRAM"},
+    {"test",    CMD_Test,           "- Test"},
+    {"bflush",  CMD_FlushBuffer,    "- Flush specified buffer"},
+    {"bprint",  CMD_PrintBuffer,    "- Print byte from buffer"},
+    {"ping",    CMD_Ping,           "- Print IP address"},
     {"help",    CMD_Help,           "- This command"},
     {0, 0, 0}  // List terminator
 };
@@ -36,23 +43,20 @@ SM_CMDList CMDList[] =
 
 void CMD_LaunchTelnet(u8 argc, char *argv[]) 
 {
-    sv_Font = vFontTemp;
     ChangeState(PS_Telnet, argc, argv); 
 }
 
 void CMD_LaunchIRC(u8 argc, char *argv[])
 {
-    sv_Font = vFontTemp;
     ChangeState(PS_IRC, argc, argv);
 }
 
 void CMD_LaunchMenu(u8 argc, char *argv[])
 {
-    sv_Font = vFontTemp;
     ChangeState(PS_Entry, argc, argv);
 }
 
-void CMD_Test(u8 argc, char *argv[])
+void CMD_SetAttr(u8 argc, char *argv[])
 {
     char tmp[32];
 
@@ -60,23 +64,23 @@ void CMD_Test(u8 argc, char *argv[])
     {
         case 2:
             sprintf(tmp, "[%um\n", atoi(argv[1]));
-            PrintOutput(tmp);
+            Stdout_Push(tmp);
         break;
         case 3:
             sprintf(tmp, "[%u;%um\n", atoi(argv[1]), atoi(argv[2]));
-            PrintOutput(tmp);
+            Stdout_Push(tmp);
         break;
     
         default:
-            PrintOutput("Set terminal attribute\n\nUsage:\n");
-            PrintOutput(argv[0]);
-            PrintOutput(" <number> <number>\n");
-            PrintOutput(argv[0]);
-            PrintOutput(" <number>\n");
+            Stdout_Push("Set terminal attribute\n\nUsage:\n");
+            Stdout_Push(argv[0]);
+            Stdout_Push(" <number> <number>\n");
+            Stdout_Push(argv[0]);
+            Stdout_Push(" <number>\n");
         return;
     }
 
-    PrintOutput("Attributes set.\n");
+    Stdout_Push("Attributes set.\n");
 }
 
 void CMD_Echo(u8 argc, char *argv[])
@@ -85,11 +89,11 @@ void CMD_Echo(u8 argc, char *argv[])
     
     if ((strcmp("-help", argv[1]) == 0) || (argc < 2))
     {
-        PrintOutput("Echo string to screen\n\nUsage:\n");
-        PrintOutput(argv[0]);
-        PrintOutput(" <string>\n");
-        PrintOutput(argv[0]);
-        PrintOutput(" $variable_name\n");
+        Stdout_Push("Echo string to screen\n\nUsage:\n");
+        Stdout_Push(argv[0]);
+        Stdout_Push(" <string>\n");
+        Stdout_Push(argv[0]);
+        Stdout_Push(" $variable_name\n");
         
         return;
     }
@@ -127,7 +131,7 @@ void CMD_Echo(u8 argc, char *argv[])
                     break;
                 }
 
-                PrintOutput(tmp);
+                Stdout_Push(tmp);
                 break;
             }
 
@@ -137,7 +141,7 @@ void CMD_Echo(u8 argc, char *argv[])
     else
     {
         sprintf(tmp, "%s\n", argv[1]);
-        PrintOutput(tmp);
+        Stdout_Push(tmp);
     }
 }
 
@@ -147,9 +151,9 @@ void CMD_KeyboardSend(u8 argc, char *argv[])
 
     if (argc < 2) 
     {
-        PrintOutput("Send command to keyboard\n\nUsage:\n");
-        PrintOutput(argv[0]);
-        PrintOutput(" <decimal number between 0 and 255>\n");
+        Stdout_Push("Send command to keyboard\n\nUsage:\n");
+        Stdout_Push(argv[0]);
+        Stdout_Push(" <decimal number between 0 and 255>\n");
         return;
     }
 
@@ -157,12 +161,12 @@ void CMD_KeyboardSend(u8 argc, char *argv[])
     u8 ret = 0;
 
     sprintf(tmp, "Sending command $%X to keyboard...\n", kbcmd);
-    PrintOutput(tmp);
+    Stdout_Push(tmp);
     
     ret = KB_PS2_SendCommand(kbcmd);
     
     sprintf(tmp, "Recieved byte $%X from keyboard   \n", ret);
-    PrintOutput(tmp);
+    Stdout_Push(tmp);
 }
 
 void CMD_Help(u8 argc, char *argv[])
@@ -170,13 +174,13 @@ void CMD_Help(u8 argc, char *argv[])
     char tmp[256];
     u16 i = 0;
     
-    PrintOutput("Commands available:\n\n");
+    Stdout_Push("Commands available:\n\n");
 
     while (CMDList[i].id != 0)
     {
         strclr(tmp);
         sprintf(tmp, "%10s %-28s\n", CMDList[i].id, CMDList[i].desc);
-        PrintOutput(tmp);
+        Stdout_Push(tmp);
 
         i++;
     }
@@ -186,7 +190,7 @@ void CMD_xpico(u8 argc, char *argv[])
 {
     if (argc == 1)
     {
-        PrintOutput("xPico debug\n\nUsage:\n\
+        Stdout_Push("xPico debug\n\nUsage:\n\
 xpico enter       - Enter monitor mode\n\
 xpico exit        - Exit monitor mode\n\
 xpico <string>    - Send string to xPico\n\
@@ -201,13 +205,13 @@ xpico connect <address>\n");
         u8 end_char = 0;
         u32 timeout = 0;
 
-        PrintOutput("Entering monitor mode...\n");
+        Stdout_Push("Entering monitor mode...\n");
         XPN_FlushBuffers();    
         XPN_SendMessage("C0.0.0.0/0\n");
 
-        waitMs(200);
+        waitMs(sv_DelayTime);
 
-        while (timeout++ < 50000)
+        while (timeout++ < sv_ReadTimeout)
         {
             response_code = end_char;
             Buffer_Pop(&RxBuffer, &end_char);
@@ -215,7 +219,7 @@ xpico connect <address>\n");
             if (end_char == '>') 
             {
                 sprintf(tmp, "Response: %c%c\n", (char)response_code, (char)end_char);
-                PrintOutput(tmp);
+                Stdout_Push(tmp);
                 break;
             }
         }
@@ -223,26 +227,26 @@ xpico connect <address>\n");
         switch (response_code)
         {
             case '0':
-                PrintOutput("OK; no error\n");
+                Stdout_Push("OK; no error\n");
             break;
             case '1':
-                PrintOutput("No answer from remote device\n");
+                Stdout_Push("No answer from remote device\n");
             break;
             case '2':
-                PrintOutput("Cannot reach remote device or no answer\n");
+                Stdout_Push("Cannot reach remote device or no answer\n");
             break;
             case '8':
-                PrintOutput("Wrong parameter(s)\n");
+                Stdout_Push("Wrong parameter(s)\n");
             break;
             case '9':
-                PrintOutput("Invalid command\n");
+                Stdout_Push("Invalid command\n");
             break;
         
             default:
             break;
         }
 
-        if (timeout >= 50000) PrintOutput("<EnterMonitor timed out>\n");
+        if (timeout >= sv_ReadTimeout) Stdout_Push("<EnterMonitor timed out>\n");
     }
     else if ((argc > 1) && (strcmp(argv[1], "exit") == 0))
     {
@@ -251,13 +255,16 @@ xpico connect <address>\n");
         u8 end_char = 0;
         u32 timeout = 0;
 
-        PrintOutput("Exiting monitor mode...\n");
+        Stdout_Push("Exiting monitor mode...\n");
         XPN_FlushBuffers();
         XPN_SendMessage("QU\n");
 
-        waitMs(200);
+        //XPN_SendMessage("QU");
+        //XPN_SendByte(0x0A);
 
-        while (timeout++ < 50000)
+        waitMs(sv_DelayTime);
+
+        while (timeout++ < sv_ReadTimeout)
         {
             response_code = end_char;
             Buffer_Pop(&RxBuffer, &end_char);
@@ -265,7 +272,7 @@ xpico connect <address>\n");
             if (end_char == '>') 
             {
                 sprintf(tmp, "Response: %c%c\n", (char)response_code, (char)end_char);
-                PrintOutput(tmp);
+                Stdout_Push(tmp);
                 break;
             }
         }
@@ -273,26 +280,31 @@ xpico connect <address>\n");
         switch (response_code)
         {
             case '0':
-                PrintOutput("OK; no error\n");
+                Stdout_Push("OK; no error\n");
             break;
             case '1':
-                PrintOutput("No answer from remote device\n");
+                Stdout_Push("No answer from remote device\n");
             break;
             case '2':
-                PrintOutput("Cannot reach remote device or no answer\n");
+                Stdout_Push("Cannot reach remote device or no answer\n");
             break;
             case '8':
-                PrintOutput("Wrong parameter(s)\n");
+                Stdout_Push("Wrong parameter(s)\n");
             break;
             case '9':
-                PrintOutput("Invalid command\n");
+                Stdout_Push("Invalid command\n");
             break;
         
             default:
             break;
         }
 
-        if (timeout >= 50000) PrintOutput("<ExitMonitor timed out>\n");
+        if (timeout >= sv_ReadTimeout) 
+        {
+            Stdout_Push("<ExitMonitor timed out>\n");
+            sprintf(tmp, "Debug response: r = $%X - e = $%X\n", response_code, end_char);
+            Stdout_Push(tmp);
+        }
     }
     else if ((argc > 2) && (strcmp(argv[1], "connect") == 0))
     {
@@ -301,7 +313,7 @@ xpico connect <address>\n");
         u32 timeout = 0;
 
         sprintf(tmp, "Connecting to %s ...\n", argv[2]);
-        PrintOutput(tmp);
+        Stdout_Push(tmp);
         snprintf(tmp, 36, "Connecting to %s", argv[2]);
         TRM_SetStatusText(tmp);
 
@@ -311,17 +323,17 @@ xpico connect <address>\n");
         XPN_SendMessage(argv[2]);
         XPN_SendByte(0x0A);
 
-        waitMs(500);
+        waitMs(sv_DelayTime);
 
-        PrintOutput("Received:\n");
+        Stdout_Push("Received:\n");
         while ((timeout++ < sv_ConnTimeout) && ((rxdata != 'C') || (rxdata != 'N')))
         {
             if (Buffer_Pop(&RxBuffer, &rxdata) == 0) TELNET_ParseRX(rxdata);
         }
 
-        if (timeout >= sv_ConnTimeout) PrintOutput("<Connection timed out>");
+        if (timeout >= sv_ConnTimeout) Stdout_Push("<Connection timed out>");
 
-        PrintOutput("\n");
+        Stdout_Push("\n");
 
         TRM_SetStatusText(STATUS_TEXT);
     }
@@ -332,19 +344,19 @@ xpico connect <address>\n");
         u32 timeout = 0;
 
         sprintf(tmp, "Sending \"%s\"\n", argv[1]);
-        PrintOutput(tmp);
+        Stdout_Push(tmp);
 
         XPN_FlushBuffers();
         XPN_SendMessage(argv[1]);
         
-        waitMs(200);
+        waitMs(sv_DelayTime);
 
-        PrintOutput("Received:\n");
+        Stdout_Push("Received:\n");
         while (timeout++ < sv_ConnTimeout)
         {
             if (Buffer_Pop(&RxBuffer, &rxdata) == 0) TELNET_ParseRX(rxdata);
         }
-        PrintOutput("\n");
+        Stdout_Push("\n");
     }
 }
 
@@ -357,8 +369,8 @@ void CMD_UName(u8 argc, char *argv[])
 
     if (argc == 1)
     {
-        PrintOutput(OS_Str);
-        PrintOutput("\n");
+        Stdout_Push(OS_Str);
+        Stdout_Push("\n");
         return;
     }
 
@@ -396,7 +408,7 @@ void CMD_UName(u8 argc, char *argv[])
     }
 
     strcat(tmp, "\n");
-    PrintOutput(tmp);
+    Stdout_Push(tmp);
 }
 
 void CMD_SetConn(u8 argc, char *argv[])
@@ -405,16 +417,16 @@ void CMD_SetConn(u8 argc, char *argv[])
 
     if (argc < 2) 
     {
-        PrintOutput("Set connection time out\n\nUsage:\nsetcon <number of ticks>\n\n");
+        Stdout_Push("Set connection time out\n\nUsage:\nsetcon <number of ticks>\n\n");
         sprintf(tmp, "Current time out: %lu ticks\n", sv_ConnTimeout);
-        PrintOutput(tmp);
+        Stdout_Push(tmp);
         return;
     }
 
     sv_ConnTimeout = atoi32(argv[1]);
 
     sprintf(tmp, "Connection time out set to %lu\n", sv_ConnTimeout);
-    PrintOutput(tmp);
+    Stdout_Push(tmp);
 }
 
 void CMD_ClearScreen(u8 argc, char *argv[])
@@ -426,7 +438,7 @@ void CMD_TestSRAM(u8 argc, char *argv[])
 {
     if (argc < 2)
     {
-        PrintOutput("Test SRAM\n\nUsage:\nsram <address> - Write/Readback test\nsram -count    - Check installed RAM\n");
+        Stdout_Push("Test SRAM\n\nUsage:\nsram <address> - Write/Readback test\nsram -count    - Check installed RAM\n");
         return;
     }
 
@@ -455,7 +467,7 @@ void CMD_TestSRAM(u8 argc, char *argv[])
         SRAM_disable();
 
         sprintf(tmp, "Total SRAM: %c$%lX bytes\n", ((c+0x1000) >= 0x1FFFF ? '>' : ' '), c + 0x1000);
-        PrintOutput(tmp);
+        Stdout_Push(tmp);
 
 
         return;
@@ -467,30 +479,30 @@ void CMD_TestSRAM(u8 argc, char *argv[])
 
     // Byte read/write
     sprintf(tmp, "Writing byte $%X to $%lX\n", 0xFF, addr);
-    PrintOutput(tmp);
+    Stdout_Push(tmp);
 
     SRAM_writeByte(addr, 0xFF);
 
-    if (SRAM_readByte(addr) == 0xFF) PrintOutput("Byte readback OK\n");
-    else PrintOutput("Byte readback FAIL\n");
+    if (SRAM_readByte(addr) == 0xFF) Stdout_Push("Byte readback OK\n");
+    else Stdout_Push("Byte readback FAIL\n");
 
     // Word read/write
     sprintf(tmp, "Writing word $%X to $%lX\n", 0xBEEF, addr);
-    PrintOutput(tmp);
+    Stdout_Push(tmp);
 
     SRAM_writeWord(addr, 0xBEEF);
 
-    if (SRAM_readWord(addr) == 0xBEEF) PrintOutput("Word readback OK\n");
-    else PrintOutput("Word readback FAIL\n");
+    if (SRAM_readWord(addr) == 0xBEEF) Stdout_Push("Word readback OK\n");
+    else Stdout_Push("Word readback FAIL\n");
 
     // Long read/write
     sprintf(tmp, "Writing long $%X to $%lX\n", 0xDEADBEEF, addr);
-    PrintOutput(tmp);
+    Stdout_Push(tmp);
 
     SRAM_writeLong(addr, 0xDEADBEEF);
 
-    if (SRAM_readLong(addr) == 0xDEADBEEF) PrintOutput("Long readback OK\n");
-    else PrintOutput("Long readback FAIL\n");
+    if (SRAM_readLong(addr) == 0xDEADBEEF) Stdout_Push("Long readback OK\n");
+    else Stdout_Push("Long readback FAIL\n");
 
     SRAM_disable();
 }
@@ -499,7 +511,7 @@ void CMD_SetVar(u8 argc, char *argv[])
 {
     if ((argc < 3) && (strcmp(argv[1], "-list")))
     {
-        PrintOutput("Set variable\n\nUsage:\nsetvar <variable_name> <value>\nsetvar -list\n");
+        Stdout_Push("Set variable\n\nUsage:\nsetvar <variable_name> <value>\nsetvar -list\n");
         return;
     }
 
@@ -508,8 +520,8 @@ void CMD_SetVar(u8 argc, char *argv[])
         u16 i = 0;
         char tmp[64];
 
-        sprintf(tmp, "%-12s %s   %s\n", "Name", "Type", "Value");
-        PrintOutput(tmp);
+        sprintf(tmp, "%-12s %s   %s\n\n", "Name", "Type", "Value");
+        Stdout_Push(tmp);
 
         while (VarList[i].size)
         {
@@ -535,7 +547,7 @@ void CMD_SetVar(u8 argc, char *argv[])
                 break;
             }
 
-            PrintOutput(tmp);
+            Stdout_Push(tmp);
             i++;
         }
 
@@ -600,24 +612,24 @@ void CMD_GetIP(u8 argc, char *argv[])
 
     if (ipstr)
     {
-        PrintOutput("Please wait...\n");
+        Stdout_Push("Please wait...\n");
 
-        u8 r = XPN_GetIP(ipstr);
+        u8 r = NET_GetIP(ipstr);
 
         if (r == 0)
         {
             char tmp[64];
 
             sprintf(tmp, "IP: %s\n", ipstr);
-            PrintOutput(tmp);
+            Stdout_Push(tmp);
         }
         else if (r == 1)
         {
-            PrintOutput("Error: IPSTR is NULL!\n");
+            Stdout_Push("Error: IPSTR is NULL!\n");
         }
         else if (r == 2)
         {
-            PrintOutput("Error: Timed out\n");
+            Stdout_Push("Error: Timed out\n");
         }
 
         free(ipstr);
@@ -625,7 +637,7 @@ void CMD_GetIP(u8 argc, char *argv[])
         return;
     }
 
-    PrintOutput("Error: Out of RAM!\n");
+    Stdout_Push("Error: Out of RAM!\n");
 }
 
 void CMD_Run(u8 argc, char *argv[])
@@ -636,7 +648,7 @@ void CMD_Run(u8 argc, char *argv[])
     /*
     char tmp[64];
     sprintf(tmp, "Running %s...\n", argv[1]);
-    PrintOutput(tmp);
+    Stdout_Push(tmp);
 
     SRAM_enableRO();
     
@@ -644,7 +656,7 @@ void CMD_Run(u8 argc, char *argv[])
     VAR2REG_L(0x201000, "a5");
     asm("jsr (%a5)");
 
-    PrintOutput("Ok ....\n");
+    Stdout_Push("Ok ....\n");
 
     SRAM_disable();*/
 }
@@ -653,9 +665,183 @@ void CMD_Free(u8 argc, char *argv[])
 {
     char tmp[64];
     sprintf(tmp, "%20s %5u bytes\n", "Free:", MEM_getFree());
-    PrintOutput(tmp);
+    Stdout_Push(tmp);
     sprintf(tmp, "%20s %5u bytes\n", "Largest free block:", MEM_getLargestFreeBlock());
-    PrintOutput(tmp);
+    Stdout_Push(tmp);
     sprintf(tmp, "%20s %5u bytes\n", "Used:", MEM_getAllocated());
-    PrintOutput(tmp);
+    Stdout_Push(tmp);
+}
+
+void CMD_Reboot(u8 argc, char *argv[])
+{
+    if ((argc > 1) && (strcmp(argv[1], "-soft") == 0)) SYS_reset();
+
+    SYS_hardReset();
+}
+
+void CMD_SaveCFG(u8 argc, char *argv[])
+{
+    SRAM_SaveData();
+}
+
+void CMD_Test(u8 argc, char *argv[])
+{
+    if (argc > 1)
+    {
+        for (u8 i = 0; i < argc; i++) 
+        {
+            Stdout_Push(argv[i]);
+            Stdout_Push("\n");
+        }
+        return;
+    }
+
+    Stdout_Push("\
+[30m█[90m█\
+[91m█[31m█\
+[32m█[92m█\
+[93m█[33m█\
+[34m█[94m█\
+[95m█[35m█\
+[36m█[96m█\
+[97m█[37m█\
+[30m\n\r");
+
+    Stdout_Push("[97mBABABABABABABABA - Plane\n");
+    Stdout_Push("[97mLHHLLHHLLHHLLHHL - Priority\n");
+
+Stdout_Push("\n\
+[90m█[30m█\
+[31m█[91m█\
+[92m█[32m█\
+[33m█[93m█\
+[94m█[34m█\
+[35m█[95m█\
+[96m█[36m█\
+[37m█[97m█\
+[30m\n\r");
+
+    Stdout_Push("[97mBABABABABABABABA - Plane\n");
+    Stdout_Push("[97mHLLHHLLHHLLHHLLH - Priority\n");
+
+Stdout_Push("\n\
+[30m █ [90m█\
+[31m █ [91m█\
+[32m █ [92m█\
+[33m █ [93m█\
+[34m █ [94m█\
+[35m █ [95m█\
+[36m █ [96m█\
+[37m █ [97m█\
+[30m\n");
+
+Stdout_Push(" \
+[30m █ [90m█\
+[31m █ [91m█\
+[32m █ [92m█\
+[33m █ [93m█\
+[34m █ [94m█\
+[35m █ [95m█\
+[36m █ [96m█\
+[37m █ [97m█\
+[30m\n");
+
+Stdout_Push("\n\
+[30m█[90m█\
+[31m█[91m█\
+[32m█[92m█\
+[33m█[93m█\
+[34m█[94m█\
+[35m█[95m█\
+[36m█[96m█\
+[37m█[97m█\
+[30m");
+
+Stdout_Push("\n\
+[90m█[30m█\
+[91m█[31m█\
+[92m█[32m█\
+[93m█[33m█\
+[94m█[34m█\
+[95m█[35m█\
+[96m█[36m█\
+[97m█[37m█\
+[0m\n\r");
+}
+
+void CMD_FlushBuffer(u8 argc, char *argv[])
+{
+    if (argc < 2) 
+    {
+        Stdout_Push("Flush buffer and set to 0\n\nUsage:\nbflush <buffer>\n\nBuffers available: rx, tx, stdout\n");
+        return;
+    }
+
+    u16 i = BUFFER_LEN;
+
+    if (strcmp(argv[1], "rx") == 0)
+    {
+        while (i--)
+        {
+            Buffer_Push(&RxBuffer, 0);
+        }
+        
+        Buffer_Flush(&RxBuffer);
+    }
+    else if (strcmp(argv[1], "tx") == 0)
+    {
+        while (i--)
+        {
+            Buffer_Push(&TxBuffer, 0);
+        }
+        
+        Buffer_Flush(&TxBuffer);
+    }
+    else if (strcmp(argv[1], "stdout") == 0)
+    {
+        while (i--)
+        {
+            Buffer_Push(&stdout, 0);
+        }
+        
+        Buffer_Flush(&stdout);
+    }
+}
+
+void CMD_PrintBuffer(u8 argc, char *argv[])
+{
+    if (argc < 3) 
+    {
+        Stdout_Push("Print byte at <position> in <buffer>\n\nUsage:\nbprint <buffer> <position>\n\nBuffers available: rx, tx, stdout\n");
+        return;
+    }
+
+    char buf[8];
+
+    if (strcmp(argv[1], "rx") == 0)
+    {
+        sprintf(buf, "$%X\n", RxBuffer.data[atoi16(argv[2]) % BUFFER_LEN]);
+        Stdout_Push(buf);
+    }
+    else if (strcmp(argv[1], "tx") == 0)
+    {
+        sprintf(buf, "$%X\n", TxBuffer.data[atoi16(argv[2]) % BUFFER_LEN]);
+        Stdout_Push(buf);
+    }
+    else if (strcmp(argv[1], "stdout") == 0)
+    {
+        sprintf(buf, "$%X\n", stdout.data[atoi16(argv[2]) % BUFFER_LEN]);
+        Stdout_Push(buf);
+    }
+}
+
+void CMD_Ping(u8 argc, char *argv[])
+{
+    if (argc < 2) 
+    {
+        Stdout_Push("Ping IP address\n\nUsage:\nping <address>\n");
+        return;
+    }
+
+    NET_PingIP(argv[1]);
 }

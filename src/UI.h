@@ -6,6 +6,7 @@
 typedef struct s_window
 {
     u8 WinBuffer[28][40];
+    u8 WinAttribute[28][40];
     char Title[35];
     bool bVisible;
     u8 Flags;
@@ -30,7 +31,7 @@ bool UI_GetVisible(SM_Window *w);
 void UI_RepaintWindow();
 void UI_SetWindowTitle(const char *title);
 void UI_CreateWindow(SM_Window *w, const char *title, u8 flags);
-void UI_DrawText(u8 x, u8 y, const char *text);
+void UI_DrawText(u8 x, u8 y, u8 attribute, const char *text);
 void UI_ClearRect(u8 x, u8 y, u8 width, u8 height);
 void UI_FillRect(u8 x, u8 y, u8 width, u8 height, u8 fillbyte);
 void UI_DrawVLine(u8 x, u8 y, u8 height, u8 linechar);
@@ -40,5 +41,6 @@ void UI_DrawPanelSimple(u8 x, u8 y, u8 width, u8 height);
 void UI_DrawVScrollbar(u8 x, u8 y, u8 height, u16 min, u16 max, u16 pos);
 void UI_DrawItemList(u8 x, u8 y, u8 width, u8 height, const char *caption, char *list[], u16 item_count, u16 scroll);
 void UI_DrawTextInput(u8 x, u8 y, u8 width, const char *caption, char str[], bool bShowCaret);
+void UI_DrawItemListSelect(u8 x, u8 y, u8 width, u8 height, const char *caption, char *list[], u8 item_count, u8 selected_item);
 
 #endif // UI_H_INCLUDED

@@ -11,12 +11,6 @@
 #include "StateCtrl.h"
 #endif
 
-// Max number of columns available
-#define DCOL4_64  126   // Using 4x8 font with 64 wide tilemap
-#define DCOL4_128 254   // Using 4x8 font with 128 wide tilemap
-#define DCOL8_64  39    // Using 8x8 font with 64 wide tilemap
-#define DCOL8_128 126   // Using 8x8 font with 128 wide tilemap
-
 // Modifiable variables
 u8 vNewlineConv = 0;     // 0 = none (\n = \n) -- 1 = \n becomes \n\r
 u8 sv_TermType = 0;      // Terminal type. See TermType table further down
@@ -26,8 +20,8 @@ char sv_Baud[5] = "4800";// Report this baud speed to remote servers if they ask
 
 // Font
 u8 sv_Font = FONT_4x8_8; // Font size. 0=8x8 16 colour - 1=4x8 8 colour AA - 2=4x8 monochrome AA
+u8 sv_BoldFont = FALSE;  // Use bold 8x8 font
 u8 EvenOdd = 0;          // Even/Odd character being printed
-static u8 LastPlane = 0;
 
 // TTY
 s32 sx = 0, sy = C_YSTART;              // Character x and y output position
@@ -218,9 +212,7 @@ void TTY_SetFontSize(u8 size)
         VDP_setHorizontalScroll(BG_B, HScroll  );   // -8
 
         LastCursor = 0x13;
-
         EvenOdd = 1;
-        LastPlane = 0;
 
         if (sv_TermColumns == D_COLUMNS_80) C_XMAX = DCOL4_128;
         else C_XMAX = DCOL4_64;
@@ -233,16 +225,14 @@ void TTY_SetFontSize(u8 size)
         VDP_setHorizontalScroll(BG_B, HScroll  );   // -8
 
         LastCursor = 0x13;
-
         EvenOdd = 1;
-        LastPlane = 0;
 
         if (sv_TermColumns == D_COLUMNS_80) C_XMAX = DCOL4_128;
         else C_XMAX = DCOL4_64;
     }
     else        // 8x8
     {
-        VDP_loadTileSet(&GFX_ASCII_TERM, AVR_FONT0, DMA);
+        VDP_loadTileSet((sv_BoldFont ? &GFX_ASCII_TERM_BOLD : &GFX_ASCII_TERM_NORMAL), AVR_FONT0, DMA);
 
         VDP_setHorizontalScroll(BG_A, HScroll);
         VDP_setHorizontalScroll(BG_B, HScroll);
@@ -308,7 +298,7 @@ inline void TTY_PrintChar(u8 c)
             }
 
             *((vu16*) VDP_DATA_PORT) = PF_Table[ColorFG & 0x7] + c + (bInverse ? 0 : 0x100);
-            EvenOdd = sx & 1;            
+            EvenOdd = sx & 1;
             break;
         }
         case FONT_4x8_1: // 4x8 Mono
@@ -491,7 +481,7 @@ inline void TTY_SetAttribute(u8 v)
     {
         ColorFG = v - 30;
 
-        if (bIntense) ColorFG += 8;
+        if (bIntense) ColorFG += 8;        
 
         #ifdef ATT_LOGGING
         kprintf("N ColorFG: $%X", ColorFG);

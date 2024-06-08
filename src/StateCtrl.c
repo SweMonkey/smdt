@@ -6,6 +6,7 @@
 #include "devices/RL_Network.h"
 #include "Screensaver.h"
 #include "DevMgr.h"             // bRLNetwork
+#include "Keyboard.h"
 
 extern PRG_State DummyState;
 extern PRG_State TelnetState;
@@ -19,6 +20,8 @@ static PRG_State *PrevState = &DummyState;
 
 static State CurrentStateEnum = PS_Dummy;
 static State PrevStateEnum = PS_Dummy;
+
+static u8 kbdata;
 bool bWindowActive = FALSE;
 
 
@@ -45,6 +48,8 @@ void VBlank()
 
 void ChangeState(State new_state, u8 argc, char *argv[])
 {
+    if (new_state == CurrentStateEnum) return;
+
     PrevState = CurrentState;
     PrevStateEnum = CurrentStateEnum;
 
@@ -148,4 +153,9 @@ void ResetSystem(bool bHard)
 void StateTick()
 {
     CurrentState->Run();
+
+    while (KB_Poll(&kbdata))
+    {
+        KB_Interpret_Scancode(kbdata);
+    }
 }

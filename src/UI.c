@@ -93,7 +93,7 @@ void UI_RepaintWindow()
         if ((y == 0) && (x > 35)) continue; // Don't clear status icons area
         if (Target->WinBuffer[y][x] == 0) continue;
 
-        TRM_DrawChar(Target->WinBuffer[y][x], x, y, PAL1);
+        TRM_DrawChar(Target->WinBuffer[y][x], x, y, (Target->WinAttribute[y][x] & 0x3));//PAL1);
     }
     }
 }
@@ -126,6 +126,8 @@ void UI_CreateWindow(SM_Window *w, const char *title, u8 flags)
 
     w->Flags = flags;
 
+    memset(w->WinAttribute, 1, 1120);
+
     if (w->Flags & UC_NOBORDER) memset(w->WinBuffer, 0, 1120);   // prev: filled with 0
     else memcpy(w->WinBuffer, Frame, 1120);
 
@@ -145,14 +147,18 @@ void UI_CreateWindow(SM_Window *w, const char *title, u8 flags)
 /// @param x X position
 /// @param y Y position
 /// @param text Text string
-void UI_DrawText(u8 x, u8 y, const char *text)
+void UI_DrawText(u8 x, u8 y, u8 attribute, const char *text)
 {
     if (Target == NULL) return;
 
     const char *c = text;
     u8 _x = x+1;
 
-    while (*c) Target->WinBuffer[y+3][_x++] = *c++;
+    while (*c)
+    {
+        Target->WinAttribute[y+3][_x] = attribute;
+        Target->WinBuffer[y+3][_x++] = *c++;
+    }
 }
 
 /// @brief Clear rectangle
@@ -448,14 +454,14 @@ void UI_DrawItemList(u8 x, u8 y, u8 width, u8 height, const char *caption, char 
 
     UI_DrawPanel(x, y, width, height, UC_PANEL_SINGLE);
     UI_DrawVScrollbar(x+width-2, y+1, height-2, 0, max, scroll_);
-    UI_DrawText(x+1, y, caption);
+    UI_DrawText(x+1, y, PAL1, caption);
 
     char tmp[width-3];
 
     for (u16 i = 0; i < (item_count < max_visible ? item_count : max_visible); i++)
     {
         strncpy(tmp, list[i+scroll_], width-3);
-        UI_DrawText(x+1, y+2+i, tmp);
+        UI_DrawText(x+1, y+2+i, PAL1, tmp);
     }
 }
 
@@ -471,9 +477,39 @@ void UI_DrawTextInput(u8 x, u8 y, u8 width, const char *caption, char str[], boo
     if (Target == NULL) return;
     
     UI_DrawPanelSimple(x, y, width, 3);
-    UI_DrawText(x+1, y, caption);
+    UI_DrawText(x+1, y, PAL1, caption);
 
-    UI_DrawText(x+1, y+1, str);
+    UI_DrawText(x+1, y+1, PAL1, str);
 
     if (bShowCaret) Target->WinBuffer[y+4][x+2+strlen(str)] = 0xBD;
+}
+
+/// @brief Draw item list with selector
+/// @param x X position
+/// @param y Y position
+/// @param width Width of item list
+/// @param height Height of item list
+/// @param caption Item list caption
+/// @param list Array of items to draw in list
+/// @param item_count Number of items in list
+/// @param selected_item Selected item in list
+void UI_DrawItemListSelect(u8 x, u8 y, u8 width, u8 height, const char *caption, char *list[], u8 item_count, u8 selected_item)
+{
+    if (Target == NULL) return;
+
+    u8 min_height = (height < item_count+4) ? item_count+4 : height;//(item_count < height) ? 0 : (item_count-max_visible);
+    u8 max_visible = min_height-4;
+
+    UI_DrawPanel(x, y, width, min_height, UC_PANEL_SINGLE);
+    UI_DrawText(x+1, y, PAL1, caption);
+
+    char tmp[width-3];
+
+    for (u16 i = 0; i < (item_count < max_visible ? item_count : max_visible); i++)
+    {
+        strncpy(tmp, list[i], width-3);
+        
+        if (selected_item == i) UI_DrawText(x+1, y+2+i, PAL3, tmp);
+        else UI_DrawText(x+1, y+2+i, PAL1, tmp);
+    }
 }

@@ -3,15 +3,14 @@
 #include "Terminal.h"
 #include "Buffer.h"
 #include "Input.h"
-#include "Keyboard.h"
 #include "Utils.h"
 #include "Network.h"
 #include "devices/RL_Network.h"
+#include "misc/Stdout.h"
 
 #ifndef EMU_BUILD
 static u8 rxdata;
 #endif
-static u8 kbdata;
 //static u8 bOnce = FALSE;
 
 #ifdef EMU_BUILD
@@ -21,9 +20,12 @@ extern const unsigned char telnetdump[];
 u32 StreamPos = 0;
 #endif
 
+u8 sv_TelnetFont = FONT_4x8_8;
+
 
 void Enter_Telnet(u8 argc, char *argv[])
 {
+    sv_Font = sv_TelnetFont;
     TELNET_Init();
     TRM_SetStatusText(STATUS_TEXT);
 
@@ -65,11 +67,6 @@ void Enter_Telnet(u8 argc, char *argv[])
         while(Buffer_Push(&RxBuffer, telnetdump[p]) != 0xFF)
         {
             p++;
-            /*if (bOnce)
-            {
-                TRM_SetStatusIcon(ICO_NET_RECV, ICO_POS_1);
-                bOnce = !bOnce;
-            }*/
 
             if (p >= s) break;
         }
@@ -77,17 +74,9 @@ void Enter_Telnet(u8 argc, char *argv[])
         while (Buffer_Pop(&RxBuffer, &data) != 0xFF)
         {
             TELNET_ParseRX(data);
-            //kprintf("StreamPos: $%lX (%lu)", StreamPos, StreamPos);
-            //waitMs(16);
-            
-            /*if (!bOnce)
-            {
-                TRM_SetStatusIcon(ICO_NET_IDLE_RECV, ICO_POS_1);
-                bOnce = !bOnce;
-            }*/
-
-            //StreamPos++;
         }
+
+        //TELNET_ParseRX(telnetdump[p++]);
     }
 
     KDebug_StopTimer();
@@ -114,6 +103,8 @@ void ReEnter_Telnet()
 
 void Exit_Telnet()
 {
+    Stdout_Flush();
+    NET_Disconnect();
 }
 
 void Reset_Telnet()
@@ -136,11 +127,6 @@ void Run_Telnet()
         }*/
     }
     #endif
-
-    while (KB_Poll(&kbdata))
-    {
-        KB_Interpret_Scancode(kbdata);
-    }
     
     #ifndef EMU_BUILD
     /*if (!bOnce)

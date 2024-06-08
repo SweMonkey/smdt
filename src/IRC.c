@@ -7,6 +7,7 @@
 #include "Cursor.h"
 #include "StateCtrl.h"
 #include "../res/system.h"
+#include "misc/Stdout.h"
 
 /*
     USERLIST WARNING:
@@ -67,9 +68,6 @@ char **PG_UserList = {NULL};
 u16 PG_UserNum = 0;
 u16 UserIterator = 0;
 
-// Terminal print function used to return error messages
-extern void PrintOutput(const char *str);
-
 
 void IRC_Init()
 {
@@ -95,6 +93,8 @@ void IRC_Reset()
     NickReRegisterCount = 0;
     sv_CursorCL = 0x0E0;
     LastCursor = 0x12;
+    
+    Stdout_Flush();
 
     // Allocate and setup channel slots
     for (u8 ch = 0; ch < IRC_MAX_CHANNELS; ch++)
@@ -105,8 +105,9 @@ void IRC_Reset()
             #ifdef IRC_LOGGING
             kprintf("Failed to allocate memory for PG_Buffer[%u]", ch);
             #endif
-            ChangeState(PS_Terminal, 0, NULL);
-            PrintOutput("Failed to allocate memory for PG_Buf!");
+            Stdout_Push("[91mIRC Client: Failed to allocate memory\n for PG_Buf![0m\n");
+            RevertState();
+            return;
         }
         memset(PG_Buffer[ch], 0, sizeof(TMBuffer));
         strcpy(PG_Buffer[ch]->Title, PG_EMPTYNAME);
@@ -123,8 +124,9 @@ void IRC_Reset()
         #ifdef IRC_LOGGING
         kprintf("Failed to allocate memory for LineBuf");
         #endif
-        ChangeState(PS_Terminal, 0, NULL);
-        PrintOutput("Failed to allocate memory for LineBuf!");
+        Stdout_Push("[91mIRC Client: Failed to allocate memory\n for LineBuf![0m\n");
+        RevertState();
+        return;
     }
     memset(LineBuf, 0, sizeof(struct s_linebuf));
 
@@ -135,8 +137,9 @@ void IRC_Reset()
         #ifdef IRC_LOGGING
         kprintf("Failed to allocate memory for RXString");
         #endif
-        ChangeState(PS_Terminal, 0, NULL);
-        PrintOutput("Failed to allocate memory for RXString!");
+        Stdout_Push("[91mIRC Client: Failed to allocate memory\n for RXString![0m\n");
+        RevertState();
+        return;
     }
     memset(RXString, 0, B_RXSTRING_LEN);
 
@@ -153,8 +156,19 @@ void IRC_Reset()
                 #ifdef IRC_LOGGING
                 kprintf("Failed to allocate memory for PG_UserList[%u]", i);
                 #endif
-                ChangeState(PS_Terminal, 0, NULL);
-                PrintOutput("Failed to allocate memory for PG_UserList[x]!");
+                //Stdout_Push("[91mIRC Client: Failed to allocate memory\n for PG_UserList[x]![0m\n\n");
+                char tmp[80];
+
+                sprintf(tmp, "[91mIRC Client: Failed to allocate memory\n for PG_UserList[%u]!\n", i);
+                Stdout_Push(tmp);
+
+                sprintf(tmp, "Free: %u - Needed: %u", MEM_getLargestFreeBlock(), IRC_MAX_USERNAME_LEN*IRC_MAX_USERLIST);
+                Stdout_Push(tmp);
+
+                Stdout_Push("[0m\n");
+
+                RevertState();
+                return;
             }
             memset(PG_UserList[i], 0, IRC_MAX_USERNAME_LEN);
         }
@@ -164,8 +178,9 @@ void IRC_Reset()
         #ifdef IRC_LOGGING
         kprintf("Failed to allocate memory for PG_UserList");
         #endif
-        ChangeState(PS_Terminal, 0, NULL);
-        PrintOutput("Failed to allocate memory for PG_UserList!");
+        Stdout_Push("[91mFailed to allocate memory for PG_UserList![0m\n");
+        RevertState();
+        return;
     }
 
     // Set defaults

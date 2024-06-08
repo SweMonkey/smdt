@@ -1,21 +1,41 @@
-
 #include "XP_Network.h"
 #include "Buffer.h"
 #include "Utils.h"      // TRM
 #include "Network.h"    // RxBuffer/TxBuffer
+#include "misc/Stdout.h"
 
 // Time out and wait values are prelimiary and needs more calibration.
 
-u32 sv_ConnTimeout = 500000; // Connection timeout (waiting for connection to remote server)
+#define CTIME 500000
+#define RTIME 300000
+#define DTIME 200
+
+u32 sv_ConnTimeout = CTIME;    // Connection timeout (waiting for connection to remote server)
+u32 sv_ReadTimeout = RTIME;    // Readback timeout (waiting for response from xpico)
+u32 sv_DelayTime   = DTIME;       // Milliseconds of delay between sending a command and reading the response
+static u8 bIsInMonitorMode = FALSE;
+static u8 rxdata = 0;
 
 
 u8 XPN_Initialize()
 {
+    #ifdef EMU_BUILD
+    return 0;
+    #endif
+
     // Todo: Call XPN_Reset() and listen for 'D' instead?
+
+    // Reset these variables in case of a clean SRAM
+    if (sv_ConnTimeout == 0) sv_ConnTimeout = CTIME;
+    if (sv_ReadTimeout == 0) sv_ReadTimeout = RTIME;
+    if (sv_DelayTime == 0) sv_DelayTime = DTIME;
+
+    //bIsInMonitorMode = FALSE;
+    if (bHardReset) waitMs(1000);
 
     if (XPN_EnterMonitorMode())
     {
-        waitMs(200);
+        waitMs(sv_DelayTime);
 
         if (XPN_ExitMonitorMode() == FALSE)
         {
@@ -28,6 +48,11 @@ u8 XPN_Initialize()
     return 0;
 }
 
+bool XPN_RXReady() 
+{
+    return !Buffer_IsEmpty(&RxBuffer);
+}
+
 void XPN_SendByte(u8 data) 
 {
     NET_SendChar(data, TXF_NOBUFFER);
@@ -35,8 +60,6 @@ void XPN_SendByte(u8 data)
 
 u8 XPN_ReadByte()
 {
-    u8 rxdata = 0;
-
     if (Buffer_Pop(&RxBuffer, &rxdata) == 0) return rxdata;
 
     return 0;
@@ -49,8 +72,8 @@ void XPN_SendMessage(char *str)
 
 void XPN_FlushBuffers()
 {
-    Buffer_Flush(&TxBuffer);
-    Buffer_Flush(&RxBuffer);
+    Buffer_Flush0(&TxBuffer);
+    Buffer_Flush0(&RxBuffer);
     return;
 }
 
@@ -59,15 +82,19 @@ bool XPN_EnterMonitorMode()
 {
     u32 timeout = 0;
 
+    if (bIsInMonitorMode) return TRUE;
+
     XPN_FlushBuffers();    
     XPN_SendMessage("C0.0.0.0/0\n");
 
-    waitMs(200);
-
-    while (XPN_ReadByte() != '>')
+    waitMs(sv_DelayTime);
+    
+    while (!XPN_RXReady() || XPN_ReadByte() != '>')
     {
-        if (timeout++ >= 50000) return FALSE;
+        if (timeout++ >= sv_ReadTimeout) return FALSE;
     }
+
+    bIsInMonitorMode = TRUE;
 
     return TRUE;
 }
@@ -77,15 +104,27 @@ bool XPN_ExitMonitorMode()
 {
     u32 timeout = 0;
 
-    XPN_FlushBuffers();    
+    if (!bIsInMonitorMode) return TRUE;
+
+    XPN_FlushBuffers();
     XPN_SendMessage("QU\n");
 
-    waitMs(200);
-
-    while (XPN_ReadByte() != '>')
+    waitMs(sv_DelayTime);
+    
+    while (!XPN_RXReady() || XPN_ReadByte() != '>')
     {
-        if (timeout++ >= 50000) return FALSE;
+        if ((RxBuffer.data[0] == 'Q') && (RxBuffer.data[1] == 'U') && (RxBuffer.data[2] == 0xD) && (RxBuffer.data[3] == 0xA)) break;
+
+        if (timeout++ >= sv_ReadTimeout)
+        {
+            XPN_FlushBuffers();
+            return FALSE;
+        }
     }
+
+    XPN_FlushBuffers();
+
+    bIsInMonitorMode = FALSE;
 
     return TRUE;
 }
@@ -106,33 +145,23 @@ bool XPN_Connect(char *str)
     XPN_SendMessage(str);
     XPN_SendByte(0x0A);
 
-    while (timeout < sv_ConnTimeout)
+    while ((RxBuffer.data[0] != 'C') || (RxBuffer.data[0] != 'N'))
     {
-        if (Buffer_Pop(&RxBuffer, &byte) == 0)
-        {
-            switch(byte)
-            {
-                case 'C': // Connected
-                {
-                    //TRM_SetStatusText(STATUS_TEXT);
-                    //XPN_FlushBuffers();
-                    r = TRUE;
-                    goto Exit;
-                }
-                case 'N': // Host Unreachable
-                {
-                    //TRM_SetStatusText(STATUS_TEXT);
-                    //XPN_FlushBuffers();
-                    goto Exit;
-                }
-            }
-        }
+        if (timeout++ >= sv_ReadTimeout) goto Exit;
+    }
 
-        timeout++;
+    if (RxBuffer.data[0] == 'C')
+    {
+        r = TRUE;
+        Buffer_Pop(&RxBuffer, &byte);   // Discard the 'C' byte from buffer
+    }
+    else if (RxBuffer.data[0] == 'N')
+    {
+        Buffer_Pop(&RxBuffer, &byte);   // Discard the 'N' byte from buffer
     }
     
     Exit:
-    XPN_FlushBuffers();
+    //XPN_FlushBuffers();
     TRM_SetStatusText(STATUS_TEXT);
     return r;
 }
@@ -140,24 +169,32 @@ bool XPN_Connect(char *str)
 void XPN_Disconnect()
 {
     u32 timeout = 0;
+    u8 byte = 0;
+
+    XPN_FlushBuffers();
 
     // 1. Real xPico
     // Set CP3 pin to tell the xPico to disconnect from the remote server
     OrDevData(DEV_UART, 0x20);  // Set pin 7 high
-    waitMs(200);
+    waitMs(100);
     UnsetDevData(DEV_UART);     // Set pin 7 low
-    waitMs(200);
+    waitMs(sv_DelayTime);
 
-    while (XPN_ReadByte() != 'D')
+    while (RxBuffer.data[0] != 'D')
     {
-        if (timeout++ >= 50000) break;
+        if (timeout++ >= sv_ReadTimeout) return;
     }
 
-    // 2. Emulated xPico
+    if (RxBuffer.data[0] == 'D')
+    {
+        Buffer_Pop(&RxBuffer, &byte);   // Discard the 'D' byte from buffer
+    }
+    
+    /*// 2. Emulated xPico
     // Enter/Exit monitor to tell the xPico emulator to disconnect/close the socket
     XPN_EnterMonitorMode();
-    waitMs(200);
-    XPN_ExitMonitorMode();
+    waitMs(sv_DelayTime);
+    XPN_ExitMonitorMode();*/
 }
 
 u8 XPN_GetIP(char *ret)
@@ -169,23 +206,28 @@ u8 XPN_GetIP(char *ret)
 
     if (ret == NULL) return 1;
 
-    XPN_EnterMonitorMode();
+    if (XPN_EnterMonitorMode() == FALSE) return 1;
+
     XPN_FlushBuffers();
     XPN_SendMessage("NC\n"); // Send command to get network information
 
-    waitMs(200);
+    waitMs(sv_DelayTime);
 
     while (byte != 'G')
     {
-        byte = XPN_ReadByte();
-
-        if ((byte >= '0' && byte <= '9') || byte == '.' || byte == '1')
+        if (XPN_RXReady())
         {
-            ret[i++] = byte;
+            byte = XPN_ReadByte();
+
+            if ((byte >= '0' && byte <= '9') || byte == '.' || byte == '1')
+            {
+                ret[i++] = byte;
+            }
+
             timeout = 0;
         }
 
-        if (timeout++ >= 1000) 
+        if (timeout++ >= sv_ReadTimeout) 
         {
             r = 2;
             break;
@@ -196,4 +238,42 @@ u8 XPN_GetIP(char *ret)
 
     ret[i++] = '\0';
     return r;
+}
+
+// Ping IP Address
+// Only accepts an IP address to ping
+void XPN_PingIP(char *ip)
+{
+    u32 timeout = 0;
+    int ping_counter = 0;
+    int byte_count = 0;
+    int ping_count = 4;
+
+    XPN_EnterMonitorMode();
+    XPN_SendMessage("PI ");
+    XPN_SendMessage(ip);
+    XPN_SendMessage("\n");
+
+    while (1)
+    {
+        while (!XPN_RXReady())
+        {
+            if (timeout++ >= sv_ReadTimeout) { break; }
+        }
+
+        u8 byte = XPN_ReadByte();
+        byte_count++;
+
+        if (byte_count > 2)
+        {
+            Stdout_PushByte(byte);
+
+            if (byte == '\n'){ Stdout_Push("\n"); Stdout_Flush(); ping_counter++; }
+            if (ping_counter >= ping_count+1){ break; }
+        }
+
+        timeout = 0;
+    }
+
+    XPN_ExitMonitorMode();
 }

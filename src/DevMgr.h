@@ -37,7 +37,7 @@ typedef struct s_deviceid
     char *sName;    // Device name
     u8 Bitmask;     // Used bits        (Example; Used bits = b00000011)
     u8 Bitshift;    // Used bits shift  (Example; If Shift=2 then Used bits = b00001100)
-    u8 Mode;        // 0=Parallel / 1=Serial
+    u8 Mode;        // 1=Parallel / 2=Serial / 3=Both
 } SM_DeviceId;
 
 typedef struct s_device

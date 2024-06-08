@@ -4,7 +4,6 @@
 #include "Terminal.h"           // vLineMode
 #include "Telnet.h"             // LMSM define
 #include "Utils.h"              // EMU_BUILD define, TRM
-#include "devices/RL_Network.h" // RLN_SendByte
 
 // Statistics
 u32 RXBytes = 0;
@@ -12,7 +11,11 @@ u32 TXBytes = 0;
 
 Buffer RxBuffer, TxBuffer;
 SM_Device DEV_UART;
+
 NET_Connect_CB *ConnectCB = NULL;
+NET_Disconnect_CB *DisconnectCB = NULL;
+NET_GetIP_CB *GetIPCB = NULL;
+NET_PingIP_CB *PingIPCB = NULL;
 
 
 // Rx IRQ
@@ -104,6 +107,10 @@ void NET_SendString(const char *str)
     }
 }
 
+
+// Network callback functions
+
+// Connect
 void NET_SetConnectFunc(NET_Connect_CB *cb)
 {
     ConnectCB = cb;
@@ -114,4 +121,46 @@ bool NET_Connect(char *str)
     if (ConnectCB == NULL) return FALSE;
 
     return ConnectCB(str);
+}
+
+// Disconnect
+void NET_SetDisconnectFunc(NET_Disconnect_CB *cb)
+{
+    DisconnectCB = cb;
+}
+
+void NET_Disconnect()
+{
+    if (DisconnectCB == NULL) return;
+
+    DisconnectCB();
+    return;
+}
+
+// Get IP address string
+void NET_SetGetIPFunc(NET_GetIP_CB *cb)
+{
+    GetIPCB = cb;
+}
+
+bool NET_GetIP(char *str)
+{
+    if (GetIPCB == NULL) return FALSE;
+
+    return GetIPCB(str);
+}
+
+// Ping IP address
+void NET_SetPingFunc(NET_PingIP_CB *cb)
+{
+    PingIPCB = cb;
+}
+
+void NET_PingIP(char *ip)
+{
+    if (PingIPCB == NULL) return;
+
+    PingIPCB(ip);
+
+    return;
 }
