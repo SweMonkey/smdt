@@ -12,7 +12,7 @@ const ROMHeader rom_header = {
     "(C)DECEPTSOFT'24",
     "SMD Terminal Client                             ",
     "SMD Terminal Client                             ",
-    "GM 00000000-00",
+    "GM DSTC2017-32",
     0x000,           
     "JKRD            ",
     0x00000000,
@@ -26,7 +26,7 @@ const ROMHeader rom_header = {
     "RA",
     0xF820,
     0x00200000,
-    0x0020FFFF,
+    0x0023FFFF,
     "            ",
     "SMD Terminal Emulator                   ",
     "EUJ             "

@@ -3,10 +3,13 @@
 #include "QMenu.h"
 #include "HexView.h"
 #include "Cursor.h"
-#include "devices/RL_Network.h"
 #include "Screensaver.h"
 #include "DevMgr.h"             // bRLNetwork
 #include "Keyboard.h"
+#include "Utils.h"              // TRM_ResetStatusText
+
+#include "devices/RL_Network.h"
+#include "system/Time.h"
 
 extern PRG_State DummyState;
 extern PRG_State TelnetState;
@@ -44,6 +47,8 @@ void VBlank()
     bWindowActive = (bShowQMenu || bShowHexView);
     
     ScreensaverTick();
+
+    TickClock();    // Clock will drift when interrupts are disabled!
 }
 
 void ChangeState(State new_state, u8 argc, char *argv[])
@@ -106,6 +111,9 @@ void ChangeState(State new_state, u8 argc, char *argv[])
 
     CurrentStateEnum = new_state;
 
+    TRM_SetStatusText(STATUS_TEXT);
+    TRM_ResetStatusText();
+
     CurrentState->Enter(argc, argv);
 
     ScreensaverInit();
@@ -128,6 +136,9 @@ void RevertState()
     CurrentState = PrevState;
     CurrentStateEnum = PrevStateEnum;
 
+    TRM_SetStatusText(STATUS_TEXT);
+    TRM_ResetStatusText();
+    
     CurrentState->ReEnter();
 
     PrevState = ShadowState;

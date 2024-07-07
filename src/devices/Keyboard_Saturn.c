@@ -1,6 +1,6 @@
 #include "Keyboard_Saturn.h"
 #include "Keyboard.h"
-#include "Utils.h"
+#include "Utils.h"      // TRM_
 
 #define TIMEOUT 128
 SM_Device DEV_KBSATURN;
@@ -8,7 +8,7 @@ SM_Device DEV_KBSATURN;
 
 bool KB_Saturn_Init()
 {
-    DEV_KBSATURN.Id.sName = "SATURN KB";
+    DEV_KBSATURN.Id.sName = "Saturn KB";
     DEV_KBSATURN.Id.Bitmask = 0x7F;
     DEV_KBSATURN.Id.Bitshift = 0;
     DEV_KBSATURN.Id.Mode = DEVMODE_PARALLEL;
@@ -33,7 +33,6 @@ bool KB_Saturn_Init()
 
         KB_SetKeyboard(&KB_Saturn_Poll);
 
-        kprintf("Saturn keyboard found");
         TRM_DrawText("Saturn KB found.", 1, BootNextLine++, PAL1);
     }
 

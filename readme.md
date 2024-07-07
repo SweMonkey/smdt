@@ -125,10 +125,15 @@ Up cursor = Move selector up<br>
 Down cursor = Move selector down<br>
 
 ## IRC client shortcuts
-F1 = Channel 1 tab<br>
-F2 = Channel 2 tab<br>
-F3 = Channel 3 tab<br>
-F5 = Toggle channel user list<br>
+F1  = Channel 1 tab<br>
+F2  = Channel 2 tab<br>
+F3  = Channel 3 tab<br>
+F4  = Channel 4 tab<br>
+F5  = Channel 5 tab<br>
+F6  = Channel 6 tab<br>
+Left arrow key = Switch to previous channel<br>
+Right arrow key = Switch to next channel<br>
+Tab = Toggle channel user list<br>
 Numpad 4 = Scroll left<br>
 Numpad 6 = Scroll right<br>
 

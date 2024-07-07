@@ -30,7 +30,7 @@ Originial source at: https://github.com/b1tsh1ft3r/retro.link/tree/main/sega_gen
 #include "Utils.h"      // TRM
 #include "Network.h"    // RxBuffer/TxBuffer
 #include "XP_Network.h"
-#include "misc/Stdout.h"
+#include "system/Stdout.h"
 
 
 #define RL_DLM 0x00
@@ -124,16 +124,23 @@ void RLN_SendMessage(char *str)
 // the software receive buffer. Designed to be called from Vblank 
 void RLN_Update(void)
 {
-    u8 n = 0;
+    u32 timeout = 0;
+    //u8 n = 0;
+
+    if (Buffer_IsEmpty(&RxBuffer) != 0xFF) return;
+
     while (Buffer_IsFull(&RxBuffer) != 0xFF)
     {
         if (RLN_RXReady())
         {
             Buffer_Push(&RxBuffer, RLN_ReadByte());
         }
-        else break;
+        else if (timeout++ >= 128)
+        {
+            break;
+        }
 
-        if (n++ >= 96) break;
+        //if (n++ >= 96) break;
     }
 
     /*while ((RLN_RXReady()) && (!Buffer_IsFull(&RxBuffer)))
@@ -221,7 +228,9 @@ void RLN_ResetAdapter(void)
 // Make an outbound TCP connection to supplied DNS/IP
 bool RLN_Connect(char *str)
 {
-    RLN_SendByte('C');RLN_SendMessage(str); RLN_SendByte(0x0A);
+    RLN_SendByte('C');
+    RLN_SendMessage(str);
+    RLN_SendByte(0x0A);
 
     while (!RLN_RXReady());
     u8 byte = RLN_ReadByte();
@@ -231,10 +240,10 @@ bool RLN_Connect(char *str)
         case 'C': // Connected
             return TRUE;
         case 'N': // Host Unreachable
-            RLN_FlushBuffers();
+            //RLN_FlushBuffers();
             return FALSE;
         default:
-            RLN_FlushBuffers();
+            //RLN_FlushBuffers();
             return FALSE;
     }
 }

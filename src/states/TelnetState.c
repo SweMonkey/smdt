@@ -6,7 +6,7 @@
 #include "Utils.h"
 #include "Network.h"
 #include "devices/RL_Network.h"
-#include "misc/Stdout.h"
+#include "system/Stdout.h"
 
 #ifndef EMU_BUILD
 static u8 rxdata;
@@ -54,7 +54,7 @@ void Enter_Telnet(u8 argc, char *argv[])
     // rx_absinthebbs.log 53692
     // rx_nethack_lines2 365971
     // rx_nethack_lines3 1175552
-    u8 data; 
+    u8 data;
     u32 p = 0;
     u32 s = 365971;
     StreamPos = p;
@@ -119,21 +119,7 @@ void Run_Telnet()
     while (Buffer_Pop(&RxBuffer, &rxdata) != 0xFF)
     {
         TELNET_ParseRX(rxdata);
-
-        /*if (bOnce)
-        {
-            TRM_SetStatusIcon(ICO_NET_RECV, ICO_POS_1);
-            bOnce = !bOnce;
-        }*/
     }
-    #endif
-    
-    #ifndef EMU_BUILD
-    /*if (!bOnce)
-    {
-        TRM_SetStatusIcon(ICO_NET_IDLE_RECV, ICO_POS_1);
-        bOnce = !bOnce;
-    }*/
     #endif
 }
 

@@ -10,7 +10,7 @@ $20  - $2F      Screensaver sprite tiles (16 tiles) - Used by boot logo on start
 $30  - $3F      Free (16 tiles)                     - Used by boot logo on startup
 $40  - $23F     Terminal ASCII font
 $240 - $43F     Terminal ASCII font duplicate used for 80 column colour support otherwise free (480 tiles)
-$440 - $4FF     Menu ASCII font
+$440 - $4FF     UI font and window tiles
 $500 - $55F     HScroll table
 $560 - $57F     SAT
 $580 - $5FF     Window table

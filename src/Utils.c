@@ -1,4 +1,5 @@
 #include "Utils.h"
+#include "system/Stdout.h"
 
 bool bPALSystem;
 bool bHardReset;
@@ -10,13 +11,12 @@ static char StatusText[36];
 void TRM_SetStatusText(const char *t)
 {
     strncpy(StatusText, t, 36);
-    TRM_ClearTextArea(0, 0, 36, 1);
     TRM_DrawText(StatusText, 1, 0, PAL1);
 }
 
 void TRM_ResetStatusText()
 {
-    TRM_ClearTextArea(0, 0, 36, 1);
+    TRM_ClearArea(0, 0, 36, 1, PAL1, TRM_CLEAR_WINDOW);
     TRM_DrawText(StatusText, 1, 0, PAL1);
 }
 
@@ -56,33 +56,34 @@ inline void TRM_SetStatusIcon(const char icon, u16 pos)
 void TRM_DrawChar(const u8 c, u8 x, u8 y, u8 palette)
 {
     *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(VDP_WINDOW + (((x & 63) + ((y & 31) << 6)) * 2));
-    *((vu16*) VDP_DATA_PORT) = TILE_ATTR_FULL(palette, 1, 0, 0, AVR_UI + c);
+    *((vu16*) VDP_DATA_PORT) = TILE_ATTR_FULL(palette, 1, 0, 0, AVR_UI + c - 32);
 }
 
+// Draw text using the first UI font (Dark BG)
 void TRM_DrawText(const char *str, u16 x, u16 y, u8 palette)
 {
-    u16 data[128];
+    u16 data[41];
     const u8 *s;
     u16 *d;
     u16 i, len;
 
-    if ((x >= 64) || (y >= 32)) return;
+    if ((x >= 40) || (y >= 32)) return;
 
     len = strlen(str);
 
     // Adjust string length
-    if (len > (64 - x)) len = 64 - x;
+    if (len > (40 - x)) len = 40 - x;
 
     // Prepare the data
     s = (const u8*) str;
     d = data;
     i = len;
-    while (i--) *d++ = AVR_UI + (*s++);
+    while (i--) *d++ = AVR_UI + (*s++) - 32;
 
     VDP_setTileMapDataRowEx(WINDOW, data, TILE_ATTR(palette, 1, 0, 0), y, x, len, DMA);
 }
 
-void TRM_ClearTextArea(u16 x, u16 y, u16 w, u16 h)
+void TRM_ClearArea(u16 x, u16 y, u16 w, u16 h, u8 palette, u16 tile)
 {
     u16 data[128];
     u16 i, ya;
@@ -99,11 +100,11 @@ void TRM_ClearTextArea(u16 x, u16 y, u16 w, u16 h)
     if (ha > (32 - y)) ha = 32 - y;
 
     // Prepare the data
-    memsetU16(data, AVR_UI, wa);
+    memsetU16(data, tile, wa);
 
     ya = y;
     i = ha;
-    while (i--) VDP_setTileMapDataRowEx(WINDOW, data, TILE_ATTR(PAL1, 1, 0, 0), ya++, x, wa, DMA);
+    while (i--) VDP_setTileMapDataRowEx(WINDOW, data, TILE_ATTR(palette, 1, 0, 0), ya++, x, wa, DMA);
 }
 
 void TRM_FillPlane(VDPPlane plane, u16 tile)
@@ -111,11 +112,15 @@ void TRM_FillPlane(VDPPlane plane, u16 tile)
     switch(plane)
     {
         case BG_A:
-            DMA_doVRamFill(VDP_BG_A, 0x2000, 0, 1);
+            DMA_doVRamFill(AVR_PLANE_A, 0x2000, 0, 1);
         break;
 
         case BG_B:
-            DMA_doVRamFill(VDP_BG_B, 0x2000, 0, 1);
+            DMA_doVRamFill(AVR_PLANE_B, 0x2000, 0, 1);
+        break;
+
+        case WINDOW:
+            DMA_doVRamFill(AVR_WINDOW, 0x2000, 0, 1);
         break;
 
         default:
@@ -167,6 +172,40 @@ inline u32 atoi32(char *c)
     return value;
 }
 
+ // Reverse string s in place
+ void reverse(char s[])
+{
+    char c;
+
+    for (s32 i = 0, j = strlen(s)-1; i<j; i++, j--) 
+    {
+        c = s[i];
+        s[i] = s[j];
+        s[j] = c;
+    }
+}
+
+void itoa(s32 n, char s[])
+{
+    s32 i, sign;
+
+    if ((sign = n) < 0) n = -n;  // record sign - make n positive
+
+    i = 0;
+
+    // generate digits in reverse order
+    do
+    {
+        s[i++] = n % 10 + '0';   // get next digit
+    } while ((n /= 10) > 0);     // delete it
+
+    if (sign < 0) s[i++] = '-';
+
+    s[i] = '\0';
+
+    reverse(s);
+}
+
 inline u8 tolower(u8 c)
 {
     return ((c >= 'A') && (c <= 'Z') ? c | 0x60 : c);
@@ -208,6 +247,7 @@ char *strtok(char *s, char d)
     return result;
 }
 
+#ifdef KERNEL_BUILD
 #define SYSCALL_RET(x) {n=x;return 0;}
 u32 syscall(register vu32 n, register vu32 a, register vu32 b, register vu32 c, register vu32 d, register vu32 e, register vu32 f)
 {
@@ -215,6 +255,7 @@ u32 syscall(register vu32 n, register vu32 a, register vu32 b, register vu32 c, 
 
     return 0;
 }
+#endif
 
 // strncat, modified strcat from SGDK
 char *strncat(char *to, const char *from, u16 num)
@@ -578,4 +619,54 @@ u16 snprintf(char *buffer, u16 size, const char *fmt, ...)
     va_end(args);
 
     return i;
+}
+
+u16 stdout_printf(const char *fmt, ...)
+{
+    va_list args;
+    u16 i;
+    char *buffer = malloc(256);
+
+    va_start(args, fmt);
+    i = vsnprintf(buffer, 256, fmt, args);
+    va_end(args);
+
+    Stdout_Push(buffer);
+
+    free(buffer);
+
+    return i;
+}
+
+div_t div(s32 __numer, s32 __denom)
+{
+    div_t ret;
+
+    ret.quot = (s32)__numer / __denom;
+    ret.rem = __numer % __denom;
+
+    return ret;
+}
+
+ldiv_t ldiv(s32 __numer, s32 __denom)
+{
+    ldiv_t ret;
+
+    ret.quot = (s32)__numer / __denom;
+    ret.rem = __numer % __denom;
+
+    return ret;
+}
+
+s32 memcmp(const void *s1, const void *s2, u32 n)
+{
+    const u8 *p1 = s1, *p2 = s2;
+
+    while (n--)
+    {
+        if (*p1 != *p2) return *p1 - *p2;
+        else p1++, p2++;
+    }
+
+    return 0;
 }

@@ -9,6 +9,7 @@
 #include "Network.h"        // sv_ListenPort
 #include "Keyboard.h"       // sv_KeyLayout
 #include "Screensaver.h"    // sv_bScreensaver
+#include "UI.h"             // UI_ApplyTheme
 
 // Forward decl.
 void WINFN_Reset();
@@ -17,7 +18,9 @@ void WINFN_BGColor();
 void WINFN_FGColor();
 void WINFN_TERMTYPE();
 void WINFN_SERIALSPEED();
-void WINFN_FONTSIZE();
+void WINFN_FONT_TERM();
+void WINFN_FONT_TELNET();
+void WINFN_FONT_IRC();
 void WINFN_KBLayoutSel();
 void WINFN_RXTXSTATS();
 void WINFN_RXBUFSTATS();
@@ -30,10 +33,12 @@ void WINFN_LineMode();
 void WINFN_CUSTOM_FGCL();
 void WINFN_SCREENSAVER();
 void WINFN_CURSOR_CL();
+void WINFN_UITHEME();
 
 extern u8 sv_IRCFont;
 extern u8 sv_TelnetFont;
 extern u8 sv_TerminalFont;
+extern u8 sv_ThemeUI;
 
 static struct s_menu
 {
@@ -52,64 +57,66 @@ static struct s_menu
     5,
     0, 255, 0,
     NULL, NULL, NULL,
-    "QUICK MENU",
+    "Quick Menu",
     {1, 3, 4, 13, 255},
-    {"RESET",
-     "TERMINAL SETTINGS",
-     "MEGA DRIVE SETTINGS",
-     "DEBUG",
-     "ABOUT"}
+    {"System",
+     "Settings",
+     "Mega Drive settings",
+     "Debug",
+     "About"}
 },
 {//1
     5,
     0, 255, 0,
     NULL, WINFN_Reset, NULL,
-    "RESET",
+    "System",
     {255, 255, 255, 255, 255},
-    {"EXIT",
-     "HARD RESET",
-     "SOFT RESET",
-     "SAVE CONFIG TO SRAM",
-     "ERASE SRAM"}
+    {"Return to terminal",
+     "Hard reset",
+     "Soft reset",
+     "Save config to SRAM",
+     "Erase SRAM"}
 },
 {//2
-    2,
+    3,
     0, 255, 0,
     NULL, NULL, NULL,
-    "SESSION SETTINGS",
-    {255, 20},
-    {"TELNET",
-     "IRC"}
+    "Default fonts",
+    {11, 20, 27},
+    {"Terminal font",
+     "Telnet font",
+     "IRC font"}
 },
 {//3
+    7,
+    0, 255, 0,
+    NULL, NULL, NULL,
+    "Settings",
+    {8, 6, 9, 2, 25, 12, 28},
+    {"Colour",
+     "Variables",
+     "Terminal type",
+     "Default fonts",
+     "Screensaver",
+     "Keyboard layout",
+     "UI theme"}
+},
+{//4
     4,
     0, 255, 0,
     NULL, NULL, NULL,
-    "TERMINAL SETTINGS",
-    {6, 9, 11, 25},
-    {"VARIABLES",
-     "TERMINAL TYPE",
-     "FONT SIZE",
-     "SCREENSAVER"}
-},
-{//4
-    6,
-    0, 255, 0,
-    NULL, NULL, NULL,
-    "MD SETTINGS",
-    {7, 8, 10, 16, 19, 12},
-    {"CONNECTED DEVICES",
-     "COLOUR",
-     "SERIAL SPEED",
-     "SELECT SERIAL PORT",
-     "HSCROLL OFFSET",
-     "KEYBOARD LAYOUT"}
+    "MD Settings",
+    {7, 10, 16, 19},
+    {"Connected devices",
+     "Serial speed",
+     "Select serial port",
+     "H Scroll offset"}
 },
 {//5
     2,
     0, 255, 0,
     NULL, WINFN_Newline, NULL,
-    "LINE ENDING",
+    "Line ending",
     {254, 254},
     {"LF",
      "CRLF"}
@@ -118,17 +125,17 @@ static struct s_menu
     3,
     0, 255, 0,
     NULL, NULL, NULL,
-    "VARIABLES",
+    "Variables",
     {5, 21, 22},
-    {"LINE ENDING",
-     "LOCAL ECHO",
-     "LINE MODE"}
+    {"Line ending",
+     "Local echo",
+     "Line mode"}
 },
 {//7
     6,
     0, 255, 0,
     WINFN_DEVLISTENTRY, NULL, NULL,
-    "CONNECTED DEVICES",
+    "Connected devices",
     {255, 255, 255, 255, 255, 255},
     {"P1:0= <?>",
      "P1:1= <?>",
@@ -141,72 +148,73 @@ static struct s_menu
     4,
     0, 255, 0,
     NULL, NULL, NULL,
-    "COLOUR",
+    "Colour",
     {17, 18, 24, 26},
-    {"BG COLOUR",
-     "4x8 MONO COLOUR",
-     "4x8 8 COLOUR SET",
-     "CURSOR COLOUR"}
+    {"BG Colour",
+     "4x8 Mono colour",
+     "4x8 8 colour set",
+     "Cursor colour"}
 },
 {//9
     5,
     0, 255, 0,
     NULL, WINFN_TERMTYPE, NULL,
-    "TERMINAL TYPE",
+    "Terminal type",
     {254, 254, 254, 254, 254},
-    {"XTERM",
+    {"Xterm",
      "ANSI",
      "VT100",
-     "MEGADRIVE",
-     "UNKNOWN"}
+     "MegaDrive",
+     "Unknown"}
 },
 {//10
     4,
     0, 255, 0,
     NULL, WINFN_SERIALSPEED, NULL,
-    "SERIAL SPEED",
+    "Serial speed",
     {254, 254, 254, 254},
-    {"4800 BAUD",
-     "2400 BAUD",
-     "1200 BAUD",
-     "300 BAUD"}
+    {"4800 Baud",
+     "2400 Baud",
+     "1200 Baud",
+     "300 Baud"}
 },
 {//11
-    3,
+    4,
     0, 255, 0,
-    NULL, WINFN_FONTSIZE, NULL,
-    "FONT SIZE",
-    {254, 254, 254},
-    {"8x8 16 COLOUR",
-     "4x8 8 COLOUR + AA",
-     "4x8 MONO ANTIALIAS"}
+    NULL, WINFN_FONT_TERM, NULL,
+    "Terminal font",
+    {254, 254, 254, 254},
+    {"8x8 16 Colour",
+     "8x8 16 Colour bold",
+     "4x8 8 Colour + AA",
+     "4x8 Mono + AA"}
 },
 {//12
     2,
     0, 0, 0,
     NULL, WINFN_KBLayoutSel, NULL,
-    "KEYBOARD LAYOUT",
+    "Keyboard layout",
     {254, 254},
-    {"US (ENGLISH)",
-     "SV (SWEDISH)"}
+    {"US (English)",
+     "SV (Swedish)"}
 },
 {//13
     5,
     0, 255, 0,
     NULL, WINFN_DEBUGSEL, NULL,
-    "DEBUG",
+    "Debug",
     {15, 23, 255, 255, 255},
-    {"TX/RX STATS",
-     "RX BUFFER STATS",
-     "HEX VIEW - RX",
-     "HEX VIEW - TX",
-     "HEX VIEW - STDOUT"}
+    {"TX/RX stats",
+     "RX Buffer stats",
+     "HexView - RX",
+     "HexView - TX",
+     "HexView - STDOUT"}
 },
 {//14
     3,
     0, 255, 0,
     NULL, NULL, NULL,
-    "ABOUT",
+    "About",
     {255, 255, 255},
     {"","",""}
 },
@@ -214,129 +222,154 @@ static struct s_menu
     2,
     0, 255, 0,
     WINFN_RXTXSTATS, WINFN_RXTXSTATS, NULL,
-    "TX/RX STATS",
+    "TX/RX stats",
     {255, 255},
-    {"TX BYTES: 0",
-     "RX BYTES: 0"}
+    {"TX bytes: 0",
+     "RX bytes: 0"}
 },
 {//16
     4,
     2, 255, 0,
     NULL, WINFN_SERIALPORTSEL, NULL,
-    "SELECT SERIAL PORT",
+    "Select serial port",
     {254, 254, 254, 254},
-    {"DISCONNECTED",
-     "PORT 1",
-     "PORT 2",
-     "PORT 3"}
+    {"Disconnected",
+     "Port 1",
+     "Port 2",
+     "Port 3"}
 },
 {//17
     3,
     0, 255, 0,
     NULL, WINFN_BGColor, NULL,
-    "BG COLOUR",
+    "BG Colour",
     {254, 254, 254},
-    {"BLACK",
-     "WHITE",
-     "RANDOM"}
+    {"Black",
+     "White",
+     "Random"}
 },
 {//18
     5,
     0, 255, 0,
     NULL, WINFN_FGColor, NULL,
-    "4x8 MONO COLOUR",
+    "4x8 Mono colour",
     {254, 254, 254, 254, 254},
-    {"BLACK",
-     "WHITE",
-     "AMBER",
-     "GREEN",
-     "RANDOM"}
+    {"Black",
+     "White",
+     "Amber",
+     "Green",
+     "Random"}
 },
 {//19
     5,
     0, 255, 0,
     NULL, WINFN_HSCOFF, NULL,
-    "HSCROLL OFFSET",
+    "H Scroll offset",
     {254, 254, 254, 254, 254},
-    {"NONE",
+    {"None",
      "-8",
      "-16",
      "+8",
      "+16"}
 },
 {//20
-    2,
+    4,
     0, 255, 0,
-    NULL, NULL, NULL,
-    "IRC",
-    {254, 254},
-    {"SET NICKNAME",
-     "SET QUIT MESSAGE"}
+    NULL, WINFN_FONT_TELNET, NULL,
+    "Telnet font",
+    {254, 254, 254, 254},
+    {"8x8 16 Colour",
+     "8x8 16 Colour bold",
+     "4x8 8 Colour + AA",
+     "4x8 Mono + AA"}
 },
 {//21
     2,
     0, 255, 0,
     NULL, WINFN_Echo, NULL,
-    "ECHO",
+    "Local echo",
     {254, 254},
-    {"OFF",
-     "ON"}
+    {"Off",
+     "On"}
 },
 {//22
     2,
     0, 255, 0,
     NULL, WINFN_LineMode, NULL,
-    "LINEMODE",
+    "Line mode",
     {254, 254},
-    {"NONE",
-     "+EDIT"}
+    {"None",
+     "+Edit"}
 },
 {//23
     3,
     0, 255, 0,
     WINFN_RXBUFSTATS, WINFN_RXBUFSTATS, NULL,
-    "RX BUFFER STATS",
+    "RX Buffer stats",
     {255, 255, 255},
-    {"HEAD: 0",
-     "TAIL: 0",
-     "FREE: 0"}
+    {"Head: 0",
+     "Tail: 0",
+     "Free: 0"}
 },
 {//24
     3,
     0, 255, 0,
     NULL, WINFN_CUSTOM_FGCL, NULL,
-    "4x8 8 COLOUR SET",
+    "4x8 8 Colour set",
     {254, 254, 254},
-    {"NORMAL",
-     "HIGHLIGHTED",
-     "CUSTOM"}
+    {"Normal",
+     "Highlighted",
+     "Custom"}
 },
 {//25
     2,
     0, 255, 0,
     NULL, WINFN_SCREENSAVER, NULL,
-    "SCREENSAVER",
+    "Screensaver",
     {254, 254},
-    {"OFF",
-     "ON"}
+    {"Off",
+     "On"}
 },
 {//26
     4,
     0, 255, 0,
     NULL, WINFN_CURSOR_CL, NULL,
-    "CURSOR COLOUR",
+    "Cursor colour",
     {254, 254, 254, 254},
-    {"GREEN",
-     "BLACK",
-     "WHITE",
-     "RANDOM"}
+    {"Green",
+     "Black",
+     "White",
+     "Random"}
+},
+{//27
+    3,
+    0, 255, 0,
+    NULL, WINFN_FONT_IRC, NULL,
+    "IRC font",
+    {254, 254, 254},
+    {"8x8 16 Colour",
+     "8x8 16 Colour bold",
+     "4x8 Mono + AA"}
+},
+{//28
+    4,
+    0, 255, 0,
+    NULL, WINFN_UITHEME, NULL,
+    "UI theme",
+    {254, 254, 254, 254},
+    {"Dark blue",
+     "Dark lime",
+     "Dark amber",
+     "High contrast"}
 }};
 
-static const u8 QFrame[3][24] = 
+static const u8 QFrame[5][24] = 
 {
-    {0xA9, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0x9B},
-    {0x9A, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 0x9A},
-    {0xA8, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0xAD, 0x9C},
+    {0xC0, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC2},
+    {0xC3, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC5},
+    {0xC6, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC8},
+    {0xC9, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCB},
+    {0xCC, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCE},
 };
 
 static u8 SelectedIdx = 0;
@@ -374,7 +407,6 @@ void SetupQItemTags()
 {
     MainMenu[ 5].tagged_entry = vNewlineConv;
     MainMenu[ 9].tagged_entry = sv_TermType;
-    MainMenu[11].tagged_entry = sv_Font;
     MainMenu[12].tagged_entry = sv_KeyLayout;
     MainMenu[16].tagged_entry = sv_ListenPort;
     MainMenu[17].tagged_entry = sv_QBGCL;
@@ -383,6 +415,58 @@ void SetupQItemTags()
     MainMenu[22].tagged_entry = vLineMode>1?0:vLineMode;
     MainMenu[24].tagged_entry = sv_bHighCL;
     MainMenu[25].tagged_entry = sv_bScreensaver;
+    MainMenu[28].tagged_entry = sv_ThemeUI;
+
+    switch (sv_TerminalFont)
+    {
+        case 0:
+        if (sv_BoldFont) MainMenu[11].tagged_entry = 1;
+        else MainMenu[11].tagged_entry = 0;
+        break;
+        case 1:
+        MainMenu[11].tagged_entry = 2;
+        break;
+        case 2:
+        MainMenu[11].tagged_entry = 3;
+        break;
+
+        default:
+        MainMenu[11].tagged_entry = 255;
+        break;
+    }
+
+    switch (sv_TelnetFont)
+    {
+        case 0:
+        if (sv_BoldFont) MainMenu[20].tagged_entry = 1;
+        else MainMenu[20].tagged_entry = 0;
+        break;
+        case 1:
+        MainMenu[20].tagged_entry = 2;
+        break;
+        case 2:
+        MainMenu[20].tagged_entry = 3;
+        break;
+
+        default:
+        MainMenu[20].tagged_entry = 255;
+        break;
+    }
+
+    switch (sv_IRCFont)
+    {
+        case 0:
+        if (sv_BoldFont) MainMenu[27].tagged_entry = 1;
+        else MainMenu[27].tagged_entry = 0;
+        break;
+        case 2:
+        MainMenu[27].tagged_entry = 2;
+        break;
+
+        default:
+        MainMenu[27].tagged_entry = 255;
+        break;
+    }
 
     switch (sv_Baud[0])
     {
@@ -398,7 +482,7 @@ void SetupQItemTags()
         case '3':
         MainMenu[10].tagged_entry = 3;
         break;
-    
+
         default:
         MainMenu[10].tagged_entry = 255;
         break;
@@ -421,7 +505,7 @@ void SetupQItemTags()
         case 16:
         MainMenu[19].tagged_entry = 4;
         break;
-    
+
         default:
         MainMenu[19].tagged_entry = 255;
         break;
@@ -429,43 +513,37 @@ void SetupQItemTags()
 }
 
 void DrawMenu(u8 idx)
-{
-    char buf[32];
-    
-    TRM_SetWinHeight(MainMenu[idx].num_entries+4);
-    TRM_ClearTextArea(0, 0, 36, MainMenu[idx].num_entries+4);
+{    
+    TRM_SetWinHeight(MainMenu[idx].num_entries+5);
+    TRM_ClearArea(1, 1, 23, MainMenu[idx].num_entries+4, PAL1, TRM_CLEAR_BG);
 
     MainMenu[MenuIdx].selected_entry = SelectedIdx;   // Mark previous menu selection entry
 
     MenuIdx = idx;
     SelectedIdx = MainMenu[MenuIdx].selected_entry;   // Get menu selection entry from new menu
 
-    TRM_DrawText((char*)QFrame[0], 1, 0, PAL1);    // Draw the top of the border frame
+    TRM_DrawText((char*)QFrame[0], 1, 1, PAL1);    // Draw the top of the title bar frame
+    TRM_DrawText((char*)QFrame[1], 1, 2, PAL1);    // Draw the middle of the title bar frame
+    TRM_DrawText((char*)QFrame[2], 1, 3, PAL1);    // Draw the bottom of the title bar frame
+    TRM_DrawText((char*)QFrame[4], 1, MainMenu[MenuIdx].num_entries+4, PAL1);   // Draw the bottom of the window frame
 
-    // Insert the menu title into the top border frame
-    sprintf(buf, " %s ", MainMenu[MenuIdx].title);
-    TRM_DrawText(buf, 2, 0, PAL1);
-
-    TRM_DrawText((char*)QFrame[2], 1, MainMenu[MenuIdx].num_entries+3, PAL1);
+    // Insert the menu title into the title bar
+    TRM_DrawText(MainMenu[MenuIdx].title, 2, 2, PAL0);
 
     for (u8 i = 0; i < MainMenu[MenuIdx].num_entries; i++)
     {
-        TRM_DrawText((char*)QFrame[1], 1, MenuPosY+2+i, PAL1); // Draw left/right border around menu item text
-        TRM_DrawText(MainMenu[MenuIdx].text[i], MenuPosX+2, MenuPosY+2+i, PAL1);    // Draw menu item text
+        TRM_DrawText((char*)QFrame[3], 1, MenuPosY+4+i, PAL1); // Draw left/right window border around menu item text
+        TRM_DrawText(MainMenu[MenuIdx].text[i], MenuPosX+2, MenuPosY+4+i, PAL1);    // Draw menu item text
     }
 
     // Redraw selected menu item text (highlight)
-    TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+2+SelectedIdx, PAL3);
-
-    // Draw left/right border above and below menu item text
-    TRM_DrawText((char*)QFrame[1], 1, MenuPosY+1, PAL1);
-    TRM_DrawText((char*)QFrame[1], 1, MenuPosY+2+MainMenu[MenuIdx].num_entries, PAL1);
+    TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+4+SelectedIdx, PAL3);
 
     // Mark activated option
-    if ((MainMenu[MenuIdx].tagged_entry < MainMenu[MenuIdx].num_entries) )//|| (MainMenu[MenuIdx].next_menu[SelectedIdx] < 254))
+    if (MainMenu[MenuIdx].tagged_entry < MainMenu[MenuIdx].num_entries)
     {
-        TRM_DrawChar('>', MenuPosX+1, MenuPosY+2+MainMenu[MenuIdx].tagged_entry, PAL1);
-        TRM_DrawChar('<', MenuPosX+2+strlen(MainMenu[MenuIdx].text[MainMenu[MenuIdx].tagged_entry]), MenuPosY+2+MainMenu[MenuIdx].tagged_entry, PAL1);
+        TRM_DrawChar('>', MenuPosX+1, MenuPosY+4+MainMenu[MenuIdx].tagged_entry, PAL1);
+        TRM_DrawChar('<', MenuPosX+2+strlen(MainMenu[MenuIdx].text[MainMenu[MenuIdx].tagged_entry]), MenuPosY+4+MainMenu[MenuIdx].tagged_entry, PAL1);
     }
 }
 
@@ -507,30 +585,29 @@ void ExitMenu()
 
 void UpMenu()
 {
-    TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+2+SelectedIdx, PAL1);
+    TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+4+SelectedIdx, PAL1);
     SelectedIdx = (SelectedIdx == 0 ? MainMenu[MenuIdx].num_entries-1 : SelectedIdx-1);
-    TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+2+SelectedIdx, PAL3);
+    TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+4+SelectedIdx, PAL3);
 }
 
 void DownMenu()
 {
-    TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+2+SelectedIdx, PAL1);
+    TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+4+SelectedIdx, PAL1);
     SelectedIdx = (SelectedIdx == MainMenu[MenuIdx].num_entries-1 ? 0 : SelectedIdx+1);
-    TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+2+SelectedIdx, PAL3);
+    TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+4+SelectedIdx, PAL3);
 }
 
 void QMenu_Toggle()
 {
     if (bShowQMenu)
     {
-        TRM_SetWinHeight(1);
-        TRM_ResetStatusText();
+        TRM_ResetWinParam();
     }
     else
     {
         TRM_SetWinHeight(10);
-        TRM_ClearTextArea(0, 0, 35, 1);
-        TRM_ClearTextArea(0, 1, 40, 29);
+        TRM_ClearArea(0, 1, 24, 29, PAL1, TRM_CLEAR_BG);
+                
         DrawMenu(0);
     }
 
@@ -542,6 +619,8 @@ void ChangeText(u8 menu_idx, u8 entry_idx, const char *new_text)
     strncpy(MainMenu[menu_idx].text[entry_idx], new_text, 20);
 }
 
+
+// Callback functions
 
 void WINFN_Reset()
 {
@@ -597,7 +676,6 @@ void WINFN_BGColor()
     
     sv_QBGCL = SelectedIdx;
     PAL_setColor( 0, sv_CBGCL);
-    PAL_setColor( 5, sv_CBGCL);
     PAL_setColor(17, sv_CBGCL);
     PAL_setColor(50, sv_CBGCL);
 }
@@ -680,27 +758,79 @@ void WINFN_SERIALSPEED()
     }
 }
 
-void WINFN_FONTSIZE()
+void WINFN_FONT_TERM()
 {
-    State ps = getState();
-
-    switch (ps)
+    switch (SelectedIdx)
     {
-        case PS_Telnet:
-        sv_TelnetFont = SelectedIdx;
-        TTY_SetFontSize(SelectedIdx);
+        case 0:
+            sv_TerminalFont = 0;
+            sv_BoldFont = FALSE;
         break;
-        //case PS_IRC:
-        //sv_IRCFont = SelectedIdx;
-        //break;
-        case PS_Terminal:
-        sv_TerminalFont = SelectedIdx;
-        TTY_SetFontSize(SelectedIdx);
+        case 1:
+            sv_TerminalFont = 0;
+            sv_BoldFont = TRUE;
+        break;
+        case 2:
+            sv_TerminalFont = 1;
+        break;
+        case 3:
+            sv_TerminalFont = 2;
         break;
     
         default:
         break;
     }
+
+    if (getState() == PS_Terminal) TTY_SetFontSize(sv_TerminalFont);
+}
+
+void WINFN_FONT_TELNET()
+{
+    switch (SelectedIdx)
+    {
+        case 0:
+            sv_TelnetFont = 0;
+            sv_BoldFont = FALSE;
+        break;
+        case 1:
+            sv_TelnetFont = 0;
+            sv_BoldFont = TRUE;
+        break;
+        case 2:
+            sv_TelnetFont = 1;
+        break;
+        case 3:
+            sv_TelnetFont = 2;
+        break;
+    
+        default:
+        break;
+    }
+    
+    if (getState() == PS_Telnet) TTY_SetFontSize(sv_TelnetFont);
+}
+
+void WINFN_FONT_IRC()
+{
+    switch (SelectedIdx)
+    {
+        case 0:
+            sv_IRCFont = 0;
+            sv_BoldFont = FALSE;
+        break;
+        case 1:
+            sv_IRCFont = 0;
+            sv_BoldFont = TRUE;
+        break;
+        case 2:
+            sv_IRCFont = 2;
+        break;
+    
+        default:
+        break;
+    }
+    
+    if (getState() == PS_IRC) TTY_SetFontSize(sv_IRCFont);
 }
 
 void WINFN_KBLayoutSel()
@@ -722,8 +852,8 @@ void WINFN_RXTXSTATS()
     char buf1[32];
     char buf2[32];
 
-    sprintf(buf1, "TX BYTES: %lu", TXBytes);
-    sprintf(buf2, "RX BYTES: %lu", RXBytes);
+    sprintf(buf1, "TX Bytes: %lu", TXBytes);
+    sprintf(buf2, "RX Bytes: %lu", RXBytes);
 
     strncpy(MainMenu[15].text[0], buf1, 20);
     strncpy(MainMenu[15].text[1], buf2, 20);
@@ -735,9 +865,9 @@ void WINFN_RXBUFSTATS()
     char buf2[32];
     char buf3[32];
     
-    sprintf(buf1, "HEAD: %u", RxBuffer.head);
-    sprintf(buf2, "TAIL: %u", RxBuffer.tail);
-    sprintf(buf3, "FREE: %u / %u", BUFFER_LEN - (RxBuffer.tail>RxBuffer.head?(BUFFER_LEN+(s16)(RxBuffer.head-RxBuffer.tail)):(RxBuffer.head-RxBuffer.tail)), BUFFER_LEN);
+    sprintf(buf1, "Head: %u", RxBuffer.head);
+    sprintf(buf2, "Tail: %u", RxBuffer.tail);
+    sprintf(buf3, "Free: %u / %u", BUFFER_LEN - (RxBuffer.tail>RxBuffer.head?(BUFFER_LEN+(s16)(RxBuffer.head-RxBuffer.tail)):(RxBuffer.head-RxBuffer.tail)), BUFFER_LEN);
 
     strncpy(MainMenu[23].text[0], buf1, 20);
     strncpy(MainMenu[23].text[1], buf2, 20);
@@ -908,4 +1038,10 @@ void WINFN_CURSOR_CL()
     
     sv_QCURCL = SelectedIdx;
     PAL_setColor(4, sv_CursorCL);
+}
+
+void WINFN_UITHEME()
+{
+    sv_ThemeUI = SelectedIdx;
+    UI_ApplyTheme();
 }

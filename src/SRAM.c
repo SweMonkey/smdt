@@ -2,7 +2,7 @@
 #include "Utils.h"              // For EMU_BUILD define
 #include "misc/VarList.h"
 
-#define SAVE_VERSION 1
+#define SAVE_VERSION 2
 
 static u32 Offset = 0;
 
@@ -13,6 +13,10 @@ void SRAM_ClearSRAM()
     vu32 *SEnd = (u32*)0x1B8;
     u16 SSize = (*SEnd-*SStart) >> 1;
     //kprintf("SRAM Size: $%X", SSize);
+
+    #ifdef KERNEL_BUILD
+    return;
+    #endif
 
     SRAM_enable();
 
@@ -73,6 +77,10 @@ void SRAM_SaveData()
 {
     u16 i = 0;
     u8 bBreak = FALSE;
+
+    #ifdef KERNEL_BUILD
+    return;
+    #endif
 
     SRAM_ClearSRAM();
 
@@ -184,6 +192,10 @@ u8 SRAM_LoadData()
     u8 bBreak = FALSE;
     char magic[5];
     u16 version;
+
+    #ifdef KERNEL_BUILD
+    return 0;
+    #endif
 
     SRAM_enableRO();
 

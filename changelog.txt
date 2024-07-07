@@ -1,3 +1,17 @@
+v0.30.1:
+SMDTC: FAT12/16/32 support, file operations and other misc functions added for testing purposes. Disabled by default.
+SMDTC: Added time calculation functions. IRC client can now print DD/MM/YY HH:MM:SS date times (previously printed seconds since epoch).
+SMDTC: Added system date/time clock, for now it is not synced to anything so it will drift/reset to 0 on power up. Clock drift is due to the fact SMDTC uses VSync (which may be disabled at times) to tick clock.
+IRC: Changed TM buffers to use 64x32 tilemaps, the IRC client now supports up to 6 concurrent channel "tabs" (F1-F6).
+IRC: Added channel update info in status bar. It shows the channel number (1-6) and if it has any new text.
+IRC: Changed MODE command text output to make more sense, taking into account what mode and who set it. Previously everything was printed as "You set personal modes +xyz" which is wrong. More MODE text will be added as I bump into them.
+IRC: Added the missing /part command, it is used to leave a channel. Usage: "/part #channel" or "/part" to leave the currently open channel.
+Terminal: Added the "uptime" command to show for how long the system has been running.
+Terminal: Added clock to status bar.
+Quickmenu: 1. Dropped the full on upper case. 2. Organized menues and added font selector for each state (terminal, telnet, irc).
+UI: Large visual overhaul. Can no longer cover up status bar either.
+UI: Theme support.
+
 v0.30.0:
 Terminal: Added bold variant of the 8x8 font.
 Terminal: More colours in text output.
@@ -7,7 +21,7 @@ Terminal: Now wraps at screen edge instead of at column 80.
 Terminal: Removed unused leftover variables.
 Terminal: Fixed command parser reading some extra garbage if the inputted string was too long for the internal buffer.
 Terminal: More stdout work. Automatic "less/more" when more than a full screen worth of text tries to print to the screen in one go.
-Telnet/IRC/Terminal now has their own font selection setting, no more keeping track of state should use what font.
+Telnet/IRC/Terminal now has their own font selection setting, no more keeping track of which state should use what font.
 IRC: Fixed a leftover inverted check that caused the irc client to quit prematurely when initializing.
 Net: More network callbacks.
 XPN: More work done to support b1tsh1ft3r's controller port network adapter. Ping/Get IP/Transmit data/Receive data works good enough.

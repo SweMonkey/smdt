@@ -5,13 +5,22 @@
 #include "IRC.h"
 #include "Telnet.h"
 #include "Terminal.h"
+#include "SRAM.h"
+
 #include "devices/XP_Network.h"
 #include "devices/Keyboard_PS2.h"
-#include "misc/VarList.h"
-#include "SRAM.h"
-#include "misc/Stdout.h"
 
-//void PrintOutput(const char *str);
+#include "misc/VarList.h"
+
+#include "system/Stdout.h"
+#include "system/Time.h"
+
+#ifdef KERNEL_BUILD
+#include "system/File.h"
+#include "system/Filesystem.h"
+#include "system/ELF_ldr.h"
+#endif
+
 
 SM_CMDList CMDList[] =
 {
@@ -25,17 +34,26 @@ SM_CMDList CMDList[] =
     {"uname",   CMD_UName,          "- Print system information"},
     {"setcon",  CMD_SetConn,        "- Set connection timeout"},
     {"clear",   CMD_ClearScreen,    "- Clear screen"},
-    {"sram",    CMD_TestSRAM,       "- Test SRAM"},
     {"setvar",  CMD_SetVar,         "- Set variable"},
     {"getip",   CMD_GetIP,          "- Get network IP"},
-    {"run",     CMD_Run,            "- Run binary file"},
     {"free",    CMD_Free,           "- List free memory"},
     {"reboot",  CMD_Reboot,         "- Reboot system"},
     {"savecfg", CMD_SaveCFG,        "- Save confg to SRAM"},
     {"test",    CMD_Test,           "- Test"},
     {"bflush",  CMD_FlushBuffer,    "- Flush specified buffer"},
     {"bprint",  CMD_PrintBuffer,    "- Print byte from buffer"},
-    {"ping",    CMD_Ping,           "- Print IP address"},
+    {"ping",    CMD_Ping,           "- Ping IP address"},
+    #ifdef KERNEL_BUILD
+    {"run",     CMD_Run,            "- Run binary file"},
+    {"ls",      CMD_ListDir,        "- List directory"},
+    {"cat",     CMD_Concatenate,    "- Concatenate file"},
+    {"touch",   CMD_Touch,          "- Update or create file"},
+    {"mkdir",   CMD_MakeDirectory,  "- Create directory"},
+    {"rm",      CMD_RemoveLink,     "- Remove directory/file"},
+    #else
+    {"sram",    CMD_TestSRAM,       "- Test SRAM"},
+    #endif
+    {"uptime",  CMD_Uptime,         "- Show system uptime"},
     {"help",    CMD_Help,           "- This command"},
     {0, 0, 0}  // List terminator
 };
@@ -434,79 +452,6 @@ void CMD_ClearScreen(u8 argc, char *argv[])
     TTY_Reset(TRUE);
 }
 
-void CMD_TestSRAM(u8 argc, char *argv[])
-{
-    if (argc < 2)
-    {
-        Stdout_Push("Test SRAM\n\nUsage:\nsram <address> - Write/Readback test\nsram -count    - Check installed RAM\n");
-        return;
-    }
-
-    char tmp[64];
-    u32 addr = 0;
-
-    if (strcmp(argv[1], "-count") == 0)
-    {
-        u32 c = 0;
-        addr = 0x1000;
-
-        SRAM_enable();
-
-        while (addr < 0x1FFFF)
-        {
-            SRAM_writeByte(addr, 0xAC);
-
-            if (SRAM_readByte(addr) == 0xAC)
-            {
-                addr++;
-                c++;
-            }
-            else break;
-        }
-
-        SRAM_disable();
-
-        sprintf(tmp, "Total SRAM: %c$%lX bytes\n", ((c+0x1000) >= 0x1FFFF ? '>' : ' '), c + 0x1000);
-        Stdout_Push(tmp);
-
-
-        return;
-    }
-
-    addr = atoi32(argv[1]);
-
-    SRAM_enable();
-
-    // Byte read/write
-    sprintf(tmp, "Writing byte $%X to $%lX\n", 0xFF, addr);
-    Stdout_Push(tmp);
-
-    SRAM_writeByte(addr, 0xFF);
-
-    if (SRAM_readByte(addr) == 0xFF) Stdout_Push("Byte readback OK\n");
-    else Stdout_Push("Byte readback FAIL\n");
-
-    // Word read/write
-    sprintf(tmp, "Writing word $%X to $%lX\n", 0xBEEF, addr);
-    Stdout_Push(tmp);
-
-    SRAM_writeWord(addr, 0xBEEF);
-
-    if (SRAM_readWord(addr) == 0xBEEF) Stdout_Push("Word readback OK\n");
-    else Stdout_Push("Word readback FAIL\n");
-
-    // Long read/write
-    sprintf(tmp, "Writing long $%X to $%lX\n", 0xDEADBEEF, addr);
-    Stdout_Push(tmp);
-
-    SRAM_writeLong(addr, 0xDEADBEEF);
-
-    if (SRAM_readLong(addr) == 0xDEADBEEF) Stdout_Push("Long readback OK\n");
-    else Stdout_Push("Long readback FAIL\n");
-
-    SRAM_disable();
-}
-
 void CMD_SetVar(u8 argc, char *argv[])
 {
     if ((argc < 3) && (strcmp(argv[1], "-list")))
@@ -640,27 +585,6 @@ void CMD_GetIP(u8 argc, char *argv[])
     Stdout_Push("Error: Out of RAM!\n");
 }
 
-void CMD_Run(u8 argc, char *argv[])
-{
-    if (argc < 2) return;
-
-    // TTY_Reset(TRUE);
-    /*
-    char tmp[64];
-    sprintf(tmp, "Running %s...\n", argv[1]);
-    Stdout_Push(tmp);
-
-    SRAM_enableRO();
-    
-    asm("move.w #0x000, %sr");
-    VAR2REG_L(0x201000, "a5");
-    asm("jsr (%a5)");
-
-    Stdout_Push("Ok ....\n");
-
-    SRAM_disable();*/
-}
-
 void CMD_Free(u8 argc, char *argv[])
 {
     char tmp[64];
@@ -686,13 +610,91 @@ void CMD_SaveCFG(u8 argc, char *argv[])
 
 void CMD_Test(u8 argc, char *argv[])
 {
-    if (argc > 1)
+    /*if (argc > 1)
     {
         for (u8 i = 0; i < argc; i++) 
         {
             Stdout_Push(argv[i]);
             Stdout_Push("\n");
         }
+        return;
+    }*/
+
+    #ifdef KERNEL_BUILD
+    if ((argc > 2) && (strcmp("-f", argv[1]) == 0))
+    {
+        char buf[162] = "Hello World!\nThis is a long text file that just keeps dragging on and on and on...\nMaybe it will repeat forever? who knows, it shouldn't repeat... but it might";
+        SM_File *f = F_Open(argv[2], FM_WRITE);
+
+        stdout_printf("Writing this:\n\n%s\n\nto file %s\n", buf, argv[2]);
+        F_Write(buf, 162, 1, f);
+
+        F_Close(f);
+        
+        f = F_Open(argv[2], FM_READ);
+
+        memset(buf, 0, 162);
+        F_Read(buf, 162, 1, f);
+
+        stdout_printf("Reading back file %s:\n\n%s\n", argv[2], buf);
+
+        F_Close(f);
+
+        return;
+    }
+    #endif  // KERNEL_BUILD
+
+    if ((argc > 1) && (strcmp("-t", argv[1]) == 0))
+    {
+        u8 data;
+        u8 buf[16];
+        u8 i = 0;
+
+        memset(buf, 0, 16);
+
+        NET_Connect("time.nist.gov:37");
+
+        waitMs(2000);
+
+        while (Buffer_Pop(&RxBuffer, &data) != 0xFF)
+        {
+            buf[i++] = data;
+        }
+        
+        NET_Disconnect();
+
+        stdout_printf("Returned \"%s\" (%lu)\n", (char*)buf, atoi32((char*)buf));
+
+        SetSystemDateTime(atoi32((char*)buf));
+        bTempTime = FALSE;
+
+        return;
+    }
+
+    if ((argc > 2) && (strcmp("-t2", argv[1]) == 0))
+    {
+        u8 data;
+        u8 buf[16];
+        u8 i = 0;
+
+        memset(buf, 0, 16);
+
+        NET_Connect(argv[2]);
+
+        waitMs(2000);
+
+        while (Buffer_Pop(&RxBuffer, &data) != 0xFF)
+        {
+            buf[i++] = data;
+        }
+        
+        NET_Disconnect();
+
+        stdout_printf("Returned \"%s\" (%lu)\n", (char*)buf, atoi32((char*)buf));
+
+        SetSystemDateTime(atoi32((char*)buf));        
+        bTempTime = FALSE;
+
         return;
     }
 
@@ -844,4 +846,185 @@ void CMD_Ping(u8 argc, char *argv[])
     }
 
     NET_PingIP(argv[1]);
+}
+
+
+#ifdef KERNEL_BUILD
+void CMD_Run(u8 argc, char *argv[])
+{
+    if (argc < 2) return;
+
+    void *proc = ELF_LoadProc(argv[1]);
+
+    Stdout_Flush();
+
+    if (proc == NULL) return;
+
+    //SRAM_enableRO();
+    kprintf("cmd proc: $%X", proc);
+
+    asm("move.w #0x000, %sr");
+    VAR2REG_L(proc, "a5");
+    asm("jsr (%a5)");
+
+    Stdout_Push("Returned from oblivion...\n");
+    //SRAM_disable();
+}
+
+void CMD_ListDir(u8 argc, char *argv[]) 
+{
+    if (argc > 1)
+    {
+        char tmp[64];
+        sprintf(tmp, "/%s", argv[1]);
+        FS_ListDir(tmp);
+    }
+    else FS_ListDir("/");
+}
+
+void CMD_Concatenate(u8 argc, char *argv[]) 
+{
+    if (argc < 2)
+    {
+        return;
+    }
+
+    SM_File *f = F_Open(argv[1], FM_READ);
+
+    if (f)
+    {
+        F_Seek(f, 0, SEEK_END);
+        u16 size = F_Tell(f);
+
+        char *buf = (char*)malloc(size);
+        memset(buf, 0, size);
+
+        if (buf)
+        {
+            F_Seek(f, 0, SEEK_SET);
+            F_Read(buf, size, 1, f);
+
+            Stdout_Push(buf);
+            Stdout_Flush();
+        }
+
+        F_Close(f);
+        free(buf);
+    }
+}
+
+void CMD_Touch(u8 argc, char *argv[]) 
+{
+    if (argc < 2)
+    {
+        Stdout_Push("Update file or create a new file if it does not exist\nNot enough arguments\n");
+        return;
+    }
+
+    SM_File *f = F_Open(argv[1], FM_WRITE);
+    F_Close(f);
+}
+
+void CMD_MakeDirectory(u8 argc, char *argv[]) 
+{
+    if (argc < 2)
+    {
+        Stdout_Push("Create a directory if it does not already exist\nNot enough arguments\n");
+        return;
+    }
+
+    //SM_File *f = F_Open(argv[1], FM_WRITE);
+    //F_Close(f);
+}
+
+void CMD_RemoveLink(u8 argc, char *argv[]) 
+{
+    if (argc < 2)
+    {
+        Stdout_Push("Remove a file/directory\nNot enough arguments\n");
+        return;
+    }
+
+    FS_Unlink(argv[1]);
+}
+#else   // Non Kernel build SRAM function
+void CMD_TestSRAM(u8 argc, char *argv[])
+{
+    if (argc < 2)
+    {
+        Stdout_Push("Test SRAM\n\nUsage:\nsram <address> - Write/Readback test\nsram -count    - Check installed RAM\n");
+        return;
+    }
+
+    char tmp[64];
+    u32 addr = 0;
+
+    if (strcmp(argv[1], "-count") == 0)
+    {
+        u32 c = 0;
+        addr = 0x1000;
+
+        SRAM_enable();
+
+        while (addr < 0x1FFFF)
+        {
+            SRAM_writeByte(addr, 0xAC);
+
+            if (SRAM_readByte(addr) == 0xAC)
+            {
+                addr++;
+                c++;
+            }
+            else break;
+        }
+
+        SRAM_disable();
+
+        sprintf(tmp, "Total SRAM: %c$%lX bytes\n", ((c+0x1000) >= 0x1FFFF ? '>' : ' '), c + 0x1000);
+        Stdout_Push(tmp);
+
+
+        return;
+    }
+
+    addr = atoi32(argv[1]);
+
+    SRAM_enable();
+
+    // Byte read/write
+    sprintf(tmp, "Writing byte $%X to $%lX\n", 0xFF, addr);
+    Stdout_Push(tmp);
+
+    SRAM_writeByte(addr, 0xFF);
+
+    if (SRAM_readByte(addr) == 0xFF) Stdout_Push("Byte readback OK\n");
+    else Stdout_Push("Byte readback FAIL\n");
+
+    // Word read/write
+    sprintf(tmp, "Writing word $%X to $%lX\n", 0xBEEF, addr);
+    Stdout_Push(tmp);
+
+    SRAM_writeWord(addr, 0xBEEF);
+
+    if (SRAM_readWord(addr) == 0xBEEF) Stdout_Push("Word readback OK\n");
+    else Stdout_Push("Word readback FAIL\n");
+
+    // Long read/write
+    sprintf(tmp, "Writing long $%X to $%lX\n", 0xDEADBEEF, addr);
+    Stdout_Push(tmp);
+
+    SRAM_writeLong(addr, 0xDEADBEEF);
+
+    if (SRAM_readLong(addr) == 0xDEADBEEF) Stdout_Push("Long readback OK\n");
+    else Stdout_Push("Long readback FAIL\n");
+
+    SRAM_disable();
+}
+#endif  // KERNEL_BUILD
+
+void CMD_Uptime(u8 argc, char *argv[])
+{
+    SM_Time t = SecondsToDateTime(SystemUptime);
+
+    stdout_printf("%02lu:%02u:%02u up %lu days, %lu:%02u\n", SystemTime.hour, SystemTime.minute, SystemTime.second, t.day-1, t.hour, t.minute);
 }

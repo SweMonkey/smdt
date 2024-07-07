@@ -50,7 +50,14 @@
 			"irc.h": "c",
 			"atomic": "c",
 			"sram.h": "c",
-			"kdebug.h": "c"
+			"kdebug.h": "c",
+			"cstdio": "c",
+			"*.tcc": "c",
+			"file.h": "c",
+			"dosfs.h": "c",
+			"memory_resource": "c",
+			"chrono": "c",
+			"filesystem.h": "c"
 		}
 	}
 }

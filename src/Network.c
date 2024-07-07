@@ -21,7 +21,7 @@ NET_PingIP_CB *PingIPCB = NULL;
 // Rx IRQ
 void NET_RxIRQ()
 {
-    if ((*(vu8*)DEV_UART.SCtrl & 6) != 2) return;
+    if ((*(vu8*)DEV_UART.SCtrl & 6) != 2) return;   // Check Ready/RxError flag in serial control register, Bail if no byte is ready or if there was an Rx error
 
     SYS_setInterruptMaskLevel(7);
     Buffer_Push(&RxBuffer, *(vu8*)DEV_UART.RxData);
@@ -161,6 +161,5 @@ void NET_PingIP(char *ip)
     if (PingIPCB == NULL) return;
 
     PingIPCB(ip);
-
     return;
 }

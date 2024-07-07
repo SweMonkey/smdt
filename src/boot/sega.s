@@ -245,10 +245,10 @@ _VINT:
         rte
 
 _trap_2:
-        movem.l %d0-%d1/%a0-%a1,-(%sp)
-        move.l  syscall, %a0
-        jsr    (%a0)
-        movem.l (%sp)+,%d0-%d1/%a0-%a1
+        /*movem.l %d0-%d1/%a0-%a1,-(%sp)*/
+        /*move.l  syscall, %a0*/
+        /*jsr    (%a0)*/
+        /*movem.l (%sp)+,%d0-%d1/%a0-%a1*/
         rte
 
 *------------------------------------------------

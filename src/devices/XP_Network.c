@@ -2,9 +2,7 @@
 #include "Buffer.h"
 #include "Utils.h"      // TRM
 #include "Network.h"    // RxBuffer/TxBuffer
-#include "misc/Stdout.h"
-
-// Time out and wait values are prelimiary and needs more calibration.
+#include "system/Stdout.h"
 
 #define CTIME 500000
 #define RTIME 300000
@@ -12,7 +10,7 @@
 
 u32 sv_ConnTimeout = CTIME;    // Connection timeout (waiting for connection to remote server)
 u32 sv_ReadTimeout = RTIME;    // Readback timeout (waiting for response from xpico)
-u32 sv_DelayTime   = DTIME;       // Milliseconds of delay between sending a command and reading the response
+u32 sv_DelayTime   = DTIME;    // Milliseconds of delay between sending a command and reading the response
 static u8 bIsInMonitorMode = FALSE;
 static u8 rxdata = 0;
 
@@ -131,13 +129,9 @@ bool XPN_ExitMonitorMode()
 
 bool XPN_Connect(char *str)
 {
-    char tmp[64];
     u32 timeout = 0;
     u8 byte = 0;
     bool r = FALSE;
-
-    snprintf(tmp, 36, "Connecting to %s", str);
-    TRM_SetStatusText(tmp);
 
     XPN_FlushBuffers();  
 
@@ -161,8 +155,6 @@ bool XPN_Connect(char *str)
     }
     
     Exit:
-    //XPN_FlushBuffers();
-    TRM_SetStatusText(STATUS_TEXT);
     return r;
 }
 
@@ -176,8 +168,9 @@ void XPN_Disconnect()
     // 1. Real xPico
     // Set CP3 pin to tell the xPico to disconnect from the remote server
     OrDevData(DEV_UART, 0x20);  // Set pin 7 high
-    waitMs(100);
+    waitMs(400);
     UnsetDevData(DEV_UART);     // Set pin 7 low
+    waitMs(sv_DelayTime);
     waitMs(sv_DelayTime);
 
     while (RxBuffer.data[0] != 'D')

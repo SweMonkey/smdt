@@ -7,7 +7,9 @@
 #include "Cursor.h"
 #include "StateCtrl.h"
 #include "../res/system.h"
-#include "misc/Stdout.h"
+
+#include "system/Stdout.h"
+#include "system/Time.h"
 
 /*
     USERLIST WARNING:
@@ -41,9 +43,9 @@ static struct s_linebuf
     char param[16][B_PARAM_LEN];
 } *LineBuf = NULL;
 
-static bool CR_Set = FALSE;
-static u8 bLookingForCL = 0;
-static u8 NewColor = 0;
+static bool CR_Set = FALSE; // Carridge return flag
+static u8 bLookingForCL = 0;// Looking for colour flag (Parsing current/following bytes as colour)
+static u8 NewColor = 0;     // Temporary buffer for incomming colour bytes 
 
 static char *RXString = NULL;
 static u16 RXStringSeq = 0;
@@ -51,22 +53,25 @@ static u16 RXStringSeq = 0;
 static bool bFirstRun = TRUE;
 static u8 NickReRegisterCount = 0;
 
-char sv_Username[32] = "smd_user";                  // Saved preferred IRC nickname
-char v_UsernameReset[32] = "ERROR_NOTSET";              // Your IRC nickname modified to suit the server (nicklen etc)
-char sv_QuitStr[32] = "Mega Drive IRC Client Quit"; // IRC quit message
-
 static const u16 pColors[16] =
 {
     0x000, 0x800, 0x0A0, 0x00E, 0x008, 0xA0A, 0x08E, 0x0EE,
     0x0E0, 0xAA0, 0xEE0, 0xE00, 0xE0E, 0x888, 0xCCC, 0xEEE
 };
 
-u8 PG_CurrentIdx = 0;
-u8 PG_OpenPages = 1;
-TMBuffer *PG_Buffer[IRC_MAX_CHANNELS] = {NULL};
-char **PG_UserList = {NULL};
-u16 PG_UserNum = 0;
-u16 UserIterator = 0;
+char sv_Username[32] = "smd_user";                   // Saved preferred IRC nickname
+char v_UsernameReset[32] = "ERROR_NOTSET";           // Your IRC nickname modified to suit the server (nicklen etc)
+char sv_QuitStr[32] = "Mega_Drive_IRC_Client_Quit";  // IRC quit message
+
+u8 PG_CurrentIdx = 0;                                // Current active page/channel number
+u8 PG_OpenPages = 1;                                 // Number of pages/channels in use
+TMBuffer *PG_Buffer[IRC_MAX_CHANNELS] = {NULL};      // Page/Channel buffers
+char **PG_UserList = {NULL};                         // Array of username strings (nick)
+u16 PG_UserNum = 0;                                  // Number of entries in PG_UserList
+u8 bPG_UpdateUserlist = 2;                           // Flag to update the user list window
+bool bPG_HasNewMessages[IRC_MAX_CHANNELS] = {FALSE}; // Flag to show if a channel has new messages
+bool bPG_UpdateMessage = TRUE;                       // Flag to update the "HasNewMessages" text
+u16 UserIterator = 0;                                // Used to iterate through PG_UserList during a 353 command
 
 
 void IRC_Init()
@@ -91,10 +96,10 @@ void IRC_Reset()
     vLineMode = 1;
     bFirstRun = TRUE;
     NickReRegisterCount = 0;
-    sv_CursorCL = 0x0E0;
     LastCursor = 0x12;
     
     Stdout_Flush();
+    Buffer_Flush(&TxBuffer);
 
     // Allocate and setup channel slots
     for (u8 ch = 0; ch < IRC_MAX_CHANNELS; ch++)
@@ -105,6 +110,7 @@ void IRC_Reset()
             #ifdef IRC_LOGGING
             kprintf("Failed to allocate memory for PG_Buffer[%u]", ch);
             #endif
+            
             Stdout_Push("[91mIRC Client: Failed to allocate memory\n for PG_Buf![0m\n");
             RevertState();
             return;
@@ -124,6 +130,7 @@ void IRC_Reset()
         #ifdef IRC_LOGGING
         kprintf("Failed to allocate memory for LineBuf");
         #endif
+
         Stdout_Push("[91mIRC Client: Failed to allocate memory\n for LineBuf![0m\n");
         RevertState();
         return;
@@ -137,6 +144,7 @@ void IRC_Reset()
         #ifdef IRC_LOGGING
         kprintf("Failed to allocate memory for RXString");
         #endif
+
         Stdout_Push("[91mIRC Client: Failed to allocate memory\n for RXString![0m\n");
         RevertState();
         return;
@@ -162,7 +170,7 @@ void IRC_Reset()
                 sprintf(tmp, "[91mIRC Client: Failed to allocate memory\n for PG_UserList[%u]!\n", i);
                 Stdout_Push(tmp);
 
-                sprintf(tmp, "Free: %u - Needed: %u", MEM_getLargestFreeBlock(), IRC_MAX_USERNAME_LEN*IRC_MAX_USERLIST);
+                sprintf(tmp, "Free: %u - Needed: %u (Total: %u)", MEM_getLargestFreeBlock(), IRC_MAX_USERNAME_LEN, IRC_MAX_USERNAME_LEN*IRC_MAX_USERLIST);
                 Stdout_Push(tmp);
 
                 Stdout_Push("[0m\n");
@@ -178,6 +186,7 @@ void IRC_Reset()
         #ifdef IRC_LOGGING
         kprintf("Failed to allocate memory for PG_UserList");
         #endif
+
         Stdout_Push("[91mFailed to allocate memory for PG_UserList![0m\n");
         RevertState();
         return;
@@ -187,6 +196,12 @@ void IRC_Reset()
     PG_CurrentIdx = 0;
     TMB_SetActiveBuffer(PG_Buffer[PG_CurrentIdx]);
     PG_OpenPages = 1;
+    bPG_UpdateMessage = TRUE;
+
+    for (u8 i = 0; i < IRC_MAX_CHANNELS; i++)
+    {
+        bPG_HasNewMessages[i] = FALSE;
+    }
 
     // Setup the cursor for the typing input box at the bottom of the screen
     s16 spr_x = 8 + 128;
@@ -197,14 +212,14 @@ void IRC_Reset()
     {
         SetSprite_Y(i+2, spr_y);
         SetSprite_SIZELINK(i+2, SPR_WIDTH_4x1, i+3);
-        SetSprite_TILE(i+2, 0x2000+TTS_VRAMIDX+(i*4));
+        SetSprite_TILE(i+2, 0x6000+TTS_VRAMIDX+(i*4));  // 0x6000 = PAL3
         SetSprite_X(i+2, spr_x+(i*32));
     }
 
     // Final 10th textbox
     SetSprite_Y(11, spr_y);
     SetSprite_SIZELINK(11, SPR_WIDTH_3x1, 0);
-    SetSprite_TILE(11, 0x2000+TTS_VRAMIDX+36);
+    SetSprite_TILE(11, 0x6000+TTS_VRAMIDX+36);  // 0x6000 = PAL3
     SetSprite_X(11, spr_x+288);
 
     // Setup cursor sprite y position and tile
@@ -250,11 +265,11 @@ void PrintTextLine(const u8 *str)
     {
         if (str[px] == 0)
         {
-            VDP_loadTileData(GFX_ASCII_MENU.tiles, TTS_VRAMIDX+px, 1, CPU);
+            VDP_loadTileData(GFX_IRC_TYPE.tiles, TTS_VRAMIDX+px, 1, CPU);
         }
         else 
         {
-            VDP_loadTileData(GFX_ASCII_MENU.tiles+((str[px])<<3), TTS_VRAMIDX+px, 1, CPU);
+            VDP_loadTileData(GFX_IRC_TYPE.tiles+((str[px])<<3)-256, TTS_VRAMIDX+px, 1, CPU);
             spr_x = px+1;
         }
     }
@@ -509,10 +524,53 @@ void IRC_DoCommand()
         {
             snprintf(PrintBuf, B_PRINTSTR_LEN, "%s: %s\n", subprefix, LineBuf->param[0]);
         }
+
+        // Use "WHOWAS <subprefix> 1" to query user information and print above quit message in proper channel later?
     }
     else if (strcmp(LineBuf->command, "MODE") == 0)
     {
-        snprintf(PrintBuf, B_PRINTSTR_LEN, "[Mode] You have set personal modes: %s\n", LineBuf->param[1]);
+        // Extract nickname from <nick>!<<hostname>
+        u16 end = 1;
+        while ((LineBuf->prefix[end++] != '!') && (end < B_SUBPREFIX_LEN));
+        strncpy(subprefix, LineBuf->prefix, end-1);
+
+        //kprintf("MODE: Cmd: %s - Prefix: %s - P0: %s - P1: %s - P2: %s -- subprefix: %s", LineBuf->command, LineBuf->prefix, LineBuf->param[0], LineBuf->param[1], LineBuf->param[2], subprefix);
+
+        if (strcmp(subprefix, v_UsernameReset) != 0)
+        {
+            // https://datatracker.ietf.org/doc/html/rfc2811#section-4
+            switch (LineBuf->param[1][1])
+            {
+                // Nick limit
+                case 'l':
+                    if (LineBuf->param[1][0] == '-') snprintf(PrintBuf, B_PRINTSTR_LEN, "[Mode] %s removes the channel nick limit.\n", subprefix);
+                    else                             snprintf(PrintBuf, B_PRINTSTR_LEN, "[Mode] %s sets the channel limit to %s nicks.\n", subprefix, LineBuf->param[2]);
+                break;
+
+                // Voice
+                case 'v':
+                    // Is this your nick? Then use "you/your"
+                    if (strcmp(LineBuf->param[2], v_UsernameReset) == 0)
+                    {
+                        if (LineBuf->param[1][0] == '-') snprintf(PrintBuf, B_PRINTSTR_LEN, "[Mode] %s removes your permission to talk.\n", subprefix);
+                        else                             snprintf(PrintBuf, B_PRINTSTR_LEN, "[Mode] %s gives you permission to talk.\n", subprefix);
+                    }
+                    // If this is not you, then use the nick it is refering to.
+                    else
+                    {
+                        if (LineBuf->param[1][0] == '-') snprintf(PrintBuf, B_PRINTSTR_LEN, "[Mode] %s removes %s' permission to talk.\n", subprefix, LineBuf->param[2]);
+                        else                             snprintf(PrintBuf, B_PRINTSTR_LEN, "[Mode] %s gives %s permission to talk.\n", subprefix, LineBuf->param[2]);
+                    }
+                break;
+            
+                default:
+                    snprintf(PrintBuf, B_PRINTSTR_LEN, "[Mode] %s sets mode %s.\n", subprefix, LineBuf->param[1]);
+                break;
+            }
+
+            strncpy(ChanBuf, LineBuf->param[0], 40);
+        }
+        else snprintf(PrintBuf, B_PRINTSTR_LEN, "[Mode] You have set personal modes: %s\n", LineBuf->param[1]);
     }
     else
     {
@@ -587,7 +645,11 @@ void IRC_DoCommand()
             }
             case 333:
             {
-                snprintf(PrintBuf, B_PRINTSTR_LEN, "*** The topic was set by %s on %s.\n", LineBuf->param[2], LineBuf->param[3]);
+                SM_Time t = SecondsToDateTime(atoi32(LineBuf->param[3]));
+                char buf[40];
+                TimeToStr_Full(t, buf);
+
+                snprintf(PrintBuf, B_PRINTSTR_LEN, "*** The topic was set by %s on %s.\n", LineBuf->param[2], buf);
                 strncpy(ChanBuf, LineBuf->param[1], 40); 
                 break;
             }
@@ -714,21 +776,37 @@ void IRC_DoCommand()
         }     
     }
 
+    // Print text to the correct channel page/tab
     for (u8 ch = 0; ch < IRC_MAX_CHANNELS; ch++)
     {
         if (strcmp(PG_Buffer[ch]->Title, ChanBuf) == 0) // Find the page this message belongs to
         {
             TMB_SetActiveBuffer(PG_Buffer[ch]);
+            
+            if (PG_CurrentIdx != ch) 
+            {
+                bPG_HasNewMessages[ch] = TRUE;
+            }
+            
+            bPG_UpdateMessage = TRUE;
+
             break;
         }
-        else if (strcmp(PG_Buffer[ch]->Title, PG_EMPTYNAME) == 0) // See if there is an empty page
+        else if (strcmp(PG_Buffer[ch]->Title, PG_EMPTYNAME) == 0) // Or see if there is an empty page
         {
-            char TitleBuf[40];
+            char TitleBuf[32];
             strncpy(PG_Buffer[ch]->Title, ChanBuf, 32);
             TMB_SetActiveBuffer(PG_Buffer[ch]);
 
-            snprintf(TitleBuf, 40, "%s - %-21s", STATUS_TEXT, PG_Buffer[PG_CurrentIdx]->Title);
+            snprintf(TitleBuf, 29, "%s %-21s", STATUS_TEXT_SHORT, PG_Buffer[PG_CurrentIdx]->Title);
             TRM_SetStatusText(TitleBuf);
+
+            if (PG_CurrentIdx != ch) 
+            {
+                bPG_HasNewMessages[ch] = TRUE;
+            }
+
+            bPG_UpdateMessage = TRUE;
 
             break;
         }

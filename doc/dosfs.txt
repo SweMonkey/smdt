@@ -1,0 +1,13 @@
+DOSFS Embedded FAT-Compatible Filesystem
+(C) 2005 Lewin A.R.W. Edwards (sysadm@zws.com)
+
+You are permitted to modify and/or use this code in your own projects without
+payment of royalty, regardless of the license(s) you choose for those projects.
+
+You cannot re-copyright or restrict use of the code as released by Lewin Edwards.
+
+---
+
+Modified and bugfixed for use in SMDTC by smds.
+
+Original source can be found at http://www.larwe.com/zws/products/dosfs/index.html

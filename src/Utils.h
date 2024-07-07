@@ -5,6 +5,7 @@
 
 // Title bar prefix
 #define STATUS_TEXT "SMDTC v0.30"
+#define STATUS_TEXT_SHORT "SMDTC"
 
 // VRAM memory addresses for various graphics in tile units (/32)
 #define AVR_BGBLOCK 0       // $0000 - $01FF
@@ -30,7 +31,7 @@
 #define ICO_POS_3 39  // Main use: None
 
 // Undefined icon/
-#define ICO_NONE  2
+#define ICO_NONE  5
 
 // Sprite indices
 #define SPRITE_ID_CURSOR 0     // Cursor sprite index
@@ -54,6 +55,11 @@
 #define SPR_HEIGHT_1x2 1
 #define SPR_SIZE_1x1   0
 
+// Tile macro for clearing window plane (Use with TRM_ClearArea)
+#define TRM_CLEAR_WINDOW (AVR_UI)   // For clearing inside windows or on the status bar
+#define TRM_CLEAR_BG (AVR_UI+0xBE)  // For clearing area to black (opaque)
+#define TRM_CLEAR_INVISIBLE (0)     // For clearing area to invisible (Tile 0)
+
 // Debugging
 //#define EMU_BUILD   // Enable to build specialized debug version meant to run on emulators
 //#define ATT_LOGGING // Log attribute changes
@@ -63,6 +69,7 @@
 //#define ESC_LOGGING // Log ESC data
 //#define UTF_LOGGING // Log UTF-8 messages
 //#define KB_DEBUG    // Log keyboard debug messages
+//#define KERNEL_BUILD
 
 extern bool bPALSystem;
 extern bool bHardReset;
@@ -70,6 +77,7 @@ extern u8 BootNextLine;     // Bootscreen text y position
 
 void TRM_SetStatusText(const char *t);
 void TRM_ResetStatusText();
+
 void TRM_SetWinHeight(u8 h);
 void TRM_SetWinWidth(u8 w);
 void TRM_SetWinParam(bool from_bottom, bool from_right, u8 w, u8 h);
@@ -78,21 +86,42 @@ void TRM_ResetWinParam();
 void TRM_SetStatusIcon(const char icon, u16 pos);
 void TRM_DrawChar(const u8 c, u8 x, u8 y, u8 palette);
 void TRM_DrawText(const char *str, u16 x, u16 y, u8 palette);
-void TRM_ClearTextArea(u16 x, u16 y, u16 w, u16 h);
+void TRM_ClearArea(u16 x, u16 y, u16 w, u16 h, u8 palette, u16 tile);
 void TRM_FillPlane(VDPPlane plane, u16 tile);
 
 u8 atoi(char *c);
 u16 atoi16(char *c);
 u32 atoi32(char *c);
+void itoa(s32 n, char s[]);
 u8 tolower(u8 c);
 char *strtok(char *s, char d);
 
 // Lower case string
 #define tolower_string(s) u16 _ti = 0;while(s[_ti]){s[_ti]=(char)tolower((u8)s[_ti]);_ti++;}
 
-u32 syscall(register vu32 n, register vu32 a, register vu32 b, register vu32 c, register vu32 d, register vu32 e, register vu32 f);
-
 char *strncat(char *to, const char *from, u16 num);
 u16 snprintf(char *buffer, u16 size, const char *fmt, ...) __attribute__ ((format (printf, 3, 4)));
+u16 stdout_printf(const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
+
+
+#ifdef KERNEL_BUILD
+u32 syscall(register vu32 n, register vu32 a, register vu32 b, register vu32 c, register vu32 d, register vu32 e, register vu32 f);
+#endif // KERNEL_BUILD
+
+typedef struct
+{
+    s32 quot;			// Quotient.
+    s32 rem;			// Remainder.
+} div_t;
+
+typedef struct
+{
+    s32 quot;		// Quotient.
+    s32 rem;		// Remainder.
+} ldiv_t;
+
+div_t div(s32 __numer, s32 __denom);
+ldiv_t ldiv(s32 __numer, s32 __denom);
+s32 memcmp(const void *s1, const void *s2, u32 n);
 
 #endif // UTILS_H_INCLUDED

@@ -4,33 +4,33 @@
 #include <genesis.h>
 
 // Port Addresses
-#define PORT1_DATA 0xA10003
-#define PORT1_CTRL 0xA10009
+#define PORT1_DATA  0xA10003
+#define PORT1_CTRL  0xA10009
 #define PORT1_SCTRL 0xA10013
-#define PORT1_SRx 0xA10011
-#define PORT1_STx 0xA1000F
+#define PORT1_SRx   0xA10011
+#define PORT1_STx   0xA1000F
 
-#define PORT2_DATA 0xA10005
-#define PORT2_CTRL 0xA1000B
+#define PORT2_DATA  0xA10005
+#define PORT2_CTRL  0xA1000B
 #define PORT2_SCTRL 0xA10019
-#define PORT2_SRx 0xA10017
-#define PORT2_STx 0xA10015
+#define PORT2_SRx   0xA10017
+#define PORT2_STx   0xA10015
 
-#define PORT3_DATA 0xA10007
-#define PORT3_CTRL 0xA1000D
+#define PORT3_DATA  0xA10007
+#define PORT3_CTRL  0xA1000D
 #define PORT3_SCTRL 0xA1001F
-#define PORT3_SRx 0xA1001D
-#define PORT3_STx 0xA1001B
+#define PORT3_SRx   0xA1001D
+#define PORT3_STx   0xA1001B
 
 #define DEVMODE_PARALLEL 1
-#define DEVMODE_SERIAL 2
+#define DEVMODE_SERIAL   2
 
 #define ICO_ID_UNKNOWN 0x1F // Unknown input device '?'
-#define ICO_KB_OK 0x1C      // Keyboard input device 'K'
-#define ICO_JP_OK 0x1E      // Joypad input device 'J'
-#define ICO_ID_ERROR 0x1D   // Error with input device 'X'
+#define ICO_KB_OK      0x1C // Keyboard input device 'K'
+#define ICO_JP_OK      0x1E // Joypad input device 'J'
+#define ICO_ID_ERROR   0x1D // Error with input device 'X'
 
-typedef enum e_port {DP_None, DP_Port1, DP_Port2, DP_Port3} DevPort;
+typedef enum e_port {DP_None = 0, DP_Port1 = 1, DP_Port2 = 2, DP_Port3 = 3} DevPort;
 
 typedef struct s_deviceid
 {
@@ -42,12 +42,12 @@ typedef struct s_deviceid
 
 typedef struct s_device
 {
-    vu8 *Ctrl;  // Control port
-    vu8 *Data;  // Data port
-    vu8 *SCtrl; // Serial control port
-    vu8 *RxData;// Rx port
-    vu8 *TxData;// Tx port
-    DevPort PAssign;   // Port assignment
+    vu8 *Ctrl;      // Control port
+    vu8 *Data;      // Data port
+    vu8 *SCtrl;     // Serial control port
+    vu8 *RxData;    // Rx port
+    vu8 *TxData;    // Tx port
+    DevPort PAssign;// Port assignment
     SM_DeviceId Id;
 } SM_Device;
 

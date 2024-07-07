@@ -15,7 +15,7 @@
 ID	        Peripheral
 1111 ($0F)	(undetectable)
 1101 ($0D)	Mega Drive controller
-1100 ($0C)	Mega Drive controller (see note)
+1100 ($0C)	Mega Drive controller
 1011 ($0B)	Saturn controller
 1010 ($0A)	Printer
 0111 ($07)	Sega multitap
@@ -165,7 +165,7 @@ void DetectDevices()
     // -- Joypad setup ---------------------------------
     if (bNoKeyboard || ((DEV_KBPS2.PAssign != DP_Port1) || (DEV_KBSATURN.PAssign != DP_Port1))) // Only enable joypad if there is no keyboard detected, or if port 1 is free
     {
-        DEV_Joypad.Id.sName = "JOYPAD";
+        DEV_Joypad.Id.sName = "Joypad";
         DEV_Joypad.Id.Bitmask = 0x40;
         DEV_Joypad.Id.Bitshift = 0;
         DEV_Joypad.Id.Mode = DEVMODE_PARALLEL;
@@ -189,7 +189,7 @@ void DetectDevices()
     }
 
     // -- UART setup --------------------------
-    DEV_UART.Id.sName = "UART DEVICE";
+    DEV_UART.Id.sName = "UART";
     DEV_UART.Id.Bitmask = 0x20; // TH pin
     DEV_UART.Id.Bitshift = 0;
     DEV_UART.Id.Mode = DEVMODE_SERIAL | DEVMODE_PARALLEL;
@@ -200,6 +200,7 @@ void DetectDevices()
     SCtrl = (vu8 *)DEV_UART.SCtrl;
     *SCtrl = 0x38;
     
+    #ifndef EMU_BUILD
     u8 xpn_r = 0;
 
     if (RLN_Initialize())   // Check if RetroLink network adapter is present
@@ -217,7 +218,7 @@ void DetectDevices()
     }
     else if ((xpn_r = XPN_Initialize())) // Check if xPico device is present
     {
-        DEV_UART.Id.sName = "XPICO UART";
+        DEV_UART.Id.sName = "xPico UART";
 
         SetDevCtrl(DEV_UART, 0x20);
         UnsetDevData(DEV_UART);
@@ -243,6 +244,7 @@ void DetectDevices()
         }
     }
     else    // No external network adapters found
+    #endif
     {
         bRLNetwork = FALSE;
         bXPNetwork = FALSE;

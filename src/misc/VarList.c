@@ -12,6 +12,7 @@
 extern u8 sv_IRCFont;
 extern u8 sv_TelnetFont;
 extern u8 sv_TerminalFont;
+extern u8 sv_ThemeUI;
 
 SM_VarList VarList[] =
 {
@@ -24,9 +25,7 @@ SM_VarList VarList[] =
     {ST_WORD, &sv_CBGCL,          "custbg"},
     {ST_WORD, &sv_CFG0CL,         "custfg0"},
     {ST_WORD, &sv_CFG1CL,         "custfg1"},
-    {ST_BYTE, &sv_Font,           "font"},
     {ST_LONG, &sv_ListenPort,     "listenport"},
-    {ST_BYTE, &sv_bWrapAround,    "bwraparound"},
     {ST_BYTE, &sv_KeyLayout,      "kblayout"},
     {ST_SARR, &sv_QuitStr,        "quitstr"},
     {ST_SARR, &sv_Username,       "username"},
@@ -44,5 +43,6 @@ SM_VarList VarList[] =
     {ST_BYTE, &sv_IRCFont,        "ircfont"},
     {ST_BYTE, &sv_TelnetFont,     "telnetfont"},
     {ST_BYTE, &sv_TerminalFont,   "termfont"},
+    {ST_BYTE, &sv_ThemeUI,        "themeui"},
     {0, 0, 0}  // List terminator
 };

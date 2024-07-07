@@ -28,3 +28,6 @@ IMAGE GFX_LOGO "logo_old.png" BEST ALL
 
 # Screensaver sprite tiles
 TILESET GFX_SCRSAV "screensaverball.png" NONE NONE
+
+# Font glyphs for IRC typing input
+TILESET GFX_IRC_TYPE "irc_type.png" NONE NONE

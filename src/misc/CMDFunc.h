@@ -23,10 +23,8 @@ void CMD_xpico(u8 argc, char *argv[]);
 void CMD_UName(u8 argc, char *argv[]);
 void CMD_SetConn(u8 argc, char *argv[]);
 void CMD_ClearScreen(u8 argc, char *argv[]);
-void CMD_TestSRAM(u8 argc, char *argv[]);
 void CMD_SetVar(u8 argc, char *argv[]);
 void CMD_GetIP(u8 argc, char *argv[]);
-void CMD_Run(u8 argc, char *argv[]);
 void CMD_Free(u8 argc, char *argv[]);
 void CMD_Reboot(u8 argc, char *argv[]);
 void CMD_SaveCFG(u8 argc, char *argv[]);
@@ -34,5 +32,18 @@ void CMD_Test(u8 argc, char *argv[]);
 void CMD_FlushBuffer(u8 argc, char *argv[]);
 void CMD_PrintBuffer(u8 argc, char *argv[]);
 void CMD_Ping(u8 argc, char *argv[]);
+
+#ifdef KERNEL_BUILD
+void CMD_Run(u8 argc, char *argv[]);
+void CMD_ListDir(u8 argc, char *argv[]);
+void CMD_Concatenate(u8 argc, char *argv[]);
+void CMD_Touch(u8 argc, char *argv[]);
+void CMD_MakeDirectory(u8 argc, char *argv[]);
+void CMD_RemoveLink(u8 argc, char *argv[]);
+#else
+void CMD_TestSRAM(u8 argc, char *argv[]);
+#endif
+
+void CMD_Uptime(u8 argc, char *argv[]);
 
 #endif // CMDFUNC_H_INCLUDED

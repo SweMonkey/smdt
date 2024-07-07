@@ -8,7 +8,7 @@
 #include "SRAM.h"
 #include "IRC.h"
 
-static SM_Window EntryWindow;
+static SM_Window *EntryWindow;
 static char IPSTR[32];
 static u8 pLineMode = 1;
 static u8 SelectedIdx = 0;
@@ -17,7 +17,7 @@ static u8 SubMenuIdx = 0;
 
 void UpdateWindow()
 {
-    UI_Begin(&EntryWindow);
+    UI_Begin(EntryWindow);
 
     UI_DrawText( 1, 3 + SelectedIdx, PAL1, ">");
     UI_DrawText(36, 3 + SelectedIdx, PAL1, "<");
@@ -48,21 +48,19 @@ void UpdateWindow()
 
 void Enter_Entry(u8 argc, char *argv[])
 {
-    VDP_setWindowVPos(FALSE, 30);
-    TRM_ClearTextArea(0, 0, 35, 1);
-    TRM_ClearTextArea(0, 1, 40, 29);
+    TRM_SetWinHeight(30);
+    TRM_ClearArea(0, 1, 40, 29, PAL1, TRM_CLEAR_WINDOW);
+
+    EntryWindow = malloc(sizeof(SM_Window));
     
-    UI_CreateWindow(&EntryWindow, "SMDTC - Startup Menu", UC_NONE);
-    
-    // Hack to draw window border only once
-    UI_Begin(&EntryWindow);
-    UI_End();
-    EntryWindow.Flags = UC_NOBORDER;
+    UI_CreateWindow(EntryWindow, "SMDTC Startup Menu", UC_NONE);
 
     memset(IPSTR, 0, 32);
 
     pLineMode = vLineMode;  // Save linemode setting
     vLineMode = 1;          // Causes keyboard input to be buffered
+
+    TRM_SetStatusText(STATUS_TEXT);
 
     UpdateWindow();
 }
@@ -73,15 +71,17 @@ void ReEnter_Entry()
 
 void Exit_Entry()
 {
-    VDP_setWindowVPos(FALSE, 1);
-    TRM_ClearTextArea(0, 0, 36, 1);
-
     vLineMode = pLineMode;  // Revert linemode setting
 
     Buffer_Flush(&TxBuffer);
     Buffer_Flush(&RxBuffer);
 
     SRAM_SaveData();
+
+    free(EntryWindow);
+
+    TRM_SetWinHeight(1);
+    TRM_ClearArea(0, 1, 40, 28, PAL1, TRM_CLEAR_BG);
 }
 
 void Reset_Entry()
@@ -93,21 +93,21 @@ void Run_Entry()
     if ((SelectedIdx == 0) && (SubMenuIdx == 0))        // Address
     {
         Buffer_PeekLast(&TxBuffer, 31, (u8*)IPSTR);
-        UI_Begin(&EntryWindow);
+        UI_Begin(EntryWindow);
         UI_DrawTextInput(2, 2, 34, "Address", IPSTR, (SelectedIdx == 0));
         UI_End();
     }
     else if ((SelectedIdx == 0) && (SubMenuIdx == 1))   // Nick 
     {
         Buffer_PeekLast(&TxBuffer, 31, (u8*)sv_Username);
-        UI_Begin(&EntryWindow);
+        UI_Begin(EntryWindow);
         UI_DrawTextInput(2, 2, 34, "IRC Nick", sv_Username, (SelectedIdx == 0));
         UI_End();
     }
     else if ((SelectedIdx == 4) && (SubMenuIdx == 1))   // Exit Message 
     {
         Buffer_PeekLast(&TxBuffer, 31, (u8*)sv_QuitStr);
-        UI_Begin(&EntryWindow);
+        UI_Begin(EntryWindow);
         UI_DrawTextInput(2, 6, 34, "IRC Exit Message", sv_QuitStr, (SelectedIdx == 4));
         UI_End();
     }
@@ -121,7 +121,7 @@ void Input_Entry()
 {
     if (is_KeyDown(KEY_UP))
     {
-        UI_Begin(&EntryWindow);
+        UI_Begin(EntryWindow);
         UI_DrawText( 1, 3 + SelectedIdx, PAL1, " ");
         UI_DrawText(36, 3 + SelectedIdx, PAL1, " ");
 
@@ -180,7 +180,7 @@ void Input_Entry()
 
     if (is_KeyDown(KEY_DOWN))
     {
-        UI_Begin(&EntryWindow);
+        UI_Begin(EntryWindow);
         UI_DrawText( 1, 3 + SelectedIdx, PAL1, " ");
         UI_DrawText(36, 3 + SelectedIdx, PAL1, " ");
 
@@ -252,7 +252,7 @@ void Input_Entry()
             Buffer_Flush(&TxBuffer);
             for (u8 i = 0; i < strlen(IPSTR); i++) Buffer_Push(&TxBuffer, IPSTR[i]);
 
-            UI_Begin(&EntryWindow);
+            UI_Begin(EntryWindow);
             UI_ClearRect(1, 1, 37, 23);
             UI_EndNoPaint();
 
@@ -275,14 +275,17 @@ void Input_Entry()
                 break;
 
                 case 3: // Launch telnet
+                    UI_SetVisible(EntryWindow, FALSE);
                     ChangeState(PS_Telnet, 1, argv);
                 break;
 
                 case 5: // Launch IRC
+                    UI_SetVisible(EntryWindow, FALSE);
                     ChangeState(PS_IRC, 1, argv);
                 break;
 
                 case 7: // Launch terminal
+                    UI_SetVisible(EntryWindow, FALSE);
                     ChangeState(PS_Terminal, 1, argv);
                 break;
 
@@ -293,8 +296,8 @@ void Input_Entry()
                     Buffer_Flush(&TxBuffer);                    
                     for (u8 i = 0; i < strlen(sv_Username); i++) Buffer_Push(&TxBuffer, sv_Username[i]);
 
-                    UI_Begin(&EntryWindow);
-                    UI_ClearRect(1, 1, 37, 23);
+                    UI_Begin(EntryWindow);
+                    UI_ClearRect(1, 1, 37, 22);
                     UI_EndNoPaint();
                 break;
             
@@ -319,8 +322,8 @@ void Input_Entry()
                     Buffer_Flush(&TxBuffer);
                     for (u8 i = 0; i < strlen(IPSTR); i++) Buffer_Push(&TxBuffer, IPSTR[i]);
 
-                    UI_Begin(&EntryWindow);
-                    UI_ClearRect(1, 1, 37, 23);
+                    UI_Begin(EntryWindow);
+                    UI_ClearRect(1, 1, 37, 22);
                     UI_EndNoPaint();
                 break;
             

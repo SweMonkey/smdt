@@ -91,7 +91,7 @@ void TTY_Reset(u8 bClearScreen)
 {
     TTY_SetSX(0);
     sy = C_YSTART;
-    C_YMAX = IS_PAL_SYSTEM ? C_YMAX_PAL : C_YMAX_NTSC;
+    C_YMAX = bPALSystem ? C_YMAX_PAL : C_YMAX_NTSC;
     HScroll = sv_HSOffset;
     VScroll = D_VSCROLL;
     ColorBG = CL_BG;
@@ -174,26 +174,20 @@ void TTY_ReloadPalette()
 
         PAL_setColor(0x3E, pColorsHalf[7]);
         PAL_setColor(0x3F, pColors[(sv_bHighCL ? 15 : 7)]);
-
-        //sv_CursorCL = 0x0E0;
     }
     else if (sv_Font == FONT_4x8_1)   // 4x8 AA
     {
         PAL_setColor(47, sv_CFG0CL);    // FG colour
         PAL_setColor(46, sv_CFG1CL);    // AA colour
-
-        //sv_CursorCL = sv_CFG0CL;
     }
     else        // 8x8
     {
         PAL_setPalette(PAL2, pColors, DMA);
-        //sv_CursorCL = 0x0E0;
     }
     
-    PAL_setColor( 0, sv_CBGCL);
-    PAL_setColor( 5, sv_CBGCL);
-    PAL_setColor(17, sv_CBGCL);
-    PAL_setColor(50, sv_CBGCL);
+    PAL_setColor( 0, sv_CBGCL); // VDP BG Colour
+    PAL_setColor(17, sv_CBGCL); // Window text BG Normal / Terminal text BG
+    PAL_setColor(50, sv_CBGCL); // Window text FG Inverted
 }
 
 // Todo: Clean up plane A/B when switching

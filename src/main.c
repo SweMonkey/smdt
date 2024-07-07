@@ -6,6 +6,7 @@
 #include "Utils.h"
 #include "HexView.h"    // bShowHexView
 #include "QMenu.h"      // bShowQMenu
+#include "UI.h"         // UI_ApplyTheme
 #include "Network.h"
 #include "SRAM.h"
 
@@ -64,17 +65,24 @@ int main(bool hardReset)
     waitMs(200);
     PSG_setEnvelope(0, PSG_ENVELOPE_MIN);
     
-    PAL_setColor( 1, 0x00e);    // Icon Red
-    PAL_setColor( 3, 0x0e0);    // Icon Green
-    PAL_setColor( 4, 0x0e0);    // Cursor
-    PAL_setColor( 5, 0x000);    // Icon BG
-    PAL_setColor( 6, 0xeee);    // Icon Normal
+    PAL_setColor( 1, 0x00E);    // Icon Red
+    PAL_setColor( 2, 0xEEE);    // Window title FG
+    PAL_setColor( 3, 0x444);    // Window title BG
+    PAL_setColor( 4, 0x0E0);    // Cursor
+    PAL_setColor( 5, 0x222);    // Icon BG
+    PAL_setColor( 6, 0xEEE);    // Icon Normal
+    PAL_setColor( 7, 0x0E0);    // Icon Green (Previously in slot 3)
     PAL_setColor(10, 0x444);    // Screensaver colour 0
-    PAL_setColor(11, 0xeee);    // Screensaver colour 1
+    PAL_setColor(11, 0xEEE);    // Screensaver colour 1
     PAL_setColor(17, 0x000);    // Window text BG Normal / Terminal text BG
-    PAL_setColor(18, 0xeee);    // Window text FG Normal
-    PAL_setColor(49, 0xeee);    // Window text BG Inverted / Terminal text FG? Was used for something there...
+    PAL_setColor(18, 0xEEE);    // Window text FG Normal
+    PAL_setColor(19, 0x000);    // Window inner BG - Changed to 0x222 after boot
+    PAL_setColor(20, 0x444);    // Window title BG
     PAL_setColor(50, 0x000);    // Window text FG Inverted
+    PAL_setColor(51, 0xEEE);    // Window text BG Inverted
+
+    // Reset window plane to be fully transparent
+    TRM_FillPlane(WINDOW, 0);
 
     // Upload and draw boot logo (Area shared with screensaver sprite)
     VDP_drawImageEx(BG_B, &GFX_LOGO, TILE_ATTR_FULL(PAL2, FALSE, 0, 0, 0x20), 27, (bPALSystem ? 19 : 17), TRUE, TRUE);
@@ -88,7 +96,6 @@ int main(bool hardReset)
     BootNextLine = 0;
     TRM_SetWinParam(FALSE, FALSE, 0, 1);    // Setup default window parameters
     TRM_SetWinHeight(28);                   // Change window height for boot menu
-    //TRM_ClearTextArea(0, 0, 40, 28);
     TRM_DrawText("Initializing system...", 1, BootNextLine++, PAL1);
 
     VDP_setReg(0xB, 0x8);               // Enable VDP ext interrupt (Enable: 8 - Disable: 0)
@@ -152,11 +159,15 @@ int main(bool hardReset)
 
     waitMs(1000);
 
+    // Post boot cleanup
     TRM_FillPlane(BG_B, 0);                         // Clear boot logo
     VDP_loadTileSet(&GFX_SCRSAV, AVR_SCRSAV, DMA);  // Upload screensaver sprite to VRAM (Area shared with boot logo)
     TRM_ResetWinParam();                            // Reset window to defaults set earlier
     VDP_setHilightShadow(FALSE);
+    PAL_setColor(19, 0x222);                        // Window inner BG - Is set to black during boot, revert it back
+    TRM_ClearArea(0, 1, 40, (bPALSystem ? 28 : 26), PAL1, TRM_CLEAR_BG);
 
+    UI_ApplyTheme();
     
     //ChangeState(PS_Debug, 0, NULL);
     //ChangeState(PS_Telnet, 0, NULL);

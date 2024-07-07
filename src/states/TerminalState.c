@@ -6,13 +6,22 @@
 #include "Utils.h"
 #include "Network.h"
 #include "misc/CMDFunc.h"
-#include "misc/Stdout.h"
+
+#include "system/Stdout.h"
+#include "system/Time.h"
+
+#ifdef KERNEL_BUILD
+#include "system/File.h"
+#include "system/Filesystem.h"
+#endif
 
 #define INPUT_SIZE 128
 #define INPUT_SIZE_ARGV 64
 
-u8 sv_TerminalFont = FONT_8x8_16;
+u8 sv_TerminalFont = FONT_8x8_16;//FONT_4x8_8;//
 static char LastCommand[INPUT_SIZE] = {'\0'};
+static char TimeString[9];
+static s32 LastTime = 666;
 
 
 u8 ParseInputString()
@@ -97,7 +106,6 @@ u8 DoBackspace()
 void SetupTerminal()
 {
     TELNET_Init();
-    TRM_SetStatusText(STATUS_TEXT);
 
     // Variable overrides
     vDoEcho = 0;
@@ -109,12 +117,11 @@ void SetupTerminal()
 
     LastCommand[0] = '\0';
 
-    C_XMAX = DCOL8_64;  // Make the cursor wrap at screen edge
+    C_XMAX = (sv_TerminalFont == 0 ? 39 : 79);  // Make the cursor wrap at screen edge
 }
 
 void Enter_Terminal(u8 argc, char *argv[])
 {
-
     SetupTerminal();
     Stdout_Push("SMDTC Command Interpreter v0.2\nType \"[32mhelp[0m\" for available commands\n\n");
 
@@ -124,6 +131,7 @@ void Enter_Terminal(u8 argc, char *argv[])
 void ReEnter_Terminal()
 {
     SetupTerminal();
+    
     if (Buffer_IsEmpty(&stdout))
     {
         Stdout_Push(">");
@@ -142,6 +150,13 @@ void Reset_Terminal()
 void Run_Terminal()
 {
     Stdout_Flush();
+
+    if (LastTime != SystemUptime)
+    {
+        TimeToStr_Time(SystemTime, TimeString);
+        TRM_DrawText(TimeString, 27, 0, PAL1);
+        LastTime = SystemUptime;
+    }
 }
 
 void Input_Terminal()

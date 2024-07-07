@@ -1,12 +1,6 @@
 #include "Keyboard_PS2.h"
 #include "Keyboard.h"
-#include "StateCtrl.h"  // bWindowActive
-#include "QMenu.h"      // ChangeText() when KB is detected
-#include "Terminal.h"   // TTY_PrintChar
-#include "Telnet.h"
-#include "Input.h"
-#include "Buffer.h"
-#include "Utils.h"
+#include "Utils.h"      // TRM_
 
 #define KB_CL 0 // Control pin shift
 #define KB_DT 1 // Data pin shift
@@ -20,7 +14,7 @@ bool KB_PS2_Init()
     u8 ret = 0;
     char FStringTemp[32];
 
-    DEV_KBPS2.Id.sName = "PS/2 KEYBOARD";
+    DEV_KBPS2.Id.sName = "PS/2 Keyboard";
     DEV_KBPS2.Id.Mode = DEVMODE_PARALLEL;
 
     // Iterate through all ports/pins in search for a keyboard. First found keyboard will be used

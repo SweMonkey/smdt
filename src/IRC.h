@@ -5,8 +5,8 @@
 #include "TMBuffer.h"
 
 #define PG_EMPTYNAME "EMPTY PAGE"
-#define IRC_MAX_CHANNELS 3
-#define IRC_MAX_USERLIST 320    //512
+#define IRC_MAX_CHANNELS 6      // 3 if using a tilemap width of 128 - otherwise 6
+#define IRC_MAX_USERLIST 300    //512
 #define IRC_MAX_USERNAME_LEN 12 //11
 
 extern char sv_Username[];     // Saved preferred IRC nickname
@@ -15,9 +15,11 @@ extern char sv_QuitStr[];      // IRC quit message
 extern u8 PG_CurrentIdx;
 
 extern TMBuffer *PG_Buffer[];
-
-extern u16 PG_UserNum;
 extern char **PG_UserList;
+extern u16 PG_UserNum;
+extern u8 bPG_UpdateUserlist;
+extern bool bPG_HasNewMessages[];
+extern bool bPG_UpdateMessage;
 
 void IRC_Init();
 void IRC_Reset();
