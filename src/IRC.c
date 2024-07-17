@@ -6,6 +6,7 @@
 #include "Network.h"
 #include "Cursor.h"
 #include "StateCtrl.h"
+#include "Telnet.h"         // LMSM_EDIT
 #include "../res/system.h"
 
 #include "system/Stdout.h"
@@ -34,7 +35,7 @@
 
 #define B_RXSTRING_LEN 1024
 
-#define TTS_VRAMIDX 0x240    // TODO: find a spot for all the tiles. It requires at least 38 continous tiles in VRAM
+#define TTS_VRAMIDX 0x400
 
 static struct s_linebuf
 {
@@ -61,7 +62,7 @@ static const u16 pColors[16] =
 
 char sv_Username[32] = "smd_user";                   // Saved preferred IRC nickname
 char v_UsernameReset[32] = "ERROR_NOTSET";           // Your IRC nickname modified to suit the server (nicklen etc)
-char sv_QuitStr[32] = "Mega_Drive_IRC_Client_Quit";  // IRC quit message
+char sv_QuitStr[32] = "MegaDrive IRC client quit";   // IRC quit message
 
 u8 PG_CurrentIdx = 0;                                // Current active page/channel number
 u8 PG_OpenPages = 1;                                 // Number of pages/channels in use
@@ -77,14 +78,16 @@ u16 UserIterator = 0;                                // Used to iterate through 
 void IRC_Init()
 {
     TTY_Init(TRUE);
-    UTF8_Init();
-
     IRC_Reset();
 }
 
 void IRC_Reset()
 {
-    if (!sv_Font) PAL_setPalette(PAL2, pColors, DMA);
+    if (!sv_Font) 
+    {
+        PAL_setPalette(PAL2, pColors, DMA);
+        DMA_waitCompletion();
+    }
 
     memset(v_UsernameReset, 0, 32);
     strcpy(v_UsernameReset, sv_Username);
@@ -93,7 +96,7 @@ void IRC_Reset()
 
     // Variable overrides
     vDoEcho = 1;
-    vLineMode = 1;
+    vLineMode = LMSM_EDIT;
     bFirstRun = TRUE;
     NickReRegisterCount = 0;
     LastCursor = 0x12;
@@ -226,6 +229,10 @@ void IRC_Reset()
     SetSprite_Y(SPRITE_ID_CURSOR, spr_y);
     SetSprite_TILE(SPRITE_ID_CURSOR, LastCursor);
     //SetSprite_SIZELINK(SPRITE_ID_CURSOR, 0, 1);
+
+    // Upload typing text font to VRAM, it will be used as source for DMA VRAM copy
+    VDP_loadTileSet(&GFX_IRC_TYPE, AVR_FONT1, DMA);
+    DMA_waitCompletion();
 }
 
 void IRC_Exit()
@@ -261,17 +268,20 @@ void IRC_Exit()
 void PrintTextLine(const u8 *str)
 {
     u8 spr_x = 0;
+
     for (u8 px = 0; px < 39; px++)
     {
         if (str[px] == 0)
         {
-            VDP_loadTileData(GFX_IRC_TYPE.tiles, TTS_VRAMIDX+px, 1, CPU);
+            DMA_doVRamCopy(AVR_FONT1<<5, (TTS_VRAMIDX+px)<<5, 32, 1);
         }
         else 
         {
-            VDP_loadTileData(GFX_IRC_TYPE.tiles+((str[px])<<3)-256, TTS_VRAMIDX+px, 1, CPU);
             spr_x = px+1;
+            DMA_doVRamCopy((AVR_FONT1+str[px]-32)<<5, (TTS_VRAMIDX+px)<<5, 32, 1);
         }
+
+        DMA_waitCompletion();
     }
 
     // Update cursor X position
@@ -676,7 +686,7 @@ void IRC_DoCommand()
                         }
 
                         // Detect end of line space (not a valid nick)
-                        if (strcmp(LineBuf->param[3]+start, "") == 0)
+                        if (strcmp(LineBuf->param[3]+start, "") == 0)   // This is obviously wrong, but it works for now and I don't want to mess with it... may cause the missing nick?
                         {
                             if (UserIterator) UserIterator--;
                             break;

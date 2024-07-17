@@ -36,8 +36,8 @@ ID	        Peripheral
 #define DEVICE_JUSTIFIER 0x1
 #define DEVICE_MENACER 0
 
-SM_Device DEV_Joypad;               // Joypad device
-SM_Device DEV_Detector;             // Detector device
+SM_Device DRV_Joypad;               // Joypad device
+SM_Device DRV_Detector;             // Detector device
 SM_Device *DevList[DEV_MAX];        // Device list
 u8 DevSeq = 0;                      // Number of devices
 bool bRLNetwork = FALSE;            // Use RetroLink cartridge instead of built-in UART
@@ -55,22 +55,20 @@ u8 GetDeviceID(DevPort p)
     u8 dL = 0;
 
     // Setup dummy device to test ports with
-    DEV_Detector.Id.Bitmask = 0x7F;
-    DEV_Detector.Id.Bitshift = 0;
-    DEV_Detector.Id.Mode = DEVMODE_PARALLEL;
+    DRV_Detector.Id.Bitmask = 0x7F;
+    DRV_Detector.Id.Bitshift = 0;
+    DRV_Detector.Id.Mode = DEVMODE_PARALLEL;
 
-    SetDevicePort(&DEV_Detector, p);
+    SetDevicePort(&DRV_Detector, p);
 
     // Get device ID
-    UnsetDevCtrl(DEV_Detector);
-    OrDevCtrl(DEV_Detector, 0x40);
-    UnsetDevData(DEV_Detector);
+    DEV_SetCtrl(DRV_Detector, 0x40);
 
-    OrDevData(DEV_Detector, 0x40);
-    dH = GetDevData(DEV_Detector, 0xF);
+    DEV_SetData(DRV_Detector, 0x40);
+    dH = DEV_GetData(DRV_Detector, 0xF);
 
-    UnsetDevData(DEV_Detector);
-    dL = GetDevData(DEV_Detector, 0xF);
+    DEV_ClrData(DRV_Detector);
+    dL = DEV_GetData(DRV_Detector, 0xF);
 
     r |= (((dH & 8) >> 3) | ((dH & 4) >> 2)) << 3;
     r |= (((dH & 2) >> 1) | ((dH & 1)     )) << 2;
@@ -136,7 +134,7 @@ void DetectDevices()
     // -- PS/2 Keyboard setup --------------------------
     if (KB_PS2_Init())
     {
-        DevList[DevSeq++] = &DEV_KBPS2;
+        DevList[DevSeq++] = &DRV_KBPS2;
         TRM_SetStatusIcon(ICO_KB_OK, ICO_POS_0);
         bNoKeyboard = FALSE;
     }
@@ -144,13 +142,13 @@ void DetectDevices()
     // -- Saturn Keyboard setup ------------------------
     if (bNoKeyboard && ((DevId0 == DEVICE_SATURN_PERIPHERAL) || (DevId1 == DEVICE_SATURN_PERIPHERAL) || (DevId2 == DEVICE_SATURN_PERIPHERAL)))
     {
-             if (DevId0 == DEVICE_SATURN_PERIPHERAL) SetDevicePort(&DEV_KBSATURN, DP_Port1);
-        else if (DevId1 == DEVICE_SATURN_PERIPHERAL) SetDevicePort(&DEV_KBSATURN, DP_Port2);
-        else if (DevId2 == DEVICE_SATURN_PERIPHERAL) SetDevicePort(&DEV_KBSATURN, DP_Port3);
+             if (DevId0 == DEVICE_SATURN_PERIPHERAL) SetDevicePort(&DRV_KBSATURN, DP_Port1);
+        else if (DevId1 == DEVICE_SATURN_PERIPHERAL) SetDevicePort(&DRV_KBSATURN, DP_Port2);
+        else if (DevId2 == DEVICE_SATURN_PERIPHERAL) SetDevicePort(&DRV_KBSATURN, DP_Port3);
 
         if (KB_Saturn_Init())
         {
-            DevList[DevSeq++] = &DEV_KBSATURN;
+            DevList[DevSeq++] = &DRV_KBSATURN;
             TRM_SetStatusIcon(ICO_KB_OK, ICO_POS_0);
             bNoKeyboard = FALSE;
         }
@@ -163,21 +161,19 @@ void DetectDevices()
     }
 
     // -- Joypad setup ---------------------------------
-    if (bNoKeyboard || ((DEV_KBPS2.PAssign != DP_Port1) || (DEV_KBSATURN.PAssign != DP_Port1))) // Only enable joypad if there is no keyboard detected, or if port 1 is free
+    if (bNoKeyboard && ((DRV_KBPS2.PAssign != DP_Port1) && (DRV_KBSATURN.PAssign != DP_Port1))) // Only enable joypad if there is no keyboard detected, or if port 1 is free
     {
-        DEV_Joypad.Id.sName = "Joypad";
-        DEV_Joypad.Id.Bitmask = 0x40;
-        DEV_Joypad.Id.Bitshift = 0;
-        DEV_Joypad.Id.Mode = DEVMODE_PARALLEL;
+        DRV_Joypad.Id.sName = "Joypad";
+        DRV_Joypad.Id.Bitmask = 0x40;
+        DRV_Joypad.Id.Bitshift = 0;
+        DRV_Joypad.Id.Mode = DEVMODE_PARALLEL;
 
-        DevList[DevSeq++] = &DEV_Joypad;
+        DevList[DevSeq++] = &DRV_Joypad;
 
-        SetDevicePort(&DEV_Joypad, DP_Port1);
+        SetDevicePort(&DRV_Joypad, DP_Port1);
 
-        UnsetDevCtrl(DEV_Joypad);
-        OrDevCtrl(DEV_Joypad, 0x40);
-        UnsetDevData(DEV_Joypad);
-        OrDevData(DEV_Joypad, 0x40);
+        DEV_SetCtrl(DRV_Joypad, 0x40);
+        DEV_SetData(DRV_Joypad, 0x40);
 
         JOY_setSupport(PORT_1, JOY_SUPPORT_6BTN);
         JOY_setEventHandler(Input_JP);
@@ -189,16 +185,17 @@ void DetectDevices()
     }
 
     // -- UART setup --------------------------
-    DEV_UART.Id.sName = "UART";
-    DEV_UART.Id.Bitmask = 0x20; // TH pin
-    DEV_UART.Id.Bitshift = 0;
-    DEV_UART.Id.Mode = DEVMODE_SERIAL | DEVMODE_PARALLEL;
+    DRV_UART.Id.sName = "UART";
+    DRV_UART.Id.Bitmask = 0x40; // Pin 7
+    DRV_UART.Id.Bitshift = 0;
+    DRV_UART.Id.Mode = DEVMODE_SERIAL | DEVMODE_PARALLEL;
     
-    DevList[DevSeq++] = &DEV_UART;
-    SetDevicePort(&DEV_UART, sv_ListenPort);
-    vu8 *SCtrl;
-    SCtrl = (vu8 *)DEV_UART.SCtrl;
-    *SCtrl = 0x38;
+    DevList[DevSeq++] = &DRV_UART;
+    SetDevicePort(&DRV_UART, sv_ListenPort);
+    *((vu8*) DRV_UART.SCtrl) = 0x38;
+
+    DEV_SetCtrl(DRV_UART, 0x40);
+    DEV_ClrData(DRV_UART);
     
     #ifndef EMU_BUILD
     u8 xpn_r = 0;
@@ -218,10 +215,10 @@ void DetectDevices()
     }
     else if ((xpn_r = XPN_Initialize())) // Check if xPico device is present
     {
-        DEV_UART.Id.sName = "xPico UART";
+        DRV_UART.Id.sName = "xPico UART";
 
-        SetDevCtrl(DEV_UART, 0x20);
-        UnsetDevData(DEV_UART);
+        //DEV_SetCtrl(DRV_UART, 0x40);
+        //DEV_ClrData(DRV_UART);
 
         bXPNetwork = TRUE;
 
@@ -252,7 +249,6 @@ void DetectDevices()
         TRM_DrawText("No network adapters found", 1, BootNextLine++, PAL1);
         TRM_DrawText("Listening on built in UART", 1, BootNextLine++, PAL1);
     }
-
 }
 
 /// @brief Initialize device manager and find/init devices

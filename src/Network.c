@@ -10,7 +10,7 @@ u32 RXBytes = 0;
 u32 TXBytes = 0;
 
 Buffer RxBuffer, TxBuffer;
-SM_Device DEV_UART;
+SM_Device DRV_UART;
 
 NET_Connect_CB *ConnectCB = NULL;
 NET_Disconnect_CB *DisconnectCB = NULL;
@@ -21,10 +21,10 @@ NET_PingIP_CB *PingIPCB = NULL;
 // Rx IRQ
 void NET_RxIRQ()
 {
-    if ((*(vu8*)DEV_UART.SCtrl & 6) != 2) return;   // Check Ready/RxError flag in serial control register, Bail if no byte is ready or if there was an Rx error
+    if ((*(vu8*)DRV_UART.SCtrl & 6) != 2) return;   // Check Ready/RxError flag in serial control register, Bail if no byte is ready or if there was an Rx error
 
     SYS_setInterruptMaskLevel(7);
-    Buffer_Push(&RxBuffer, *(vu8*)DEV_UART.RxData);
+    Buffer_Push(&RxBuffer, *(vu8*)DRV_UART.RxData);
     SYS_setInterruptMaskLevel(0);
 
     //RXBytes++;
@@ -52,9 +52,9 @@ void NET_SendChar(const u8 c, u8 flags)
     }
     else
     {
-        while (*(vu8*)DEV_UART.SCtrl & 1); // while Txd full = 1
+        while (*(vu8*)DRV_UART.SCtrl & 1); // while Txd full = 1
 
-        *(vu8*)DEV_UART.TxData = c;
+        *(vu8*)DRV_UART.TxData = c;
     }
 
     TXBytes++;
@@ -88,9 +88,9 @@ void NET_TransmitBuffer()
 
         while (Buffer_Pop(&TxBuffer, &data) != 0xFF)
         {
-            while (*(vu8*)DEV_UART.SCtrl & 1); // while Txd full = 1
+            while (*(vu8*)DRV_UART.SCtrl & 1); // while Txd full = 1
 
-            *(vu8*)DEV_UART.TxData = data;
+            *(vu8*)DRV_UART.TxData = data;
 
             TXBytes++;
         }

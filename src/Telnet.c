@@ -259,9 +259,13 @@ inline void TELNET_ParseRX(u8 byte)
             bESCAPE = TRUE;
         break;
         case 0xE2:  // Dumb handling of UTF8
-        case 0xEF:
+        case 0xEF:  // Dumb handling of UTF8
             bUTF8 = TRUE;
         break;
+        /*case 0xC2:  // Dumb handling of UTF8
+            //DoUTF8(0);
+            //bUTF8 = TRUE;
+        break;*/
         case TC_IAC:  // IAC
             bIAC = TRUE;
         break;

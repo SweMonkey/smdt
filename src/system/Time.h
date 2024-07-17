@@ -15,7 +15,9 @@ typedef struct s_time
 
 extern SM_Time SystemTime;
 extern s32 SystemUptime;
-extern bool bTempTime;
+extern s8 sv_TimeZone;
+extern char sv_TimeServer[];
+extern u16 sv_EpochStart;
 
 SM_Time SecondsToDateTime(s32 seconds);
 void TimeToStr_Full(SM_Time t, char *ret);
@@ -24,5 +26,7 @@ void TimeToStr_Time(SM_Time t, char *ret);
 
 void TickClock();
 void SetSystemDateTime(s32 seconds);
+s32 GetTimeSinceLastSync();
+u8 DoTimeSync(char *server);
 
 #endif // TIME_H_INCLUDED

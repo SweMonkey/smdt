@@ -54,6 +54,7 @@ SM_CMDList CMDList[] =
     {"sram",    CMD_TestSRAM,       "- Test SRAM"},
     #endif
     {"uptime",  CMD_Uptime,         "- Show system uptime"},
+    {"date",    CMD_Date,           "- Show/Set date and time"},
     {"help",    CMD_Help,           "- This command"},
     {0, 0, 0}  // List terminator
 };
@@ -212,169 +213,65 @@ void CMD_xpico(u8 argc, char *argv[])
 xpico enter       - Enter monitor mode\n\
 xpico exit        - Exit monitor mode\n\
 xpico <string>    - Send string to xPico\n\
-xpico connect <address>\n");
+xpico connect <address>\n\
+xpico disconnect  - Close connection\n");
         return;
     }
 
     if ((argc > 1) && (strcmp(argv[1], "enter") == 0))
     {
-        char tmp[20];
-        u8 response_code = 4;
-        u8 end_char = 0;
-        u32 timeout = 0;
+        stdout_printf("Entering monitor mode...\n");
+        Stdout_Flush();
 
-        Stdout_Push("Entering monitor mode...\n");
-        XPN_FlushBuffers();    
-        XPN_SendMessage("C0.0.0.0/0\n");
+        bool r = XPN_EnterMonitorMode();
 
-        waitMs(sv_DelayTime);
-
-        while (timeout++ < sv_ReadTimeout)
-        {
-            response_code = end_char;
-            Buffer_Pop(&RxBuffer, &end_char);
-
-            if (end_char == '>') 
-            {
-                sprintf(tmp, "Response: %c%c\n", (char)response_code, (char)end_char);
-                Stdout_Push(tmp);
-                break;
-            }
-        }
-
-        switch (response_code)
-        {
-            case '0':
-                Stdout_Push("OK; no error\n");
-            break;
-            case '1':
-                Stdout_Push("No answer from remote device\n");
-            break;
-            case '2':
-                Stdout_Push("Cannot reach remote device or no answer\n");
-            break;
-            case '8':
-                Stdout_Push("Wrong parameter(s)\n");
-            break;
-            case '9':
-                Stdout_Push("Invalid command\n");
-            break;
+        if (r) stdout_printf("OK!\n");
+        else stdout_printf("Timeout!\n");
         
-            default:
-            break;
-        }
-
-        if (timeout >= sv_ReadTimeout) Stdout_Push("<EnterMonitor timed out>\n");
     }
     else if ((argc > 1) && (strcmp(argv[1], "exit") == 0))
     {
-        char tmp[20];
-        u8 response_code = 0x4;
-        u8 end_char = 0;
-        u32 timeout = 0;
-
-        Stdout_Push("Exiting monitor mode...\n");
-        XPN_FlushBuffers();
-        XPN_SendMessage("QU\n");
-
-        //XPN_SendMessage("QU");
-        //XPN_SendByte(0x0A);
-
-        waitMs(sv_DelayTime);
-
-        while (timeout++ < sv_ReadTimeout)
-        {
-            response_code = end_char;
-            Buffer_Pop(&RxBuffer, &end_char);
-
-            if (end_char == '>') 
-            {
-                sprintf(tmp, "Response: %c%c\n", (char)response_code, (char)end_char);
-                Stdout_Push(tmp);
-                break;
-            }
-        }
-
-        switch (response_code)
-        {
-            case '0':
-                Stdout_Push("OK; no error\n");
-            break;
-            case '1':
-                Stdout_Push("No answer from remote device\n");
-            break;
-            case '2':
-                Stdout_Push("Cannot reach remote device or no answer\n");
-            break;
-            case '8':
-                Stdout_Push("Wrong parameter(s)\n");
-            break;
-            case '9':
-                Stdout_Push("Invalid command\n");
-            break;
+        stdout_printf("Exiting monitor mode...\n");
+        Stdout_Flush();
         
-            default:
-            break;
-        }
+        bool r = XPN_ExitMonitorMode();
 
-        if (timeout >= sv_ReadTimeout) 
-        {
-            Stdout_Push("<ExitMonitor timed out>\n");
-            sprintf(tmp, "Debug response: r = $%X - e = $%X\n", response_code, end_char);
-            Stdout_Push(tmp);
-        }
+        if (r) stdout_printf("OK!\n");
+        else stdout_printf("Timeout!\n");
     }
     else if ((argc > 2) && (strcmp(argv[1], "connect") == 0))
     {
-        char tmp[64];
-        u8 rxdata = 0;
-        u32 timeout = 0;
+        stdout_printf("Connecting to %s ...\n", argv[2]);
+        Stdout_Flush();
 
-        sprintf(tmp, "Connecting to %s ...\n", argv[2]);
-        Stdout_Push(tmp);
-        snprintf(tmp, 36, "Connecting to %s", argv[2]);
-        TRM_SetStatusText(tmp);
+        bool r = XPN_Connect(argv[2]);
 
-        XPN_FlushBuffers();  
+        if (r) stdout_printf("Connected!\n");
+        else stdout_printf("Error!\n");
+    }
+    else if ((argc > 1) && (strcmp(argv[1], "disconnect") == 0))
+    {
+        stdout_printf("Disconnecting... \n");
+        Stdout_Flush();
 
-        XPN_SendByte('C');
-        XPN_SendMessage(argv[2]);
-        XPN_SendByte(0x0A);
-
-        waitMs(sv_DelayTime);
-
-        Stdout_Push("Received:\n");
-        while ((timeout++ < sv_ConnTimeout) && ((rxdata != 'C') || (rxdata != 'N')))
-        {
-            if (Buffer_Pop(&RxBuffer, &rxdata) == 0) TELNET_ParseRX(rxdata);
-        }
-
-        if (timeout >= sv_ConnTimeout) Stdout_Push("<Connection timed out>");
-
-        Stdout_Push("\n");
-
-        TRM_SetStatusText(STATUS_TEXT);
+        XPN_Disconnect();
     }
     else if (argc > 1)
     {
-        char tmp[64];
-        u8 rxdata = 0;
-        u32 timeout = 0;
-
-        sprintf(tmp, "Sending \"%s\"\n", argv[1]);
-        Stdout_Push(tmp);
-
-        XPN_FlushBuffers();
-        XPN_SendMessage(argv[1]);
+        char buf[128];
         
-        waitMs(sv_DelayTime);
+        strclr(buf);
 
-        Stdout_Push("Received:\n");
-        while (timeout++ < sv_ConnTimeout)
+        for (u8 i = 1; i < argc; i++)
         {
-            if (Buffer_Pop(&RxBuffer, &rxdata) == 0) TELNET_ParseRX(rxdata);
+            strcat(buf, argv[i]);
+            if (i != argc-1) strcat(buf, " ");
         }
-        Stdout_Push("\n");
+
+        stdout_printf("Sending string:\n\"%s\"\n", buf);
+        Stdout_Flush();
+
+        XPN_SendMessage(buf);
     }
 }
 
@@ -644,59 +541,15 @@ void CMD_Test(u8 argc, char *argv[])
     }
     #endif  // KERNEL_BUILD
 
-    if ((argc > 1) && (strcmp("-t", argv[1]) == 0))
+    /*if ((argc > 1) && (strcmp("-test1arg", argv[1]) == 0))
     {
-        u8 data;
-        u8 buf[16];
-        u8 i = 0;
-
-        memset(buf, 0, 16);
-
-        NET_Connect("time.nist.gov:37");
-
-        waitMs(2000);
-
-        while (Buffer_Pop(&RxBuffer, &data) != 0xFF)
-        {
-            buf[i++] = data;
-        }
-        
-        NET_Disconnect();
-
-        stdout_printf("Returned \"%s\" (%lu)\n", (char*)buf, atoi32((char*)buf));
-
-        SetSystemDateTime(atoi32((char*)buf));
-        bTempTime = FALSE;
-
         return;
     }
 
-    if ((argc > 2) && (strcmp("-t2", argv[1]) == 0))
+    if ((argc > 2) && (strcmp("-test2arg", argv[1]) == 0))
     {
-        u8 data;
-        u8 buf[16];
-        u8 i = 0;
-
-        memset(buf, 0, 16);
-
-        NET_Connect(argv[2]);
-
-        waitMs(2000);
-
-        while (Buffer_Pop(&RxBuffer, &data) != 0xFF)
-        {
-            buf[i++] = data;
-        }
-        
-        NET_Disconnect();
-
-        stdout_printf("Returned \"%s\" (%lu)\n", (char*)buf, atoi32((char*)buf));
-
-        SetSystemDateTime(atoi32((char*)buf));        
-        bTempTime = FALSE;
-
         return;
-    }
+    }*/
 
     Stdout_Push("\
 [30m█[90m█\
@@ -1027,4 +880,39 @@ void CMD_Uptime(u8 argc, char *argv[])
     SM_Time t = SecondsToDateTime(SystemUptime);
 
     stdout_printf("%02lu:%02u:%02u up %lu days, %lu:%02u\n", SystemTime.hour, SystemTime.minute, SystemTime.second, t.day-1, t.hour, t.minute);
+}
+
+void CMD_Date(u8 argc, char *argv[])
+{
+    if ((argc > 1) && (strcmp("-sync", argv[1]) == 0))
+    {
+        char *sync_server;
+
+        if (argc > 2) sync_server = argv[2];
+        else sync_server = sv_TimeServer;
+
+        u8 r = DoTimeSync(sync_server);
+
+        switch (r)
+        {
+            case 1:
+                stdout_printf("Connection to %s failed\n", sync_server);
+            break;
+            case 2:
+                stdout_printf("Time was synchronized too recently.\n");
+            break;
+        
+            default:
+            break;
+        }
+    }
+    else if ((argc > 1) && (strcmp("-help", argv[1]) == 0))
+    {
+
+        Stdout_Push("Show/Set date and time\n\nUsage:\n\
+date -sync  - Synchronize date & time\n\
+date -help  - This screen\n\
+date        - Show date and time\n");
+    }
+    else stdout_printf("%lu-%lu-%lu %02lu:%02u:%02u\n", SystemTime.day, SystemTime.month, SystemTime.year, SystemTime.hour, SystemTime.minute, SystemTime.second);
 }

@@ -3,7 +3,7 @@
 
 #include "DevMgr.h"
 
-extern SM_Device DEV_KBSATURN;
+extern SM_Device DRV_KBSATURN;
 
 bool KB_Saturn_Init();
 u8 KB_Saturn_Poll(u8 *data);

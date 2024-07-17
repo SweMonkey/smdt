@@ -45,5 +45,6 @@ void CMD_TestSRAM(u8 argc, char *argv[]);
 #endif
 
 void CMD_Uptime(u8 argc, char *argv[]);
+void CMD_Date(u8 argc, char *argv[]);
 
 #endif // CMDFUNC_H_INCLUDED

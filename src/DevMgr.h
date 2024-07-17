@@ -57,26 +57,12 @@ typedef struct s_device
 #define DEV_SLOT(device) (device.Id.Bitshift >> 1)
 #define DEV_FULL(device) DEV_PORT, DEV_SLOT(device)
 
-#define SetDevCtrl(d, b) (*d.Ctrl ^= ((b & d.Id.Bitmask) << d.Id.Bitshift)) // TODO: Can't XOR this stuff - Temp: Make sure to call UnsetDevCtrl at least once before calling SetDevCtrl
-#define OrDevCtrl(d, b) (*d.Ctrl |= ((b & d.Id.Bitmask) << d.Id.Bitshift))
-#define AndDevCtrl(d, b) (*d.Ctrl &= ((b & d.Id.Bitmask) << d.Id.Bitshift))
-#define UnsetDevCtrl(d) (*d.Ctrl &= ~(d.Id.Bitmask << d.Id.Bitshift))
+#define DEV_SetCtrl(d, b) (*d.Ctrl  =  (*d.Ctrl & ~(d.Id.Bitmask << d.Id.Bitshift)) | ((b & d.Id.Bitmask) << d.Id.Bitshift))
+#define DEV_ClrCtrl(d)    (*d.Ctrl &= ~(d.Id.Bitmask << d.Id.Bitshift))
 
-#define SetDevData(d, b) (*d.Data ^= ((b & d.Id.Bitmask) << d.Id.Bitshift)) // TODO: Can't XOR this stuff - Temp: Make sure to call UnsetDevData at least once before calling SetDevData
-#define OrDevData(d, b) (*d.Data |= ((b & d.Id.Bitmask) << d.Id.Bitshift))
-#define AndDevData(d, b) (*d.Data &= ((b & d.Id.Bitmask) << d.Id.Bitshift))
-#define UnsetDevData(d) (*d.Data &= ~(d.Id.Bitmask << d.Id.Bitshift))
-
-#define GetDevData(d, b) ((*d.Data & ((b & d.Id.Bitmask) << d.Id.Bitshift)) >> d.Id.Bitshift)
-
-
-// Debug
-/*
-#define SetDevData(d, b) (kprintf("SetDevData: $%X"  , (*d.Data^ ((b & d.Id.Bitmask) << d.Id.Bitshift))));(*d.Data ^=  ((b & d.Id.Bitmask) << d.Id.Bitshift))
-#define OrDevData(d, b)  (kprintf("OrDevData: $%X"   , (*d.Data| ((b & d.Id.Bitmask) << d.Id.Bitshift))));(*d.Data |=  ((b & d.Id.Bitmask) << d.Id.Bitshift))
-#define AndDevData(d, b) (kprintf("AndDevData: $%X"  , (*d.Data& ((b & d.Id.Bitmask) << d.Id.Bitshift))));(*d.Data &=  ((b & d.Id.Bitmask) << d.Id.Bitshift))
-#define UnsetDevData(d)  (kprintf("UnsetDevData: $%X", (*d.Data&~(     d.Id.Bitmask  << d.Id.Bitshift))));(*d.Data &= ~(d.Id.Bitmask << d.Id.Bitshift))
-*/
+#define DEV_SetData(d, b) (*d.Data  =  (*d.Ctrl & ~(d.Id.Bitmask << d.Id.Bitshift)) | ((b & d.Id.Bitmask) << d.Id.Bitshift))
+#define DEV_ClrData(d)    (*d.Data &= ~(d.Id.Bitmask << d.Id.Bitshift))
+#define DEV_GetData(d, b) (*d.Data & ((b & d.Id.Bitmask) << d.Id.Bitshift) >> d.Id.Bitshift)
 
 extern SM_Device *DevList[DEV_MAX];
 extern DevPort sv_ListenPort;   // Default UART port to listen on

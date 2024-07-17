@@ -22,7 +22,7 @@ typedef void NET_PingIP_CB(char *ip);
 
 extern Buffer RxBuffer;
 extern Buffer TxBuffer;
-extern SM_Device DEV_UART;      // Built-in UART
+extern SM_Device DRV_UART;      // Built-in UART
 
 void NET_RxIRQ();
 void NET_SendChar(const u8 c, u8 flags);

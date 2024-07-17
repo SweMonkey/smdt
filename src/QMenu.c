@@ -732,7 +732,7 @@ void WINFN_TERMTYPE()
 
 void WINFN_SERIALSPEED()
 {
-    vu8 *PSCTRL = (vu8 *)DEV_UART.SCtrl;
+    vu8 *PSCTRL = (vu8 *)DRV_UART.SCtrl;
 
     switch (SelectedIdx)
     {
@@ -898,11 +898,11 @@ void WINFN_DEBUGSEL()
 
 void WINFN_SERIALPORTSEL()
 {
-    SetDevicePort(&DEV_UART, (DevPort)SelectedIdx);
+    SetDevicePort(&DRV_UART, (DevPort)SelectedIdx);
     sv_ListenPort = (DevPort)SelectedIdx;
     
     vu8 *SCtrl;
-    SCtrl = (vu8 *)DEV_UART.SCtrl;
+    SCtrl = (vu8 *)DRV_UART.SCtrl;
     *SCtrl = 0x38;
 }
 

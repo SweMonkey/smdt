@@ -8,6 +8,7 @@
 #include "devices/XP_Network.h" // sv_ConnTimeout, sv_ReadTimeout, sv_DelayTime
 #include "devices/RL_Network.h" // sv_DLM, sv_DLL
 #include "Cursor.h"             // sv_CursorCL
+#include "system/Time.h"        // sv_TimeZone, sv_TimeServer, sv_EpochStart
 
 extern u8 sv_IRCFont;
 extern u8 sv_TelnetFont;
@@ -44,5 +45,8 @@ SM_VarList VarList[] =
     {ST_BYTE, &sv_TelnetFont,     "telnetfont"},
     {ST_BYTE, &sv_TerminalFont,   "termfont"},
     {ST_BYTE, &sv_ThemeUI,        "themeui"},
+    {ST_BYTE, &sv_TimeZone,       "timezone"},
+    {ST_SARR, &sv_TimeServer,     "timeserver"},
+    {ST_WORD, &sv_EpochStart,     "epoch"},
     {0, 0, 0}  // List terminator
 };

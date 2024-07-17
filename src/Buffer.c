@@ -23,6 +23,25 @@ u8 Buffer_IsEmpty(Buffer *b)
     return 0;  // return false
 }
 
+/// @brief Get the number of bytes in buffer
+/// @param b Pointer to buffer
+/// @return Number of bytes in buffer
+u16 Buffer_GetNum(Buffer *b)
+{
+    u16 num = 0;
+
+    if (b->tail < b->head)
+    {
+        num = b->head - b->tail;
+    }
+    else if (b->tail > b->head)
+    {
+        num = (BUFFER_LEN - b->head) + b->tail;
+    }
+
+    return num;
+}
+
 /// @brief Push byte into buffer at head
 /// @param b Pointer to buffer
 /// @param data Byte data to push into buffer

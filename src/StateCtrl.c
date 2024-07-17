@@ -41,14 +41,12 @@ void VBlank()
 
     if (CurrentState->Input != NULL) CurrentState->Input(); // Current PRG
 
-    InputTick();    // Pump IO system
-    CR_Blink();     // Cursor blink
+    InputTick();        // Pump IO system
+    TickClock();        // Clock will drift when interrupts are disabled!
+    ScreensaverTick();  // Screensaver counter/animation
+    CR_Blink();         // Cursor blink
 
     bWindowActive = (bShowQMenu || bShowHexView);
-    
-    ScreensaverTick();
-
-    TickClock();    // Clock will drift when interrupts are disabled!
 }
 
 void ChangeState(State new_state, u8 argc, char *argv[])
@@ -128,20 +126,30 @@ void ChangeState(State new_state, u8 argc, char *argv[])
 void RevertState()
 {
     PRG_State *ShadowState = CurrentState;
+    State ShadowStateEnum = CurrentStateEnum;
+
+    SYS_disableInts();
 
     CurrentState->Exit();
 
-    SYS_disableInts();
-    
+    InputTick();    // Flush input queue to prevent inputs "leaking" into new state
+
     CurrentState = PrevState;
     CurrentStateEnum = PrevStateEnum;
 
     TRM_SetStatusText(STATUS_TEXT);
     TRM_ResetStatusText();
-    
+
     CurrentState->ReEnter();
 
+    ScreensaverInit();
+    SetupQItemTags();
+    PAL_setColor(4, sv_CursorCL);
+
+    SYS_setHIntCallback(CurrentState->HBlank);
+
     PrevState = ShadowState;
+    PrevStateEnum = ShadowStateEnum;
 
     SYS_enableInts();
 }

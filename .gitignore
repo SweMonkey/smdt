@@ -4,8 +4,8 @@ tmp/
 .vscode
 build.sh
 res/*.h
-smdt.code-workspace
 doc/html/
 doc/latex/
 doc/Doxyfile
 res/Default_disk2.img
+smdt.code-workspace

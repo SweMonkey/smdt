@@ -201,7 +201,7 @@ void Run_IRC()
                 UI_DrawWindow(25, 0, 14, 26, "Nick list");
                 UI_ClearRect(26, 3, 12, 22);
                 UI_DrawText(26, 11, PAL1, "Requesting");
-                UI_DrawText(26, 12, PAL1, "user list.");
+                UI_DrawText(26, 12, PAL1, "nick list.");
                 UI_DrawText(26, 14, PAL1, "Please wait");
                 UI_End();
 
@@ -400,7 +400,7 @@ u8 ParseTx()
             // TODO: CHECK RESPONSE, NICK MAY NOT BE VALID!
 
             SRAM_SaveData();
-        } 
+        }
         else
         {
             return 1;
@@ -453,7 +453,7 @@ void Input_IRC()
 
         if (is_KeyDown(KEY_DOWN))
         {
-            if (UserListScroll < PG_UserNum)
+            if (UserListScroll < (PG_UserNum-22))
             {
                 UserListScroll++;
                 

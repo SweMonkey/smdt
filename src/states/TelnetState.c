@@ -53,7 +53,9 @@ void Enter_Telnet(u8 argc, char *argv[])
     // logo.log 1055
     // rx_absinthebbs.log 53692
     // rx_nethack_lines2 365971
-    // rx_nethack_lines3 1175552
+    // rx_nethack_lines3 1175552    0x9AB9
+    // rx_bottomlessabyss_utf8 44802
+    // rx_bottomlessabyss_cp437 46209
     u8 data;
     u32 p = 0;
     u32 s = 365971;
@@ -74,9 +76,8 @@ void Enter_Telnet(u8 argc, char *argv[])
         while (Buffer_Pop(&RxBuffer, &data) != 0xFF)
         {
             TELNET_ParseRX(data);
+            //waitMs(1);
         }
-
-        //TELNET_ParseRX(telnetdump[p++]);
     }
 
     KDebug_StopTimer();
@@ -104,6 +105,7 @@ void ReEnter_Telnet()
 void Exit_Telnet()
 {
     Stdout_Flush();
+    Buffer_Flush(&TxBuffer);
     NET_Disconnect();
 }
 
@@ -223,23 +225,15 @@ void Input_Telnet()
             (like a DOIT or ENTER key), should be sent as "CR LF".*/
             if (vLineMode & LMSM_EDIT)
             {
-                NET_TransmitBuffer();
                 NET_SendChar(0xD, 0); // Send \r - carridge return
                 NET_SendChar(0xA, 0); // Send \n - line feed
+                NET_TransmitBuffer();
             }
             else
             {
                 NET_SendChar(0xD, TXF_NOBUFFER); // Send \r - carridge return
                 NET_SendChar(0xA, TXF_NOBUFFER); // Send \n - line feed
             }
-
-            // Line feed (new line)
-            TTY_MoveCursor(TTY_CURSOR_DOWN, 1);
-            //TTY_ClearLineSingle(sy % 32);
-
-            // Carriage return
-            TTY_SetSX(0);
-            TTY_MoveCursor(TTY_CURSOR_DUMMY);
         }
 
         if (is_KeyDown(KEY_BACKSPACE))
@@ -273,7 +267,7 @@ void Input_Telnet()
 
         if (is_KeyDown(KEY_ESCAPE))
         {
-            NET_SendChar(0x1B, 0); // Send \ESC
+            NET_SendChar(0x1B, TXF_NOBUFFER); // Send \ESC
         }
     }
 }

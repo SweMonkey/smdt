@@ -109,15 +109,16 @@ void SetupTerminal()
 
     // Variable overrides
     vDoEcho = 0;
-    vLineMode = 1;
+    vLineMode = LMSM_EDIT;
     vNewlineConv = 1;
     sv_bWrapAround = TRUE;
 
     TTY_SetFontSize(sv_TerminalFont);
+    C_XMAX = (sv_TerminalFont == 0 ? 39 : 79);  // Make the cursor wrap at screen edge
+
+    //DoTimeSync(sv_TimeServer);
 
     LastCommand[0] = '\0';
-
-    C_XMAX = (sv_TerminalFont == 0 ? 39 : 79);  // Make the cursor wrap at screen edge
 }
 
 void Enter_Terminal(u8 argc, char *argv[])
@@ -131,7 +132,10 @@ void Enter_Terminal(u8 argc, char *argv[])
 void ReEnter_Terminal()
 {
     SetupTerminal();
-    
+    Stdout_Flush();
+
+    // Fixme: Upon returning from an error in the IRC client neither the IRC or terminal can reset tilemap size back to 128x32 ??
+
     if (Buffer_IsEmpty(&stdout))
     {
         Stdout_Push(">");
@@ -218,14 +222,8 @@ void Input_Terminal()
         }
 
         if (is_KeyDown(KEY_RETURN))
-        {        
-            // Line feed (new line)
-            TTY_MoveCursor(TTY_CURSOR_DOWN, 1);
-            TTY_ClearLine(sy % 32, 1);
-
-            // Carriage return
-            TTY_SetSX(0);
-            TTY_MoveCursor(TTY_CURSOR_DUMMY);
+        {
+            Stdout_Push("\n");
 
             if (ParseInputString())
             {
@@ -233,7 +231,7 @@ void Input_Terminal()
                 
                 if (isCurrentState(PS_Terminal)) Stdout_Push("\n");
             }
-            
+
             if (isCurrentState(PS_Terminal))
             {
                 Stdout_Push(">");

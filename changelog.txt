@@ -1,3 +1,16 @@
+v0.30.2:
+Telnet/Terminal: Erroneously cleared the entire next row of text every time a newline+carridge return was encountered, this should only be done when also scrolling down to a new line.
+IRC: The typing input box at the bottom now uses DMA VRAM copy. Previously a new single tile was uploaded to VRAM for every character you typed.
+IRC: Nick list scrollbar hopefully fixed; It could scroll beyond its limits before.
+Drivers: Cleaned up XPN network driver. All functions should now work decently; EnterMonitor/ExitMonitor/Connect/Disconnect/Ping/GetIP.
+DevMgr: Bugfixed the Set/Reset device pin macro; A device could previously reset pins belonging to a different device, causing all kinds of fun debugging.
+Misc: Some failed UTF8 experiments, Prefer CP437 / Extended ASCII instead of UTF8 if given the choice.
+Misc: Slimmed UTF8 tables down from 256 bytes to 64 bytes for every table. Now only covers the necessary 0x80-0xBF range.
+Misc: Added doxygen comments to the PS/2 keyboard functions.
+Misc: Date function added to terminal. Used to sync to a time server and to print the current date.
+FixMe: IRC: Nick list is missing 1 nick, see command 353 in IRC.c .
+FixMe: IRC: Erroneous string comparision in command 353, in IRC.c .
+
 v0.30.1:
 SMDTC: FAT12/16/32 support, file operations and other misc functions added for testing purposes. Disabled by default.
 SMDTC: Added time calculation functions. IRC client can now print DD/MM/YY HH:MM:SS date times (previously printed seconds since epoch).

@@ -3,33 +3,28 @@
 #include "Utils.h"      // TRM_
 
 #define TIMEOUT 128
-SM_Device DEV_KBSATURN;
+SM_Device DRV_KBSATURN;
 
 
 bool KB_Saturn_Init()
 {
-    DEV_KBSATURN.Id.sName = "Saturn KB";
-    DEV_KBSATURN.Id.Bitmask = 0x7F;
-    DEV_KBSATURN.Id.Bitshift = 0;
-    DEV_KBSATURN.Id.Mode = DEVMODE_PARALLEL;
+    DRV_KBSATURN.Id.sName = "Saturn KB";
+    DRV_KBSATURN.Id.Bitmask = 0x7F;
+    DRV_KBSATURN.Id.Bitshift = 0;
+    DRV_KBSATURN.Id.Mode = DEVMODE_PARALLEL;
 
-    UnsetDevCtrl(DEV_KBSATURN);
-    OrDevCtrl(DEV_KBSATURN, 0x60);
-    UnsetDevData(DEV_KBSATURN);
-    OrDevData(DEV_KBSATURN, 0x60);
+    DEV_SetCtrl(DRV_KBSATURN, 0x60);
+    DEV_SetData(DRV_KBSATURN, 0x60);    // Write $20 to data port, if read back of bits 3-0 is $1 then the device is a keyboard
 
-    OrDevData(DEV_KBSATURN, 0x20);  // Write $20 to data port, if read back of bits 3-0 is $1 then the device is a keyboard
-
-    if (GetDevData(DEV_KBSATURN, 0xF) != 1)
+    if (DEV_GetData(DRV_KBSATURN, 0xF) != 1)
     {
-        kprintf("Unknown Saturn peripheral found (r = $%X)", GetDevData(DEV_KBSATURN, 0xF));
+        kprintf("Unknown Saturn peripheral found (r = $%X)", DEV_GetData(DRV_KBSATURN, 0xF));
 
         return 0;
     }
     else
-    {
-        UnsetDevData(DEV_KBSATURN);
-        OrDevData(DEV_KBSATURN, 0x60);
+    {        
+        DEV_SetData(DRV_KBSATURN, 0x60);
 
         KB_SetKeyboard(&KB_Saturn_Poll);
 
@@ -56,31 +51,29 @@ u8 KB_Saturn_Poll(u8 *data)
     for (u8 i = 0; i < 12; i += 2)
     {
         // Even nibble
-        UnsetDevData(DEV_KBSATURN);
-        while ((GetDevData(DEV_KBSATURN, 0x10) & 0x10) != 0)
+        DEV_ClrData(DRV_KBSATURN);
+        while ((DEV_GetData(DRV_KBSATURN, 0x10) & 0x10) != 0)
         {
             if (timeout++ >= TIMEOUT) return 0;
         }
 
         timeout = 0;
-        nibble[i] = GetDevData(DEV_KBSATURN, 0xF);
+        nibble[i] = DEV_GetData(DRV_KBSATURN, 0xF);
 
         // Odd nibble
-        UnsetDevData(DEV_KBSATURN);
-        OrDevData(DEV_KBSATURN, 0x20);
+        DEV_SetData(DRV_KBSATURN,  0x20);
         
-        while (GetDevData(DEV_KBSATURN, 0x10) != 0x10)
+        while (DEV_GetData(DRV_KBSATURN, 0x10) != 0x10)
         {
             if (timeout++ >= TIMEOUT) return 0;
         }
 
         timeout = 0;
-        nibble[i+1] = GetDevData(DEV_KBSATURN, 0xF);
+        nibble[i+1] = DEV_GetData(DRV_KBSATURN, 0xF);
     }
 
     // End transmission
-    UnsetDevData(DEV_KBSATURN);
-    OrDevData(DEV_KBSATURN, 0x60);
+    DEV_SetData(DRV_KBSATURN, 0x60);
 
     bKB_Break = nibble[7] & 1;
     *data = (nibble[8] << 4) | nibble[9];

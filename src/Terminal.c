@@ -1,6 +1,6 @@
 #include "Terminal.h"
 #include "Buffer.h"
-#include "Telnet.h"
+#include "Telnet.h"         // LMSM_EDIT
 #include "../res/system.h"
 #include "Utils.h"
 #include "Network.h"
@@ -11,11 +11,14 @@
 #include "StateCtrl.h"
 #endif
 
+#define TTY_CURSOR_X (((sv_Font?(sx << 2):(sx << 3))) + HScroll + 128)
+#define TTY_CURSOR_Y ((sy << 3) - VScroll + 128)
+
 // Modifiable variables
 u8 vNewlineConv = 0;     // 0 = none (\n = \n) -- 1 = \n becomes \n\r
 u8 sv_TermType = 0;      // Terminal type. See TermType table further down
 u8 vDoEcho = 0;          // 0 = Rely on remote server to echo back typed characters -- 1 = Do echo typed characters back to screen
-u8 vLineMode = 0;        // Line edit mode
+u8 vLineMode = 0;        // Line edit mode - 1=LMSM_EDIT
 char sv_Baud[5] = "4800";// Report this baud speed to remote servers if they ask
 
 // Font
@@ -238,8 +241,8 @@ void TTY_SetFontSize(u8 size)
     }
 
     // Update visual cursor position    
-    u16 sprx = ((sv_Font?(sx << 2):(sx << 3))) + HScroll + 128;
-    u16 spry = (sy << 3) - VScroll + 128;
+    u16 sprx = TTY_CURSOR_X;
+    u16 spry = TTY_CURSOR_Y;
 
     // Clamp position
     sprx = sprx >= 504 ? 504 : sprx;
@@ -656,7 +659,7 @@ inline void TTY_MoveCursor(u8 dir, u8 num)
                         *((vu16*) VDP_DATA_PORT) = VScroll;
                     }
                     
-                    spry = (sy << 3) - VScroll + 128;
+                    spry = TTY_CURSOR_Y;
                     SetSprite_Y(SPRITE_ID_CURSOR, spry);
                 }
                 TTY_SetSX((sx+num)-C_XMAX-2);
@@ -666,16 +669,16 @@ inline void TTY_MoveCursor(u8 dir, u8 num)
                 TTY_SetSX(sx+num);
             }
 
-            sprx = ((sv_Font?(sx << 2):(sx << 3))) + HScroll + 128;
+            sprx = TTY_CURSOR_X;
             SetSprite_X(SPRITE_ID_CURSOR, sprx);
         break;
 
         case TTY_CURSOR_DOWN:
-            TTY_ClearLine(sy+1, num);
             sy += num;
             
             if (sy > (C_YMAX + (VScroll >> 3)))
             {
+                TTY_ClearLine((sy-num)+1, num);
                 VScroll += 8 * num;
 
                 // Update vertical scroll
@@ -685,7 +688,7 @@ inline void TTY_MoveCursor(u8 dir, u8 num)
                 *((vu16*) VDP_DATA_PORT) = VScroll;
             }
 
-            spry = (sy << 3) - VScroll + 128;
+            spry = TTY_CURSOR_Y;
             SetSprite_Y(SPRITE_ID_CURSOR, spry);
         break;
 
@@ -698,7 +701,7 @@ inline void TTY_MoveCursor(u8 dir, u8 num)
             else 
             {
                 sy -= num;
-                spry = (sy << 3) - VScroll + 128;
+                spry = TTY_CURSOR_Y;
             }
 
             SetSprite_Y(SPRITE_ID_CURSOR, spry);
@@ -711,7 +714,7 @@ inline void TTY_MoveCursor(u8 dir, u8 num)
                 if (sv_bWrapAround && (sy > 0)) 
                 {
                     sy--;
-                    spry = (sy << 3) - VScroll + 128;
+                    spry = TTY_CURSOR_Y;
                     SetSprite_Y(SPRITE_ID_CURSOR, spry);
                 }
             }
@@ -720,14 +723,14 @@ inline void TTY_MoveCursor(u8 dir, u8 num)
                 TTY_SetSX(sx-num);
             }
 
-            sprx = ((sv_Font?(sx << 2):(sx << 3))) + HScroll + 128;
+            sprx = TTY_CURSOR_X;
             SetSprite_X(SPRITE_ID_CURSOR, sprx);
         break;
 
         default:
             // Update visual cursor position
-            sprx = ((sv_Font?(sx << 2):(sx << 3))) + HScroll + 128;
-            spry = (sy << 3) - VScroll + 128;
+            sprx = TTY_CURSOR_X;
+            spry = TTY_CURSOR_Y;
 
             // Update sprite position
             SetSprite_Y(SPRITE_ID_CURSOR, spry);

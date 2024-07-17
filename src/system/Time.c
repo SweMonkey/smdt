@@ -1,15 +1,19 @@
 #include "Time.h"
 #include "Utils.h"
+#include "Network.h"
 
 // https://www.epochconverter.com/
 
 SM_Time SystemTime;
-s32 SystemUptime = 0;
-s32 TimeSync = 0;
+s32 SystemUptime = 0;            // How long the system has been running (Seconds)
 
-static u32 Second = 0;  // 1/60s ticker
+static s32 TimeSync = 0;         // Synchronized time (Seconds)
+static s32 LastTimeSync = -999;  // Time when last synchronized (Seconds)
+static u32 FrameTick = 0;        // 1/50(PAL) or 1/60(NTSC) ticker
 
-bool bTempTime = TRUE;
+s8 sv_TimeZone = 2;              // Time zone - UTC -12 +14
+char sv_TimeServer[32] = "time.nist.gov:37"; // Time sync server
+u16 sv_EpochStart = 1970;
 
 
 SM_Time SecondsToDateTime(s32 seconds)
@@ -34,7 +38,7 @@ SM_Time SecondsToDateTime(s32 seconds)
     t.month = month  / 2629743UL;
     t.day   = day    / 86400UL;
 
-    t.year  += 1970;
+    t.year  += sv_EpochStart;
     t.month += 1;
     t.day   += 1;
 
@@ -64,20 +68,67 @@ void TimeToStr_Time(SM_Time t, char *ret)
 
 void TickClock()
 {
-    if ((Second % (bPALSystem?50:60)) == 0)
+    if ((FrameTick % (bPALSystem?50:60)) == 0)
     {
         SystemUptime++;
         TimeSync++;
-        Second++;
 
-        if (bTempTime) SystemTime = SecondsToDateTime(SystemUptime);   // TEMP - should be sync'd to time server
-        else SystemTime = SecondsToDateTime(TimeSync);
+        //FrameTick++;    // Leap frame :^)
+
+        SystemTime = SecondsToDateTime(TimeSync);
     }
-    else Second++;
+    
+    FrameTick++;
 }
 
 void SetSystemDateTime(s32 seconds)
 {
-    TimeSync = seconds;
+    TimeSync = seconds + (sv_TimeZone * 3600);
+    LastTimeSync = TimeSync;
     SystemTime = SecondsToDateTime(TimeSync);
+}
+
+s32 GetTimeSinceLastSync()
+{
+    return (TimeSync - LastTimeSync);
+}
+
+u8 DoTimeSync(char *server)
+{
+    u8 data;
+    s32 recv = 0;
+    u8 i = 0;
+    char *sync_server;
+
+    if (GetTimeSinceLastSync() < 10)
+    {
+        return 2;   // Don't sync. Time was synchronized within the last 10 seconds.
+    }
+
+    if (server != NULL) sync_server = server;
+    else sync_server = sv_TimeServer;
+
+    Buffer_Flush0(&RxBuffer);
+
+    if (NET_Connect(sync_server))
+    {
+        while (Buffer_GetNum(&RxBuffer) < 4);        
+
+        while (Buffer_Pop(&RxBuffer, &data) != 0xFF)
+        {
+            recv = (recv << 8) + data;
+
+            if (i++ >= 3) break;
+        }
+        
+        Buffer_Pop(&RxBuffer, &data);
+        if (data != 'D') NET_Disconnect();      // Fixme: Don't check for 'D', it is only applicable to XPN/RLN network code!
+
+        // SMDTC assumes unix time (start year 1970), the received time however may use 1900 as starting year... fixme?
+        SetSystemDateTime(recv);
+
+        return 0;
+    }
+
+    return 1;   // Connection to <server> failed
 }

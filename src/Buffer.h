@@ -14,6 +14,7 @@ typedef struct s_buffer
 
 u8 Buffer_IsFull(Buffer *b);
 u8 Buffer_IsEmpty(Buffer *b);
+u16 Buffer_GetNum(Buffer *b);
 u8 Buffer_Push(Buffer *b, u8 data);
 u8 Buffer_Pop(Buffer *b, u8 *data);
 u8 Buffer_ReversePop(Buffer *b);
