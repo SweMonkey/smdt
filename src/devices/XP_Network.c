@@ -152,7 +152,7 @@ bool XPN_Connect(char *str)
 void XPN_Disconnect()
 {
     u32 timeout = 0;
-    //u8 byte = 0;
+    u8 byte = 0;
 
     XPN_FlushBuffers();
 
