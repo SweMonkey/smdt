@@ -38,6 +38,7 @@
 #define FONT_8x8_16 0
 #define FONT_4x8_8  1
 #define FONT_4x8_1  2
+#define FONT_4x8_16 3
 
 // Modifiable variables
 extern s8 sv_HSOffset;
@@ -46,6 +47,7 @@ extern char sv_Baud[];
 extern u8 vNewlineConv;
 extern u8 vDoEcho;
 extern u8 vLineMode;
+extern u8 vBackspace;
 
 // TTY
 extern s32 sy;

@@ -5,6 +5,7 @@
 #include "Input.h"
 #include "Utils.h"
 #include "Network.h"
+#include "Keyboard.h"       // bKB_Ctrl
 #include "misc/CMDFunc.h"
 
 #include "system/Stdout.h"
@@ -19,9 +20,11 @@
 #define INPUT_SIZE_ARGV 64
 
 u8 sv_TerminalFont = FONT_8x8_16;//FONT_4x8_8;//
-static char LastCommand[INPUT_SIZE] = {'\0'};
 static char TimeString[9];
 static s32 LastTime = 666;
+
+static char LastCommand[2][INPUT_SIZE] = {'\0'};
+static u8 LCPos = 0;   // Last command position
 
 
 u8 ParseInputString()
@@ -46,7 +49,18 @@ u8 ParseInputString()
     Buffer_Flush0(&TxBuffer);
 
     // Copy the current input string into last command string
-    if (strlen((char*)inbuf) > 0) strncpy(LastCommand, (char*)inbuf, INPUT_SIZE);
+    if (strlen((char*)inbuf) > 0) 
+    {
+        // Only push the history up the queue if the new command is unique.
+        // This is to avoid filling the history queue when re-running the same command.
+        if (strcmp(LastCommand[0], (char*)inbuf))
+        {
+            strncpy(LastCommand[1], LastCommand[0], INPUT_SIZE);
+        }
+
+        strncpy(LastCommand[0], (char*)inbuf, INPUT_SIZE);
+        LCPos = 0;
+    }
 
     // Extract argument list from input buffer string
     char *p = strtok((char*)inbuf, ' ');
@@ -54,6 +68,12 @@ u8 ParseInputString()
     {
         argv[argc++] = p;
         p = strtok(NULL, ' ');
+    }
+
+    // Filter out Ctrl^ sequences
+    if (argv[0][0] < ' ')
+    {
+        return 0;
     }
 
     // Iterate argv0 through the command list and call bound function
@@ -74,9 +94,7 @@ u8 ParseInputString()
     // Or let the user know that the command was not found
     if (strlen(argv[0]) > 0)
     {
-        char tmp[64];
-        sprintf(tmp, "Command \"[36m%s[0m\" not found...\n", argv[0]);
-        Stdout_Push(tmp);
+        stdout_printf("Command \"[36m%s[0m\" not found...\n", argv[0]);
         return 1;
     }
 
@@ -118,7 +136,7 @@ void SetupTerminal()
 
     //DoTimeSync(sv_TimeServer);
 
-    LastCommand[0] = '\0';
+    Buffer_Flush(&TxBuffer);
 }
 
 void Enter_Terminal(u8 argc, char *argv[])
@@ -155,12 +173,14 @@ void Run_Terminal()
 {
     Stdout_Flush();
 
+    #ifdef ENABLE_CLOCK
     if (LastTime != SystemUptime)
     {
         TimeToStr_Time(SystemTime, TimeString);
         TRM_DrawText(TimeString, 27, 0, PAL1);
         LastTime = SystemUptime;
     }
+    #endif
 }
 
 void Input_Terminal()
@@ -169,16 +189,30 @@ void Input_Terminal()
     {
         if (is_KeyDown(KEY_UP))
         {
-            while (DoBackspace());
+            if (strlen(LastCommand[LCPos]) > 0)
+            {
+                while (DoBackspace());
 
-            Stdout_Push(LastCommand);
+                Stdout_Push(LastCommand[LCPos]);
 
-            for (u16 i = 0; i < strlen(LastCommand); i++) Buffer_Push(&TxBuffer, LastCommand[i]);
+                for (u16 i = 0; i < strlen(LastCommand[LCPos]); i++) Buffer_Push(&TxBuffer, LastCommand[LCPos][i]);
+            }
+
+            if ((LCPos == 0) && (strlen(LastCommand[1]) > 0)) LCPos = 1;
         }
 
         if (is_KeyDown(KEY_DOWN))
         {
             while (DoBackspace());
+
+            if (LCPos == 1) 
+            {
+                LCPos = 0;
+
+                Stdout_Push(LastCommand[LCPos]);
+
+                for (u16 i = 0; i < strlen(LastCommand[LCPos]); i++) Buffer_Push(&TxBuffer, LastCommand[LCPos][i]);
+            }
         }
 
         if (is_KeyDown(KEY_KP4_LEFT))
@@ -241,6 +275,14 @@ void Input_Terminal()
         if (is_KeyDown(KEY_BACKSPACE))
         {
             DoBackspace();
+        }
+
+        // ^C
+        if (is_KeyDown(KEY_C) && bKB_Ctrl)
+        {
+            Stdout_Flush();
+            Stdout_Push("\n>");
+            Buffer_Flush0(&TxBuffer);
         }
     }
 }

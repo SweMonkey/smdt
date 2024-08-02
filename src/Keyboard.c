@@ -163,7 +163,6 @@ void KB_Interpret_Scancode(u8 scancode)
             TRM_SetStatusIcon(ICO_ID_ERROR, ICO_POS_0);
         break;
 
-        // Hopefully temporary shitcode
         // These keys will not be down/up whenever a character will be printed
         // Temporarily buffer these keys locally...
         case KEY_LSHIFT:
@@ -185,9 +184,26 @@ void KB_Interpret_Scancode(u8 scancode)
         break;
     }
 
-    // Filter out nonprintable scancodes here
+    // Ctrl^ sequence
+    if (bKB_Ctrl)
+    {
+        u8 key = SCTablePtr[sv_KeyLayout][0][scancode];
 
-    // More shit that should not be here...
+        if (isPrintable(key))
+        {
+            NET_SendChar(key & 0x1F, 0);        // Add control byte to TxBuffer
+
+            if (!vDoEcho) 
+            {
+                TTY_PrintChar('^');   // Print ^ to TTY if ECHO is false
+                TTY_PrintChar(key);
+            }
+        }
+        
+        return;
+    }
+
+    // Normal printing
     u8 mod = 0;
     if (bKB_Alt) mod = 2;
     else if (bKB_Shift) mod = 1;
@@ -196,12 +212,6 @@ void KB_Interpret_Scancode(u8 scancode)
 
     if (isPrintable(key) && !bWindowActive)
     {
-        if (bKB_Ctrl)
-        {
-            NET_SendChar(0x3, 0);               // Add control byte to TxBuffer
-            if (!vDoEcho) TTY_PrintChar('^');   // Print ^ to TTY if ECHO is false
-        }
-
         NET_SendChar(key, 0);               // Send key to TxBuffer
         if (!vDoEcho) TTY_PrintChar(key);   // Only print characters if ECHO is false
     }

@@ -5,6 +5,7 @@
 
 #ifndef _DOSFS_H
 #define _DOSFS_H
+#ifdef KERNEL_BUILD
 
 #include "Utils.h"
 
@@ -365,5 +366,7 @@ void DFS_Seek(PFILEINFO fileinfo, u32 offset, u8 *scratch);
 	scratch must point to a sector-sized buffer
 */
 u32 DFS_UnlinkFile(PVOLINFO volinfo, u8 *path, u8 *scratch);
+
+#endif // KERNEL_BUILD
 
 #endif // _DOSFS_H

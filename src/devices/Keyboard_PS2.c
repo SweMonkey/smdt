@@ -10,48 +10,25 @@ SM_Device DRV_KBPS2;
 
 /// @brief Find & initialize keyboard
 /// @return TRUE if keyboard was found, FALSE if not
-bool KB_PS2_Init()
+bool KB_PS2_Init(DevPort port)
 {
     u8 ret = 0;
-    char FStringTemp[32];
 
     DRV_KBPS2.Id.sName = "PS/2 Keyboard";
     DRV_KBPS2.Id.Mode = DEVMODE_PARALLEL;
 
     // Iterate through all ports/pins in search for a keyboard. First found keyboard will be used
-    for (u8 s = 0; s < 6; s++)
+    for (u8 s = 0; s < 2; s++)
     {
         switch (s)
         {
-            case 0: // Pin 1 and 2 @ Port 1
-                SetDevicePort(&DRV_KBPS2, DP_Port1);
+            case 0: // Pin 1 and 2
+                SetDevicePort(&DRV_KBPS2, port);
                 DRV_KBPS2.Id.Bitmask = 0x3;
                 DRV_KBPS2.Id.Bitshift = 0;
             break;
-            case 1: // Pin 3 and 4 @ Port 1
-                SetDevicePort(&DRV_KBPS2, DP_Port1);
-                DRV_KBPS2.Id.Bitmask = 0x3;
-                DRV_KBPS2.Id.Bitshift = 2;
-            break;
-
-            case 2: // Pin 1 and 2 @ Port 2
-                SetDevicePort(&DRV_KBPS2, DP_Port2);
-                DRV_KBPS2.Id.Bitmask = 0x3;
-                DRV_KBPS2.Id.Bitshift = 0;
-            break;
-            case 3: // Pin 3 and 4 @ Port 2
-                SetDevicePort(&DRV_KBPS2, DP_Port2);
-                DRV_KBPS2.Id.Bitmask = 0x3;
-                DRV_KBPS2.Id.Bitshift = 2;
-            break;
-
-            case 4: // Pin 1 and 2 @ Port 3
-                SetDevicePort(&DRV_KBPS2, DP_Port3);
-                DRV_KBPS2.Id.Bitmask = 0x3;
-                DRV_KBPS2.Id.Bitshift = 0;
-            break;
-            case 5: // Pin 3 and 4 @ Port 3
-                SetDevicePort(&DRV_KBPS2, DP_Port3);
+            case 1: // Pin 3 and 4
+                SetDevicePort(&DRV_KBPS2, port);
                 DRV_KBPS2.Id.Bitmask = 0x3;
                 DRV_KBPS2.Id.Bitshift = 2;
             break;
@@ -67,8 +44,7 @@ bool KB_PS2_Init()
         // Did we receive an echo back from the keyboard?
         if ((ret == 0xFE) || (ret == 0xEE)) // FE = Fail+Resend, EE = Successfull echo back
         {
-            sprintf(FStringTemp, "Found PS/2 KB @ slot %u:%u (r=$%X)", DEV_FULL(DRV_KBPS2), ret);
-            TRM_DrawText(FStringTemp, 1, BootNextLine++, PAL1);
+            stdout_printf("Found PS/2 KB @ slot %u:%u (r=$%X)\n", DEV_FULL(DRV_KBPS2), ret);
 
             KB_SetKeyboard(&KB_PS2_Poll);
 

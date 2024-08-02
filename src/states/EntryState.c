@@ -15,7 +15,7 @@ static u8 SelectedIdx = 0;
 static u8 SubMenuIdx = 0;
 
 
-void UpdateWindow()
+static void UpdateWindow()
 {
     UI_Begin(EntryWindow);
 

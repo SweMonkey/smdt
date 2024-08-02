@@ -5,6 +5,7 @@
 #include "Buffer.h"
 
 extern Buffer stdout;
+extern bool bAutoFlushStdout;
 
 void Stdout_Push(const char *str);
 void Stdout_PushByte(u8 byte);

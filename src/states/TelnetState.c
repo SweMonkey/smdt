@@ -29,6 +29,24 @@ void Enter_Telnet(u8 argc, char *argv[])
     TELNET_Init();
     TRM_SetStatusText(STATUS_TEXT);
 
+    Buffer_Flush(&TxBuffer);
+    Buffer_Flush(&RxBuffer);
+
+    if ((argc > 1) && (strcmp("-tty", argv[1]) == 0))
+    {
+        vNewlineConv = 1;
+        vBackspace = 1;
+        vDoEcho = 1;
+        vLineMode = 0;
+    }
+    else if (argc > 1)
+    {
+        if (NET_Connect(argv[1]) == FALSE) 
+        {
+            // Connection failed; Inform the user here
+        }
+    }
+
     #ifdef EMU_BUILD
     // out.log 7357
     // out3.log 9139
@@ -76,6 +94,11 @@ void Enter_Telnet(u8 argc, char *argv[])
         while (Buffer_Pop(&RxBuffer, &data) != 0xFF)
         {
             TELNET_ParseRX(data);
+
+            #if defined(TRM_LOGGING) || defined(ESC_LOGGING) 
+            StreamPos++;
+            #endif
+
             //waitMs(1);
         }
     }
@@ -83,19 +106,6 @@ void Enter_Telnet(u8 argc, char *argv[])
     KDebug_StopTimer();
     kprintf("Stream replay end.");
     #endif
-
-    Buffer_Flush(&TxBuffer);
-    Buffer_Flush(&RxBuffer);
-
-    if (argc > 1)
-    {
-        if (NET_Connect(argv[1]) == FALSE) 
-        {
-            /*char TitleBuf[40];
-            sprintf(TitleBuf, "%s - <Connection Error>", STATUS_TEXT);
-            TRM_SetStatusText(TitleBuf);*/
-        }
-    }
 }
 
 void ReEnter_Telnet()
@@ -129,39 +139,57 @@ void Input_Telnet()
 {
     if (!bWindowActive)
     {
-        if (is_KeyDown(KEY_UP))
+        if (is_KeyDown(KEY_UP) || is_KeyDown(KEY_KP8_UP))
         {
-            NET_SendChar(0x1B, TXF_NOBUFFER);    // ESC
-            NET_SendChar(0x5B, TXF_NOBUFFER);    // [
-            NET_SendChar(0x41, TXF_NOBUFFER);    // A
+            NET_SendChar(0x1B, TXF_NOBUFFER);                   // ESC
+            NET_SendChar(vDECCKM ? 0x4F : 0x5B, TXF_NOBUFFER);  // 0 or [
+            NET_SendChar('A', TXF_NOBUFFER);                    // A
             TTY_MoveCursor(TTY_CURSOR_DUMMY);
         }
 
-        if (is_KeyDown(KEY_DOWN))
+        if (is_KeyDown(KEY_DOWN) || is_KeyDown(KEY_KP2_DOWN))
         {
-            NET_SendChar(0x1B, TXF_NOBUFFER);    // ESC
-            NET_SendChar(0x5B, TXF_NOBUFFER);    // [
-            NET_SendChar(0x42, TXF_NOBUFFER);    // B
+            NET_SendChar(0x1B, TXF_NOBUFFER);                   // ESC
+            NET_SendChar(vDECCKM ? 0x4F : 0x5B, TXF_NOBUFFER);  // 0 or [
+            NET_SendChar('B', TXF_NOBUFFER);                    // B
             TTY_MoveCursor(TTY_CURSOR_DUMMY);
         }
 
-        if (is_KeyDown(KEY_LEFT))
+        if (is_KeyDown(KEY_LEFT) || is_KeyDown(KEY_KP4_LEFT))
         {
-            NET_SendChar(0x1B, TXF_NOBUFFER);    // ESC
-            NET_SendChar(0x5B, TXF_NOBUFFER);    // [
-            NET_SendChar(0x44, TXF_NOBUFFER);    // D
+            NET_SendChar(0x1B, TXF_NOBUFFER);                   // ESC
+            NET_SendChar(vDECCKM ? 0x4F : 0x5B, TXF_NOBUFFER);  // 0 or [
+            NET_SendChar('D', TXF_NOBUFFER);                    // D
             TTY_MoveCursor(TTY_CURSOR_DUMMY);
         }
 
-        if (is_KeyDown(KEY_RIGHT))
+        if (is_KeyDown(KEY_RIGHT) || is_KeyDown(KEY_KP6_RIGHT))
         {
-            NET_SendChar(0x1B, TXF_NOBUFFER);    // ESC
-            NET_SendChar(0x5B, TXF_NOBUFFER);    // [
-            NET_SendChar(0x43, TXF_NOBUFFER);    // C
+            NET_SendChar(0x1B, TXF_NOBUFFER);                   // ESC
+            NET_SendChar(vDECCKM ? 0x4F : 0x5B, TXF_NOBUFFER);  // 0 or [
+            NET_SendChar('C', TXF_NOBUFFER);                    // C
             TTY_MoveCursor(TTY_CURSOR_DUMMY);
         }
 
-        if (is_KeyDown(KEY_KP1_END))
+        if (is_KeyDown(KEY_HOME) || is_KeyDown(KEY_KP7_HOME))
+        {
+            NET_SendChar(0x1B, TXF_NOBUFFER);                   // ESC
+            NET_SendChar(vDECCKM ? 0x4F : 0x5B, TXF_NOBUFFER);  // 0 or [
+            NET_SendChar('1', TXF_NOBUFFER);                    // 1
+            NET_SendChar('~', TXF_NOBUFFER);                    // ~
+            TTY_MoveCursor(TTY_CURSOR_DUMMY);
+        }
+
+        if (is_KeyDown(KEY_END) || is_KeyDown(KEY_KP1_END))
+        {
+            NET_SendChar(0x1B, TXF_NOBUFFER);                   // ESC
+            NET_SendChar(vDECCKM ? 0x4F : 0x5B, TXF_NOBUFFER);  // 0 or [
+            NET_SendChar('4', TXF_NOBUFFER);                    // 4
+            NET_SendChar('~', TXF_NOBUFFER);                    // ~
+            TTY_MoveCursor(TTY_CURSOR_DUMMY);
+        }
+
+        if (is_KeyDown(KEY_F1))
         {
             if (!sv_Font)
             {
@@ -179,7 +207,7 @@ void Input_Telnet()
             TTY_MoveCursor(TTY_CURSOR_DUMMY);
         }
 
-        if (is_KeyDown(KEY_KP3_PGDN))
+        if (is_KeyDown(KEY_F2))
         {
             if (!sv_Font)
             {
@@ -204,16 +232,6 @@ void Input_Telnet()
             NET_SendChar(0x7F, TXF_NOBUFFER);    // DEL
         }
 
-        if (is_KeyDown(KEY_F11))
-        {
-            NET_SendChar(0x03, TXF_NOBUFFER);    // ^C
-        }
-
-        if (is_KeyDown(KEY_F12))
-        {
-            NET_SendChar(0x18, TXF_NOBUFFER);    // ^X
-        }
-
         if (is_KeyDown(KEY_RETURN))
         {
             /*When LINEMODE is turned on, and when in EDIT mode, when any normal
@@ -229,6 +247,10 @@ void Input_Telnet()
                 NET_SendChar(0xA, 0); // Send \n - line feed
                 NET_TransmitBuffer();
             }
+            else if (vNewlineConv == 1)
+            {
+                NET_SendChar(0xA, TXF_NOBUFFER); // Send \n - line feed
+            }
             else
             {
                 NET_SendChar(0xD, TXF_NOBUFFER); // Send \r - carridge return
@@ -237,16 +259,19 @@ void Input_Telnet()
         }
 
         if (is_KeyDown(KEY_BACKSPACE))
-        {            
-            TTY_MoveCursor(TTY_CURSOR_LEFT, 1);
+        {
+            if (vBackspace == 0)
+            {
+                TTY_MoveCursor(TTY_CURSOR_LEFT, 1);
 
-            if (!sv_Font)
-            {
-                VDP_setTileMapXY(BG_B, TILE_ATTR_FULL(2, 0, 0, 0, 0), TTY_GetSX(), sy);
-            }
-            else
-            {
-                VDP_setTileMapXY(!(TTY_GetSX() % 2), TILE_ATTR_FULL(2, 0, 0, 0, 0), TTY_GetSX()>>1, sy);
+                if (!sv_Font)
+                {
+                    VDP_setTileMapXY(BG_B, TILE_ATTR_FULL(2, 0, 0, 0, 0), TTY_GetSX(), sy);
+                }
+                else
+                {
+                    VDP_setTileMapXY(!(TTY_GetSX() % 2), TILE_ATTR_FULL(2, 0, 0, 0, 0), TTY_GetSX()>>1, sy);
+                }
             }
 
             // 0x8  = backspace
@@ -255,12 +280,12 @@ void Input_Telnet()
             {
                 Buffer_ReversePop(&TxBuffer);
             }
+            else if (vBackspace == 1)
+            {
+                NET_SendChar(0x8, TXF_NOBUFFER);    // ^H
+            }
             else
             {
-                //NET_SendChar(0x8, TXF_NOBUFFER);    // send backspace (move cursor left)
-                //NET_SendChar(0x20, TXF_NOBUFFER);   // send space ' ' (moves cursor right again)
-                //NET_SendChar(0x8, TXF_NOBUFFER);    // send backspace (move cursor left)
-
                 NET_SendChar(0x7F, TXF_NOBUFFER);   // DEL
             }
         }

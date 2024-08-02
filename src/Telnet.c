@@ -89,6 +89,7 @@ static inline void DoIAC(u8 byte);
 static u8 vDoGA = 0;        // Use Go-Ahead
 static u8 vDECOM = FALSE;   // DEC Origin Mode
 static u8 vDECLRMM = 0;     // This control function defines whether or not the set left and right margins (DECSLRM) control function can set margins.
+u8 vDECCKM = 0;             // Cursor Key Format (DECCKM) - 0 = OFF - 1 = ON
 u8 sv_AllowRemoteEnv = FALSE;
 
 // DECSTBM
@@ -193,6 +194,8 @@ void TELNET_Init()
 
     vDoGA = 0;
     vDECOM = FALSE;
+    vDECLRMM = 0;
+    vDECCKM = 0;
 
     DMarginTop = 0;
     DMarginBottom = bPALSystem?0x1D:0x1B;
@@ -203,6 +206,7 @@ void TELNET_Init()
     // Variable overrides
     vDoEcho = 0;
     vLineMode = 0;
+    vBackspace = 0;
     vNewlineConv = 0;
     sv_bWrapAround = TRUE;
 
@@ -271,7 +275,7 @@ inline void TELNET_ParseRX(u8 byte)
         break;
         case 0x0A:  // Line feed (new line)
             if (vNewlineConv == 1) TTY_SetSX(0);  // Convert \n to \n\r
-                
+
             TTY_MoveCursor(TTY_CURSOR_DOWN, 1);
         break;
         case 0x0D:  // Carriage return
@@ -303,17 +307,16 @@ inline void TELNET_ParseRX(u8 byte)
 
             TTY_MoveCursor(TTY_CURSOR_DUMMY);   // Dummy
         break;
+        case 0x0E:  // Shift Out
+            CharMapSelection = 1;
+        break;
+        case 0x0F:  // Shift In
+            CharMapSelection = 0;
+        break;
         case 0x00:  // Null
-        case 0x01:  // Start of heading
-        case 0x02:  // Start of text
-        case 0x03:  // End of text
-        case 0x04:  // End of transmission
+        break;
         case 0x05:  // Enquiry
-        case 0x06:  // Acknowledge
-        case 0x15:  // NAK (negative acknowledge)
-            #ifdef TRM_LOGGING
-            kprintf("Unimplemented VT100 mode single-character function: $%X", byte);
-            #endif
+            NET_SendString("");
         break;
         case 0x07:  // Bell
             PSG_setEnvelope(0, PSG_ENVELOPE_MAX);
@@ -331,6 +334,16 @@ inline void TELNET_ParseRX(u8 byte)
             PSG_setEnvelope(0, PSG_ENVELOPE_MAX);
             waitMs(100);
             PSG_setEnvelope(0, PSG_ENVELOPE_MIN);
+        break;
+        case 0x01:  // Start of heading
+        case 0x02:  // Start of text
+        case 0x03:  // End of text
+        case 0x04:  // End of transmission
+        case 0x06:  // Acknowledge
+        case 0x15:  // NAK (negative acknowledge)
+            #ifdef TRM_LOGGING
+            kprintf("Unimplemented VT100 mode single-character function: $%X at $%lX", byte, StreamPos);
+            #endif
         break;
     }
 }
@@ -388,55 +401,12 @@ static inline void DoEscape(u8 byte)
                     }
                 }
 
-                case 'h':   // Screen modes
-                {
-                    switch (atoi(ESC_Buffer))
-                    {
-                        case 7:     // Enables line wrapping
-                        case 137:   // 7 prefixed with =
-                            sv_bWrapAround = TRUE;
-                        break;
-
-                        case 0x19:
-                        case 0xF5: // Make cursor visible   ($F5 is actually ESC[?25h )
-                            SetSprite_TILE(SPRITE_ID_CURSOR, LastCursor);
-                        break;
-
-                        default:
-                            //kprintf("Unimplemented screen mode '%u' ($%X)", atoi(ESC_Buffer), atoi(ESC_Buffer));
-                        break;
-                    }
-
-                    goto EndEscape;
-                }
-
-                case 'l':   // Reset screen mode
-                {
-                    switch (atoi(ESC_Buffer))
-                    {
-                        case 7:     // Disables line wrapping
-                        case 137:   // 7 prefixed with =
-                            sv_bWrapAround = FALSE;    // Was TRUE, copy paste error?
-                        break;
-
-                        case 0x19:
-                        case 0xF5: // Make cursor invisible   ($F5 is actually ESC[?25l )
-                            SetSprite_TILE(SPRITE_ID_CURSOR, 0x16);
-                        break;
-
-                        default:
-                            //kprintf("Unimplemented reset screen mode '%u'", atoi(ESC_Buffer));
-                        break;
-                    }
-
-                    goto EndEscape;
-                }
-
                 case 'A':
                 {
                     u8 n = atoi(ESC_Buffer);
                     n = (n ? n : 1);
                     TTY_SetSY_A(TTY_GetSY_A() - n);
+                    TTY_MoveCursor(TTY_CURSOR_DUMMY);
                     goto EndEscape;
                 }
 
@@ -444,7 +414,8 @@ static inline void DoEscape(u8 byte)
                 {
                     u8 n = atoi(ESC_Buffer);
                     n = (n ? n : 1);
-                    TTY_SetSY_A(TTY_GetSY_A() + n);            
+                    TTY_SetSY_A(TTY_GetSY_A() + n);   
+                    TTY_MoveCursor(TTY_CURSOR_DUMMY);         
                     goto EndEscape;
                 }
 
@@ -463,6 +434,7 @@ static inline void DoEscape(u8 byte)
                     }
                     
                     TTY_SetSX(TTY_GetSX() + n);
+                    TTY_MoveCursor(TTY_CURSOR_DUMMY);
                     goto EndEscape;
                 }
 
@@ -489,6 +461,7 @@ static inline void DoEscape(u8 byte)
                     }
 
                     TTY_SetSX(TTY_GetSX() - n);
+                    TTY_MoveCursor(TTY_CURSOR_DUMMY);
                     goto EndEscape;
                 }
 
@@ -537,11 +510,17 @@ static inline void DoEscape(u8 byte)
                     switch (n)
                     {
                         case 7:     // Refresh/Redraw Terminal Window ( Needs testing! CMD = "ESC [ 7 t" )
+                            #ifdef ESC_LOGGING
+                                kprintf("Refresh/Redraw Terminal Window NOT IMPLEMENTED! n = %u", n);
+                            #endif
                         break;
 
                         case 8:     // Set Terminal Window Size ( Needs testing! CMD = "ESC [ 8 ; Ⓝ ; Ⓝ t"  Ⓝ = H/W in rows/columns )
                             //C_YMAX = H;
                             //C_XMAX = W;
+                            #ifdef ESC_LOGGING
+                                kprintf("Set Terminal Window Size NOT IMPLEMENTED! n = %u", n);
+                            #endif
                         break;
 
                         case 11:    // Report Terminal Window State (1 = non minimized - 2 = minimized)
@@ -585,12 +564,21 @@ static inline void DoEscape(u8 byte)
                         break;
 
                         case 22:    // Push Terminal Title ( Needs testing! CMD = "ESC [ 22 ; Ⓝ t" Ⓝ = 0/1/2)
+                            #ifdef ESC_LOGGING
+                                kprintf("Push Terminal Title NOT IMPLEMENTED! n = %u", n);
+                            #endif
                         break;
 
                         case 23:    // Pop Terminal Title ( Needs testing! CMD = "ESC [ 23 ; Ⓝ t" Ⓝ = 0/1/2)
+                            #ifdef ESC_LOGGING
+                                kprintf("Pop Terminal Title NOT IMPLEMENTED! n = %u", n);
+                            #endif
                         break;
 
                         default:
+                            #ifdef ESC_LOGGING
+                                kprintf("Unknown Window operation [DISPATCH]; n = %u", n);
+                            #endif
                         break;
                     }
                     
@@ -722,6 +710,8 @@ static inline void DoEscape(u8 byte)
 
                     TTY_SetSY_A(n-1);
 
+                    TTY_MoveCursor(TTY_CURSOR_DUMMY);
+
                     goto EndEscape;
                 }
 
@@ -730,6 +720,24 @@ static inline void DoEscape(u8 byte)
                     u8 n = atoi(ESC_Buffer);
 
                     TTY_SetSY_A((TTY_GetSY_A() + n) -1);
+
+                    TTY_MoveCursor(TTY_CURSOR_DUMMY);
+
+                    goto EndEscape;
+                }
+
+                case 'l':   // Insert Line (IL)
+                {
+                    u8 n = atoi(ESC_Buffer);
+
+                    // This is not correct, but I have no good way to scroll previously printed lines other than reading back from VRAM -.-
+                    // Before clearing the lines in question, they should be scrolled down n rows first!
+
+                    TTY_ClearLine(sy % 32, n-1);
+
+                    #ifdef ESC_LOGGING
+                    kprintf("Moving/Erasing lines; %ld to %ld", (sy % 32), ((sy % 32)+n)-1);
+                    #endif
 
                     goto EndEscape;
                 }
@@ -744,6 +752,9 @@ static inline void DoEscape(u8 byte)
                         else if ((ESC_Param[2] >= 8) && (ESC_Param[2] <= 15)) TTY_SetAttribute(ESC_Param[2]+90);    //   8- 15:  high intensity colors (as in ESC [ 90–97 m)
                                                                                                                     //  16-231:  6 × 6 × 6 cube (216 colors): 16 + 36 × r + 6 × g + b (0 ≤ r, g, b ≤ 5)
                                                                                                                     // 232-255:  grayscale from dark to light in 24 steps
+                        #ifdef ESC_LOGGING
+                        else kprintf("Attempted to set attribute colour > 15");
+                        #endif
                     }
                     else if ((ESC_Param[0] == 48) && (ESC_Param[1] == 5))
                     {
@@ -751,6 +762,9 @@ static inline void DoEscape(u8 byte)
                         else if ((ESC_Param[2] >= 8) && (ESC_Param[2] <= 15)) TTY_SetAttribute(ESC_Param[2]+100);   //   8- 15:  high intensity colors (as in ESC [ 100–107 m)
                                                                                                                     //  16-231:  6 × 6 × 6 cube (216 colors): 16 + 36 × r + 6 × g + b (0 ≤ r, g, b ≤ 5)
                                                                                                                     // 232-255:  grayscale from dark to light in 24 steps
+                        #ifdef ESC_LOGGING
+                        else kprintf("Attempted to set attribute colour > 15");
+                        #endif
                     }
                     else
                     {
@@ -788,6 +802,9 @@ static inline void DoEscape(u8 byte)
                         break;
 
                         default:
+                            #ifdef ESC_LOGGING
+                            kprintf("Device Status Report [Dispatch] (DSR) - Unknown command $%X", n);
+                            #endif
                         break;
                     }
 
@@ -806,6 +823,9 @@ static inline void DoEscape(u8 byte)
                         break;
 
                         default:
+                            #ifdef ESC_LOGGING
+                            kprintf("Soft Reset (DECSTR) - Unknown command $%X", n);
+                            #endif
                         break;
                     }
 
@@ -876,11 +896,31 @@ static inline void DoEscape(u8 byte)
 
                 case '_':
                 {
+                    #ifdef ESC_LOGGING
+                    kprintf("Unknown escape: \"_\" at $%lX", StreamPos);
+                    #endif
                     goto EndEscape;
                 }
 
                 case ' ':
                 {
+                    #ifdef ESC_LOGGING
+                    kprintf("Unknown escape: \" \" at $%lX", StreamPos);
+                    #endif
+                    return;
+                }
+
+                case '!':
+                {
+                    #ifdef ESC_LOGGING
+                    kprintf("Unknown escape: \"!\" at $%lX", StreamPos);
+                    #endif
+                    return;
+                }
+
+                case '?':
+                {
+                    ESC_Type = '?';
                     return;
                 }
 
@@ -933,6 +973,9 @@ static inline void DoEscape(u8 byte)
                 break;
             
                 default:
+                    #ifdef ESC_LOGGING
+                    kprintf("Unknown OSC: $%X", atoi(ESC_OSCBuffer));
+                    #endif
                 break;
             }
 
@@ -959,15 +1002,16 @@ static inline void DoEscape(u8 byte)
             return;
         }
 
-        case '(':
+        case '(':   // G0 charset
+        case ')':   // G1 charset
         {
             switch (byte)
             {
                 case '0':   // DEC Special Character and Line Drawing Set
                 {
                     CharMapSelection = 1;
-                    #ifdef ESC_LOGGING
-                    kprintf("ESC(0: DEC Special Character and Line Drawing Set");
+                    #if ESC_LOGGING == 2
+                    kprintf("ESC%c0: DEC Special Character and Line Drawing Set", ESC_Type);
                     #endif
                     break;
                 }
@@ -975,8 +1019,8 @@ static inline void DoEscape(u8 byte)
                 case 'B':
                 {
                     CharMapSelection = 0;
-                    #ifdef ESC_LOGGING
-                    kprintf("ESC(B: United States (USASCII), VT100");
+                    #if ESC_LOGGING == 2
+                    kprintf("ESC%cB: United States (USASCII), VT100", ESC_Type);
                     #endif
                     break;
                 }
@@ -984,7 +1028,7 @@ static inline void DoEscape(u8 byte)
                 default:
                 {
                     #ifdef ESC_LOGGING
-                    kprintf("Unknown ESC( sequence - $%X ( %c )", byte, (char)byte);
+                    kprintf("Unknown ESC%c sequence - $%X ( %c )", ESC_Type, byte, (char)byte);
                     #endif
                 }
             }
@@ -992,12 +1036,8 @@ static inline void DoEscape(u8 byte)
             goto EndEscape;
         }
 
-        
         case '?':
         {
-            ESC_QBuffer[ESC_QSeq-1] = byte;
-            //kprintf("ESC_Q: $%X - '%c'", ESC_QBuffer[ESC_QSeq-1], (char)ESC_QBuffer[ESC_QSeq-1]);
-
             if (byte == 'h')
             {
                 QSeqNumber = atoi16((char*)ESC_QBuffer);
@@ -1005,6 +1045,10 @@ static inline void DoEscape(u8 byte)
 
                 switch (QSeqNumber)
                 {
+                    case 1:   // Switched Cursor Key Format (DECCKM)
+                        vDECCKM = TRUE;
+                    break;
+
                     case 6:   // Origin Mode (DECOM), VT100.
                         vDECOM = TRUE;
                     break;
@@ -1027,14 +1071,16 @@ static inline void DoEscape(u8 byte)
                     // 1000h = Send Mouse X & Y on button press and release.  See the section Mouse Tracking.  This is the X11 xterm mouse protocol.
                     // 1006h = Enable SGR Mouse Mode, xterm.
 
-                    // Missing QEsq:
+                    // Missing QEsc:
                     // ?2004h
                     // ?1049h
                     // ?1h
                     // ?25h
 
                     default:
-                    //kprintf("Got an unknown ?%uh", QSeqNumber);//?%ch", (char)ESC_QBuffer[0]);
+                    #ifdef ESC_LOGGING
+                    kprintf("Unimplemented mode ?%uh at $%lX", QSeqNumber, StreamPos);
+                    #endif
                     break;
                 }
 
@@ -1048,6 +1094,10 @@ static inline void DoEscape(u8 byte)
 
                 switch (QSeqNumber)
                 {
+                    case 1:   // Normal Cursor Key Format (DECCKM)
+                        vDECCKM = FALSE;
+                    break;
+
                     case 6:   // Normal Cursor Mode (DECOM), VT100.
                         vDECOM = FALSE;
                     break;
@@ -1057,7 +1107,7 @@ static inline void DoEscape(u8 byte)
                     break;
                 
                     case 25:   // Hides the cursor. (DECTCEM)
-                        SetSprite_TILE(SPRITE_ID_CURSOR, 0x2016);
+                        SetSprite_TILE(SPRITE_ID_CURSOR, 0x16);
                     break;
 
                     case 69:   // DECSLRM cannot set margins.
@@ -1069,13 +1119,17 @@ static inline void DoEscape(u8 byte)
 
 
                     default:
-                    //kprintf("Got an unknown ?%cl", (char)ESC_QBuffer[0]);
-                    //kprintf("Got an unknown ?%ul", QSeqNumber);//?%ch", (char)ESC_QBuffer[0]);
+                    #ifdef ESC_LOGGING
+                    kprintf("Unimplemented mode ?%ul", QSeqNumber);
+                    #endif
                     break;
                 }
 
                 goto EndEscape;
             }
+            
+            ESC_QBuffer[ESC_QSeq] = byte;
+            //kprintf("ESC_Q: $%X - '%c'", ESC_QBuffer[ESC_QSeq-1], (char)ESC_QBuffer[ESC_QSeq-1]);
 
             if (ESC_QSeq > 5) 
             {
@@ -1087,7 +1141,7 @@ static inline void DoEscape(u8 byte)
 
             return;
         }
-
+        
         default:
             if (ESC_Seq == 1)
             {
@@ -1127,7 +1181,7 @@ static inline void DoEscape(u8 byte)
                         goto EndEscape;
                     }
                 
-                    default:
+                    default:    // By default skip this round and parse it later
                     break;
                 }
 
@@ -1155,7 +1209,12 @@ static inline void DoEscape(u8 byte)
         /*ESC_Buffer[2] = '\0';
         ESC_Buffer[3] = '\0';*/
         ESC_BufferSeq = 0;
+
         ESC_QSeq = 0;
+        ESC_QBuffer[0] = '\0';
+        ESC_QBuffer[1] = '\0';
+        ESC_QBuffer[2] = '\0';
+
         ESC_OSCSeq = 0;
         return;
     }

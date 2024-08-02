@@ -1,6 +1,7 @@
 #include "Keyboard_Saturn.h"
 #include "Keyboard.h"
 #include "Utils.h"      // TRM_
+#include "system/Stdout.h"
 
 #define TIMEOUT 128
 SM_Device DRV_KBSATURN;
@@ -19,6 +20,7 @@ bool KB_Saturn_Init()
     if (DEV_GetData(DRV_KBSATURN, 0xF) != 1)
     {
         kprintf("Unknown Saturn peripheral found (r = $%X)", DEV_GetData(DRV_KBSATURN, 0xF));
+        stdout_printf("Unknown Saturn peripheral found (r = $%X)\n", DEV_GetData(DRV_KBSATURN, 0xF));
 
         return 0;
     }
@@ -28,7 +30,7 @@ bool KB_Saturn_Init()
 
         KB_SetKeyboard(&KB_Saturn_Poll);
 
-        TRM_DrawText("Saturn KB found.", 1, BootNextLine++, PAL1);
+        Stdout_Push("Saturn KB initialized.\n");
     }
 
     return 1;

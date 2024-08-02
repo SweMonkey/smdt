@@ -1,3 +1,25 @@
+v0.30.3:
+Terminal: 16 colour support for the 4x8 font. Achieved by sacrificing the inverted character set (only when using 16 colour 4x8!).
+Terminal: Added the "tty" command; it initializes the SMDTC TTY to a sane enviroment for a linux tty, although still somewhat iffy and some functionality is still missing.
+Terminal: Added support for DECCKM (Cursor Key Format). "Cursor", "Numpad cursor", "Home" and "End" keys should now switch reporting mode correctly.
+Terminal: Control characters can now be entered by pressing CTRL + <key>, for example: CTRL+C will send ^C.
+Terminal: History queue can now store 2 commands.
+UI: Added preliminary ColourPicker, Tab and ConfirmBox widget, these will be finalized later on. These widgets can be tested in the UI tester; Quick menu -> Debug -> UI Tester.
+Misc: Boot prompt now uses the terminal instead of the drawing on its own to the window plane. This allows for much better printing, colour and scrolling support if needed.
+
+Fixes:
+Terminal: Mode set/reset in parser got broken in an earlier commit. Escape sequences such as "ESC[?Ⓝh" should now work again, applications such as nano now renders properly again.
+Terminal: Added a few skeleton escape codes, ie doing the bare minimum to handle them for now so they don't mess with previous/following escape codes.
+DevMgr: Joypad was set to a weird state after the PS/2 keyboard detected scan iterated through all ports, which caused a few buttons to not work on joypads.
+Drivers: The PS/2 keyboard detection scan will now only scan ports with an unknown ID, this is to avoid disturbing devices which for certain is not a PS/2 keyboard.
+Drivers: Hopefully fixed the XPN driver for the last time; Pinging does not get stuck in monitor mode any more.
+Misc cursor fixes; due to earlier optimizations the cursor Y position did not always get updated.
+Misc fixes in 4x8 font tilesets; 1 stray pixel in one character and 1 missing pixel in another character. The characters in question are used for line drawing.
+
+Known bugs:
+IRC: Nick list is missing 1 nick, see command 353 in IRC.c
+IRC: Erroneous string comparison in command 353, in IRC.c
+
 v0.30.2:
 Telnet/Terminal: Erroneously cleared the entire next row of text every time a newline+carridge return was encountered, this should only be done when also scrolling down to a new line.
 IRC: The typing input box at the bottom now uses DMA VRAM copy. Previously a new single tile was uploaded to VRAM for every character you typed.
@@ -9,7 +31,7 @@ Misc: Slimmed UTF8 tables down from 256 bytes to 64 bytes for every table. Now o
 Misc: Added doxygen comments to the PS/2 keyboard functions.
 Misc: Date function added to terminal. Used to sync to a time server and to print the current date.
 FixMe: IRC: Nick list is missing 1 nick, see command 353 in IRC.c .
-FixMe: IRC: Erroneous string comparision in command 353, in IRC.c .
+FixMe: IRC: Erroneous string comparison in command 353, in IRC.c .
 
 v0.30.1:
 SMDTC: FAT12/16/32 support, file operations and other misc functions added for testing purposes. Disabled by default.

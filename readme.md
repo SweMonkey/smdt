@@ -1,6 +1,6 @@
 
 # SMD Terminal emulator, Telnet and IRC client v0.30+
-A terminal emulator, telnet and IRC client for the Sega Mega Drive/Genesis with support for PS/2 keyboards and RS-232 communication.<br>
+A terminal emulator, telnet and IRC client for the Sega Mega Drive/Genesis with support for keyboards and RS-232 communication.<br>
 ![Screenshot of the telnet client](https://deceptsoft.com/smdtc_extra_git/v30/telnet_small.png)
 ![Screenshot of the IRC client](https://deceptsoft.com/smdtc_extra_git/v30/irc_small.png)
 ![Screenshot of the terminal emulator showing nano](https://deceptsoft.com/smdtc_extra_git/v30/blastem_20240401_104314.png)
@@ -8,13 +8,23 @@ A terminal emulator, telnet and IRC client for the Sega Mega Drive/Genesis with 
 ![Screenshot of the telnet client in 80 column + 8 colour mode](https://deceptsoft.com/smdtc_extra_git/v30/blastem_20240401_203819.png)
 ![Screenshot of the terminal emulator](https://deceptsoft.com/smdtc_extra_git/v30/blastem_20240505_222454.png)
 
-Extra hardware:<br>
-A PS/2 keyboard or a Sega Saturn keyboard (not required but preferred).<br>
-A "voltage translator" to translate between the MD +5v and remote RS232 device logic levels,<br>
-I personally recommend the max3232 (https://www.ti.com/lit/ds/symlink/max3232.pdf)<br>
-<br>
-xPico/RetroLink support as an alternative to the above is being worked on.<br>
-<br>
+##### Table of Contents
+* [Disclaimer](#disclaimer)
+* [Thanks](#thanks-to)
+* [Building from source](#building-smdtc-from-source)
+* [Running SMDTC](#running-smdtc)
+* [Required hardware](#required-hardware)
+* [Devices](#devices)
+  * [Autodetected devices](#list-of-autodetected-devices)
+  * [How to wire up a PS/2 keyboard](#how-to-wire-up-a-ps2-keyboard)
+  * [Pin configuration of the MD controller ports](#pin-configuration-of-the-md-controller-ports)
+  * [PS/2 pin reference](#ps2-pin-reference)
+  * [MD UART pin reference](#md-uart-pin-reference)
+* [Shortcuts](#shortcuts)
+  * [Quick menu](#quick-menu)
+  * [IRC client](#irc-client)
+  * [Telnet client](#telnet-client)
+  * [Terminal emulator](#terminal-emulator)
 
 ## Disclaimer
 > [!WARNING]
@@ -28,6 +38,7 @@ xPico/RetroLink support as an alternative to the above is being worked on.<br>
 b1tsh1ft3r - Testing, improvement ideas and RetroLink/xPico support<br>
 RKT - For creating a 4x8 extended ASCII font tileset<br>
 Stef - For creating [SGDK](https://github.com/Stephane-D/SGDK)<br>
+Sik - For creating the website [Plutiedev](https://plutiedev.com/) with valuable information regarding the MD<br>
 <br>
 
 ## Building SMDTC from source
@@ -35,6 +46,23 @@ Stef - For creating [SGDK](https://github.com/Stephane-D/SGDK)<br>
  To build SMDTC from source you will need SGDK version 1.80 (newer versions untested but will probably work as SMDTC mostly only uses macros and basic functions from SGDK)<br>
 The SGDK library must be rebuilt with the flags `HALT_Z80_ON_IO` and `HALT_Z80_ON_DMA` set to 0 in config.h to make sure the z80 CPU is never getting its bus back.<br>
 <br>
+
+## Running SMDTC
+SMDTC is made to run on the original Mega Drive / Genesis hardware;<br>
+Easiest way to run SMDTC on your system is by transferring the binary file `smdt_vX.YY.Z.bin` to a flashcart.<br>
+<br>
+You can also run SMDTC in a Mega Drive / Genesis emulator and easily check it out; Do mind that most emulators do not provide any way to actually connect any external serial devices, so no network support is possible while running in an emulator.<br><br>
+I highly recommend the emulator [BlastEm](https://www.retrodev.com/blastem/nightlies/) since it supports the Sega Saturn keyboard.<br>
+Other emulators may have issues running SMDTC and it is unlikely they will have any keyboard support.
+<br>
+
+## Required hardware
+1. A PS/2 keyboard or a Sega Saturn keyboard (not strictly required but preferred).
+2. A **5 volt** RS-232 serial connection or an xPico/xPort module.
+3. A Mega Drive or Genesis and a way to run roms on it.
+<br>
+
+RetroLink network cartridge as an alternative network adapter is being worked on.<br>
 
 ## Devices
 SMDTC has a device manager which can autodetect if a device is present and where it is plugged in.<br>
@@ -48,18 +76,18 @@ A fallback joypad device will be activated if SMDTC fails to find a keyboard or 
 All detected devices can be viewed in the "Connected devices" list (Quick menu -> Mega Drive settings -> Connected devices)<br>
 <br>
 > [!NOTE]
-> SMDTC is limited when it comes to detecting the presence of a serial connection on the built in UART (Only an xPico module can be autodetected)<br>
-> By default SMDTC will listen for incoming connections on PORT 2 UART.<br>
+> SMDTC is limited when it comes to detecting the presence of a serial connection on the built in UART.<br>
+> By default SMDTC will listen for incoming connections and attempt to find serial devices on PORT 2 UART.<br>
 > This setting can be changed in the "Select serial port" menu (Quick menu -> Mega Drive settings -> Select serial port)<br>
 > Do not forget to save your changes! (Quick menu -> Reset -> Save config to sram)<br>
 <br>
 
-### List of autodetected devices that require no configuration
+### List of autodetected devices
 PS/2 Keyboard.<br>
 Sega Saturn keyboard.<br>
 Sega 3/6 button joypad.<br>
-xPico module connected to built in UART (Currently being worked on, support may be iffy)<br>
-RetroLink network adapter cartridge  (Currently being worked on, support may be iffy)<br>
+xPico module connected to built in UART (May require you to set the correct serial port as described above)<br>
+RetroLink network adapter cartridge (Currently being worked on, support may be iffy)<br>
 <br>
 
 ### How to wire up a PS/2 keyboard
@@ -80,7 +108,7 @@ MD port pin 8 = PS/2 GND pin 3<br>
 See the pin configuration lists below for pinouts of the MD controller ports and PS/2 keyboard.<br>
 <br>
 
-### Pin configuration of the MD controller ports: 
+### Pin configuration of the MD controller ports
 MD port pin 1 = PS/2 device 1 clock  (CLK1)<br>
 MD port pin 2 = PS/2 device 1 data   (DATA1)<br>
 MD port pin 3 = PS/2 device 2 clock  (CLK2)<br>
@@ -91,19 +119,19 @@ MD port pin 7 = Reserved             (CP3)<br>
 MD port pin 8 = GND<br>
 MD port pin 9 = Serial RX<br>
 
-### PS/2 pin reference:
+### PS/2 pin reference
 PS/2 pin 1 = Data<br>
 PS/2 pin 3 = GND<br>
 PS/2 pin 4 = VCC<br>
 PS/2 pin 5 = Clock<br>
 
-### MD UART pin reference:
+### MD UART pin reference
 MD port pin 5 = VCC<br>
 MD port pin 6 = TX<br>
 MD port pin 8 = GND<br>
 MD port pin 9 = RX<br>
 
-### Connected device list:
+### Connected device list
 P1:0 = Port 1 @ pin 1+2<br>
 P1:1 = Port 1 @ pin 3+4<br>
 P1:S = Port 1 UART<br>
@@ -117,14 +145,16 @@ P3:1 = Port 3 @ pin 3+4<br>
 P3:S = Port 3 UART<br>
 P3:D = Port 3 Parallel+UART Mode<br>
 
-## Quick menu shortcuts
+## Shortcuts
+
+### Quick menu
 Right windows key OR F8 = Open the Quick menu<br>
 Enter = Enter submenu and activate a choice<br>
 Escape = Back out of current menu<br>
 Up cursor = Move selector up<br>
 Down cursor = Move selector down<br>
 
-## IRC client shortcuts
+### IRC client
 F1  = Channel 1 tab<br>
 F2  = Channel 2 tab<br>
 F3  = Channel 3 tab<br>
@@ -137,13 +167,12 @@ Tab = Toggle channel user list<br>
 Numpad 4 = Scroll left<br>
 Numpad 6 = Scroll right<br>
 
-## Telnet client shortcuts
-F11 = Send ^C to remote server<br>
-F12 = Send ^X to remote server<br>
-Numpad 1 = Scroll left<br>
-Numpad 3 = Scroll right<br>
+### Telnet client
+F1  = Scroll left<br>
+F2  = Scroll right<br>
 
-## Terminal emulator
+### Terminal emulator
 Type `help` for a list of all available built in commands.<br>
-Up arrow   = Retype last entered string<br>
-Down arrow = Clear current typed string<br>
+<br>History queue:<br>
+Up arrow   = Go back in history of entered command strings.<br>
+Down arrow = Go forward in history or clear command string if at the last entered command string.<br>

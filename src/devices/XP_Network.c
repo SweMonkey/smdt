@@ -253,8 +253,9 @@ void XPN_PingIP(char *ip)
         }
     }
 
-    waitMs(sv_DelayTime);
     XPN_FlushBuffers();
+    XPN_SendMessage("QU\n");    // Pre-emptive manual exit monitor mode to halt pinging
+    waitMs(sv_DelayTime);
     XPN_ExitMonitorMode();
 
     return;

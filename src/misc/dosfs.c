@@ -9,6 +9,7 @@
 */
 
 #include "dosfs.h"
+#ifdef KERNEL_BUILD
 
 /*
 	Get starting sector# of specified partition on drive #unit
@@ -1362,3 +1363,5 @@ u32 DFS_WriteFile(PFILEINFO fileinfo, u8 *scratch, u8 *buffer, u32 *successcount
 
 	return result;
 }
+
+#endif // KERNEL_BUILD

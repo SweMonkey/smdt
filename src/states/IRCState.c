@@ -258,10 +258,13 @@ void ChangePage(u8 num)
 
 u8 ParseTx()
 {
-    u8 inbuf[256] = {0};
-    u8 outbuf[300] = {0};
+    u8 inbuf[256];
+    u8 outbuf[300];
     u16 i = 0, j = 0;
     u8 data;
+
+    memset(inbuf, 0, 256);
+    memset(outbuf, 0, 300);
 
     // Pop the TxBuffer back into inbuf
     while ((Buffer_Pop(&TxBuffer, &data) != 0xFF) && (i < 256))
@@ -554,6 +557,7 @@ void Input_IRC()
             u16 i = 0;
 
             UserListScroll = 0;
+            memset(req, 0, 40);
 
             TRM_ClearArea(26, 1, 14, 25, PAL1, TRM_CLEAR_BG); // Clear area where the user list window will be drawn
 

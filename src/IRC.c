@@ -69,7 +69,7 @@ u8 PG_OpenPages = 1;                                 // Number of pages/channels
 TMBuffer *PG_Buffer[IRC_MAX_CHANNELS] = {NULL};      // Page/Channel buffers
 char **PG_UserList = {NULL};                         // Array of username strings (nick)
 u16 PG_UserNum = 0;                                  // Number of entries in PG_UserList
-u8 bPG_UpdateUserlist = 2;                           // Flag to update the user list window
+u8 bPG_UpdateUserlist = 2;                           // Flag to update the user list window (0=Do nothing - 1=Do full redraw with a populated NAMES list - 2=Do full redraw and wait for NAMES list)
 bool bPG_HasNewMessages[IRC_MAX_CHANNELS] = {FALSE}; // Flag to show if a channel has new messages
 bool bPG_UpdateMessage = TRUE;                       // Flag to update the "HasNewMessages" text
 u16 UserIterator = 0;                                // Used to iterate through PG_UserList during a 353 command

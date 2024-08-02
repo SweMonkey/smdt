@@ -2,7 +2,7 @@
 #include "Terminal.h"
 #include "Utils.h"
 
-TMBuffer *TMB_Ptr = NULL;   // Work buffer
+static TMBuffer *TMB_Ptr = NULL;   // Work buffer
 
 #define TMBATTR_BGA (sv_Font?(0x4100 + AVR_FONT0):(0x2100 + AVR_FONT0))
 #define TMBATTR_BGB (sv_Font?(0x4100 + AVR_FONT0):(0x4000            ))

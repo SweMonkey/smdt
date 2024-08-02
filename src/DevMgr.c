@@ -10,6 +10,7 @@
 #include "QMenu.h"                  // ChangeText() when KB is detected
 #include "Utils.h"                  // Definitions
 #include "Input.h"                  // Input_JP
+#include "system/Stdout.h"
 
 /*
 ID	        Peripheral
@@ -132,7 +133,13 @@ void DetectDevices()
     DevId2 = GetDeviceID(DP_Port3);
 
     // -- PS/2 Keyboard setup --------------------------
-    if (KB_PS2_Init())
+    bool ps2_r = FALSE;
+    
+    if ( DevId0 == DEVICE_UNKNOWN)            {ps2_r = KB_PS2_Init(DP_Port1);}
+    if ((DevId1 == DEVICE_UNKNOWN) && !ps2_r) {ps2_r = KB_PS2_Init(DP_Port2);}
+    if ((DevId2 == DEVICE_UNKNOWN) && !ps2_r) {ps2_r = KB_PS2_Init(DP_Port3);}
+
+    if (ps2_r)
     {
         DevList[DevSeq++] = &DRV_KBPS2;
         TRM_SetStatusIcon(ICO_KB_OK, ICO_POS_0);
@@ -156,12 +163,12 @@ void DetectDevices()
 
     if (bNoKeyboard)
     {
-        TRM_DrawText("No keyboard found.", 1, BootNextLine++, PAL1);
+        Stdout_Push("No keyboard found.\n");
         kprintf("No KB found - Press F1 to continue");
     }
 
     // -- Joypad setup ---------------------------------
-    if (bNoKeyboard && ((DRV_KBPS2.PAssign != DP_Port1) && (DRV_KBSATURN.PAssign != DP_Port1))) // Only enable joypad if there is no keyboard detected, or if port 1 is free
+    if (bNoKeyboard || ((DRV_KBPS2.PAssign != DP_Port1) && (DRV_KBSATURN.PAssign != DP_Port1))) // Only enable joypad if there is no keyboard detected, or if port 1 is free
     {
         DRV_Joypad.Id.sName = "Joypad";
         DRV_Joypad.Id.Bitmask = 0x40;
@@ -175,7 +182,7 @@ void DetectDevices()
         DEV_SetCtrl(DRV_Joypad, 0x40);
         DEV_SetData(DRV_Joypad, 0x40);
 
-        JOY_setSupport(PORT_1, JOY_SUPPORT_6BTN);
+        JOY_setSupport(PORT_1, JOY_SUPPORT_3BTN);
         JOY_setEventHandler(Input_JP);
 
         if (bNoKeyboard && (vKB_BATStatus == 0))
@@ -193,12 +200,11 @@ void DetectDevices()
     DevList[DevSeq++] = &DRV_UART;
     SetDevicePort(&DRV_UART, sv_ListenPort);
     *((vu8*) DRV_UART.SCtrl) = 0x38;
-
-    DEV_SetCtrl(DRV_UART, 0x40);
-    DEV_ClrData(DRV_UART);
     
     #ifndef EMU_BUILD
     u8 xpn_r = 0;
+
+    Stdout_Push("Checking for network adapters...\n");
 
     if (RLN_Initialize())   // Check if RetroLink network adapter is present
     {
@@ -211,14 +217,14 @@ void DetectDevices()
         NET_SetGetIPFunc(RLN_GetIP);
         NET_SetPingFunc(RLN_PingIP);
         
-        TRM_DrawText("RLN: RetroLink found", 1, BootNextLine++, PAL1);
+        Stdout_Push("RLN: RetroLink found\n");
     }
     else if ((xpn_r = XPN_Initialize())) // Check if xPico device is present
     {
         DRV_UART.Id.sName = "xPico UART";
 
-        //DEV_SetCtrl(DRV_UART, 0x40);
-        //DEV_ClrData(DRV_UART);
+        DEV_SetCtrl(DRV_UART, 0x40);
+        DEV_ClrData(DRV_UART);
 
         bXPNetwork = TRUE;
 
@@ -230,10 +236,10 @@ void DetectDevices()
         switch (xpn_r)
         {
             case 1:
-                TRM_DrawText("XPN: xPico module OK", 1, BootNextLine++, PAL1);
+                Stdout_Push("XPN: xPico module OK\n");
             break;
             case 2:
-                TRM_DrawText("XPN: Error", 1, BootNextLine++, PAL1);
+                Stdout_Push("XPN: Error\n");
             break;
         
             default:
@@ -246,8 +252,8 @@ void DetectDevices()
         bRLNetwork = FALSE;
         bXPNetwork = FALSE;
 
-        TRM_DrawText("No network adapters found", 1, BootNextLine++, PAL1);
-        TRM_DrawText("Listening on built in UART", 1, BootNextLine++, PAL1);
+        Stdout_Push("No network adapters found\n");
+        Stdout_Push("Listening on built in UART\n");
     }
 }
 

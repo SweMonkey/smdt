@@ -75,13 +75,42 @@ u8 Buffer_Pop(Buffer *b, u8 *data)
         return 0xFF;
 
     next = b->tail + 1;   // next is where tail will point to after this read.
-    if(next >= BUFFER_LEN)
-        next = 0;
+    if (next >= BUFFER_LEN) next = 0;
 
     *data = b->data[b->tail];  // Read data and then move
     b->tail = next;            // tail to next offset.
 
     return 0;  // return success to indicate successful pop.
+}
+
+/// @brief Push byte into buffer at specific position - Do not use! Not implemented!
+/// @param b Pointer to buffer
+/// @param pos Position where the byte should be pushed into
+/// @param data Byte data to push into buffer
+/// @return FALSE is returned if the buffer is full (data is dropped). TRUE on successful push
+bool Buffer_PushAt(Buffer *b, u16 pos, u8 data)
+{
+    //u16 next;
+
+    if (Buffer_IsFull(b)) return FALSE;
+
+    // Quick path
+    if (Buffer_IsEmpty(b))
+    {
+        b->data[pos] = data;
+        return TRUE;
+    }
+
+    if (b->tail < b->head)
+    {
+        // ...
+    }
+    else if (b->tail > b->head)
+    {
+        // ...
+    }
+
+    return TRUE;  // return success to indicate successful push.
 }
 
 /// @brief Pop the byte at the head of buffer

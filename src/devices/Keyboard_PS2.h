@@ -5,7 +5,7 @@
 
 extern SM_Device DRV_KBPS2;
 
-bool KB_PS2_Init();
+bool KB_PS2_Init(DevPort port);
 u8 KB_PS2_Poll(u8 *data);
 u8 KB_PS2_SendCommand(u8 cmd);
 

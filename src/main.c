@@ -9,17 +9,18 @@
 #include "UI.h"         // UI_ApplyTheme
 #include "Network.h"
 #include "SRAM.h"
-
-u8 BootNextLine = 0;    // Bootscreen text y position
+#include "Terminal.h"
+#include "Telnet.h"
+#include "system/Stdout.h"
 
 
 int main(bool hardReset)
 {
+    VDP_setEnable(FALSE);
     SYS_disableInts();
 
     Z80_unloadDriver();
     Z80_requestBus(TRUE);   // Make sure SGDK library is built with HALT_Z80_ON_IO and HALT_Z80_ON_DMA set to 0, to make sure the bus never gets released again
-    //Z80_getAndRequestBus(TRUE);
 
     #if (HALT_Z80_ON_IO != 0)
     kprintf("Warning: HALT_Z80_ON_IO is enabled!");
@@ -57,51 +58,44 @@ int main(bool hardReset)
     PAL_setPalette(PAL2, palette_black, DMA);
     PAL_setPalette(PAL3, palette_black, DMA);
 
-    VDP_setHilightShadow(TRUE);
-
     PSG_init();
     PSG_setEnvelope(0, PSG_ENVELOPE_MAX);
     PSG_setTone(0, 200);
     waitMs(200);
     PSG_setEnvelope(0, PSG_ENVELOPE_MIN);
     
-    PAL_setColor( 1, 0x00E);    // Icon Red
-    PAL_setColor( 2, 0xEEE);    // Window title FG
-    PAL_setColor( 3, 0x444);    // Window title BG
-    PAL_setColor( 4, 0x0E0);    // Cursor
-    PAL_setColor( 5, 0x222);    // Icon BG
-    PAL_setColor( 6, 0xEEE);    // Icon Normal
-    PAL_setColor( 7, 0x0E0);    // Icon Green (Previously in slot 3)
-    PAL_setColor(10, 0x444);    // Screensaver colour 0
-    PAL_setColor(11, 0xEEE);    // Screensaver colour 1
+    // Setup initial colour values needed for boot
     PAL_setColor(17, 0x000);    // Window text BG Normal / Terminal text BG
-    PAL_setColor(18, 0xEEE);    // Window text FG Normal
-    PAL_setColor(19, 0x000);    // Window inner BG - Changed to 0x222 after boot
     PAL_setColor(20, 0x444);    // Window title BG
     PAL_setColor(50, 0x000);    // Window text FG Inverted
     PAL_setColor(51, 0xEEE);    // Window text BG Inverted
+    PAL_setColor(54, 0x444);    // Screensaver colour 0
+    PAL_setColor(55, 0xEEE);    // Screensaver colour 1
 
     // Reset window plane to be fully transparent
-    TRM_FillPlane(WINDOW, 0);
+    TRM_ClearArea(0, 0, 40, (bPALSystem ? 30 : 28), PAL1, TRM_CLEAR_BG);
 
-    // Upload and draw boot logo (Area shared with screensaver sprite)
-    VDP_drawImageEx(BG_B, &GFX_LOGO, TILE_ATTR_FULL(PAL2, FALSE, 0, 0, 0x20), 27, (bPALSystem ? 19 : 17), TRUE, TRUE);
+    // Setup default window parameters
+    TRM_SetWinParam(FALSE, FALSE, 0, 1);
 
+    // Upload initial tilesets to VRAM
     VDP_loadTileSet(&GFX_BGBLOCKS,   AVR_BGBLOCK, DMA);
     VDP_loadTileSet(&GFX_POINTER,    AVR_POINTER, DMA);
     VDP_loadTileSet(&GFX_CURSOR,     AVR_CURSOR,  DMA);
     VDP_loadTileSet(&GFX_ICONS,      AVR_ICONS,   DMA);
     VDP_loadTileSet(&GFX_ASCII_MENU, AVR_UI,      DMA);
+    VDP_loadTileSet(&GFX_SCRSAV,     AVR_SCRSAV,  DMA);
 
-    BootNextLine = 0;
-    TRM_SetWinParam(FALSE, FALSE, 0, 1);    // Setup default window parameters
-    TRM_SetWinHeight(28);                   // Change window height for boot menu
-    TRM_DrawText("Initializing system...", 1, BootNextLine++, PAL1);
-
-    VDP_setReg(0xB, 0x8);               // Enable VDP ext interrupt (Enable: 8 - Disable: 0)
-    SYS_setInterruptMaskLevel(0);       // Enable all interrupts
-    SYS_setExtIntCallback(NET_RxIRQ);   // Set external IRQ callback
-    SYS_setVBlankCallback(VBlank);      // Set VBlank IRQ callback
+    // Initialize terminal for boot output text
+    sv_Font = FONT_8x8_16;
+    sv_HSOffset = 8;
+    TELNET_Init();
+    vNewlineConv = 1;
+    bAutoFlushStdout = TRUE;
+    
+    VDP_setEnable(TRUE);
+ 
+    Stdout_Push("Initializing system...\n");
 
     Input_Init();
 
@@ -110,43 +104,49 @@ int main(bool hardReset)
     TRM_SetStatusIcon(ICO_NET_IDLE_SEND, ICO_POS_2);
     TRM_SetStatusIcon(ICO_NONE,          ICO_POS_3);
 
-    TRM_DrawText("Loading config...", 1, BootNextLine++, PAL1);
+    Stdout_Push("Loading config...\n");
     if (SRAM_LoadData()) 
     {
-        TRM_DrawText("Failed to load config from SRAM...", 1, BootNextLine++, PAL1);
+        Stdout_Push("Failed to load config from SRAM...\n");
         SRAM_SaveData();
     }
-    else TRM_DrawText("Successfully loaded config from SRAM", 1, BootNextLine++, PAL1);
-    
-    TRM_DrawText("Configuring devices...", 1, BootNextLine++, PAL1);
+    else Stdout_Push("Successfully loaded config from SRAM\n");
+        
+    VDP_setReg(0xB, 0x8);               // Enable VDP ext interrupt (Enable: 8 - Disable: 0)
+    SYS_setInterruptMaskLevel(0);       // Enable all interrupts
+    SYS_setExtIntCallback(NET_RxIRQ);   // Set external IRQ callback
+
+    // Enable interrupts during driver init, certain devices will need ExtIRQ working for detection
+    SYS_enableInts();
+
+    Stdout_Push("Configuring devices...\n");
     DeviceManager_Init();
 
+    SYS_disableInts();
+    
     bShowHexView = FALSE;
     bShowQMenu = FALSE;
 
     #if (HALT_Z80_ON_IO != 0)
-    BootNextLine++;
-    TRM_DrawText("Warning: HALT_Z80_ON_IO is enabled", 1, BootNextLine++, PAL1);
-    TRM_DrawText("in SGDK! This may cause issues!", 1, BootNextLine++, PAL1);
+    Stdout_Push("\n[91mWarning: HALT_Z80_ON_IO is enabled\n");
+    Stdout_Push("in SGDK! This may cause issues![0m\n\n");
     #endif 
     #if (HALT_Z80_ON_DMA != 0)
-    BootNextLine++;
-    TRM_DrawText("Warning: HALT_Z80_ON_DMA is enabled", 1, BootNextLine++, PAL1);
-    TRM_DrawText("in SGDK! This may cause issues!", 1, BootNextLine++, PAL1);
+    Stdout_Push("\n[91mWarning: HALT_Z80_ON_DMA is enabled\n");
+    Stdout_Push("in SGDK! This may cause issues![0m\n\n");
     #endif
 
     #if ((HALT_Z80_ON_DMA != 0) || (HALT_Z80_ON_IO != 0))
-    BootNextLine++;
-    char cntbuf[16];
     for (u8 i = 0; i < 10; i++)
     {
-        sprintf(cntbuf, "Resuming boot in %u seconds", 9-i);
-        TRM_DrawText(cntbuf, 1, BootNextLine, PAL1);
+        stdout_printf(" Resuming boot in %u seconds\r", 9-i);
         
         waitMs(1000);
     }
-    BootNextLine++;
+    Stdout_Push("\n");
     #endif
+
+    bAutoFlushStdout = FALSE;
 
     SYS_enableInts();
 
@@ -154,20 +154,25 @@ int main(bool hardReset)
 
     // Show "boot" screen for a few more seconds
     #ifndef EMU_BUILD
-    //waitMs(2000);
-    #endif
-
     waitMs(1000);
+    #endif
+    
+    //waitMs(1000);
 
-    // Post boot cleanup
-    TRM_FillPlane(BG_B, 0);                         // Clear boot logo
-    VDP_loadTileSet(&GFX_SCRSAV, AVR_SCRSAV, DMA);  // Upload screensaver sprite to VRAM (Area shared with boot logo)
-    TRM_ResetWinParam();                            // Reset window to defaults set earlier
-    VDP_setHilightShadow(FALSE);
-    PAL_setColor(19, 0x222);                        // Window inner BG - Is set to black during boot, revert it back
-    TRM_ClearArea(0, 1, 40, (bPALSystem ? 28 : 26), PAL1, TRM_CLEAR_BG);
-
+    // Setup icon and default window colours
+    PAL_setColor( 1, 0x00E);    // Icon Red
+    PAL_setColor( 2, 0xEEE);    // Window title FG
+    PAL_setColor( 3, 0x444);    // Window title BG
+    PAL_setColor( 4, 0x0E0);    // Cursor
+    PAL_setColor( 5, 0x222);    // Icon BG
+    PAL_setColor( 6, 0xEEE);    // Icon Normal
+    PAL_setColor( 7, 0x0E0);    // Icon Green (Previously in slot 3)
+    PAL_setColor(18, 0xEEE);    // Window text FG Normal - This is set to black during boot, revert it back
+    PAL_setColor(19, 0x222);    // Window inner BG       - This is set to black during boot, revert it back
     UI_ApplyTheme();
+
+    // Set VBlank IRQ callback - Do not set it earlier in boot process!
+    SYS_setVBlankCallback(VBlank);
     
     //ChangeState(PS_Debug, 0, NULL);
     //ChangeState(PS_Telnet, 0, NULL);

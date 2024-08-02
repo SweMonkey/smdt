@@ -17,8 +17,9 @@
 // Modifiable variables
 u8 vNewlineConv = 0;     // 0 = none (\n = \n) -- 1 = \n becomes \n\r
 u8 sv_TermType = 0;      // Terminal type. See TermType table further down
-u8 vDoEcho = 0;          // 0 = Rely on remote server to echo back typed characters -- 1 = Do echo typed characters back to screen
-u8 vLineMode = 0;        // Line edit mode - 1=LMSM_EDIT
+u8 vDoEcho = 0;          // 0 = Do echo typed characters back to screen -- 1 = Rely on remote server to echo back typed characters
+u8 vLineMode = 0;        // Line edit mode - 1 = LMSM_EDIT
+u8 vBackspace = 0;       // 0 = DEL (0x7F) - 1 = ^H (0x8)
 char sv_Baud[5] = "4800";// Report this baud speed to remote servers if they ask
 
 // Font
@@ -48,19 +49,23 @@ u8 sv_bHighCL = TRUE;   // Use the upper 8 colours instead when using sv_Font=1
 static const u16 pColors[16] =
 {
     0x000, 0x00c, 0x0c0, 0x0cc, 0xc00, 0xc0c, 0xcc0, 0xccc,   // Normal
-    0x444, 0x66e, 0x6e6, 0x6ee, 0xe66, 0xe6e, 0xee6, 0xeee,   // Highlighted
+    0x444, 0x66e, 0x6e6, 0x6ee, 0xe64, 0xe6e, 0xee6, 0xeee,   // Highlighted
 };
 
-static const u16 pColorsHalf[8] =
+static const u16 pColorsHalf[16] =
 {
     0x000, 0x006, 0x060, 0x066, 0x600, 0x606, 0x660, 0x666,   // Shadowed (For AA)
+    0x222, 0x337, 0x373, 0x377, 0x732, 0x737, 0x773, 0x777,   // Shadowed (For AA)
 };
 
 // Palette and font lookup table
-static const u16 PF_Table[8] = 
+static const u16 PF_Table[16] = 
 {
     AVR_FONT1, AVR_FONT1 + 0x2000, AVR_FONT1 + 0x4000, AVR_FONT1 + 0x6000,
-    AVR_FONT0, AVR_FONT0 + 0x2000, AVR_FONT0 + 0x4000, AVR_FONT0 + 0x6000
+    AVR_FONT0, AVR_FONT0 + 0x2000, AVR_FONT0 + 0x4000, AVR_FONT0 + 0x6000,
+
+    AVR_FONT1+0x100, AVR_FONT1 + 0x2100, AVR_FONT1 + 0x4100, AVR_FONT1 + 0x6100,
+    AVR_FONT0+0x100, AVR_FONT0 + 0x2100, AVR_FONT0 + 0x4100, AVR_FONT0 + 0x6100
 };
 
 // Plane Y lookup table
@@ -150,7 +155,61 @@ void TTY_SetColumns(u8 col)
 
 void TTY_ReloadPalette()
 {
-    if (sv_Font == FONT_4x8_8)   // 4x8
+    if (sv_Font == FONT_4x8_16)   // 4x8
+    {
+        // Font glyph set 0 (Colours 0-3)
+        PAL_setColor(0x0A, pColorsHalf[0]);
+        PAL_setColor(0x0B, pColors[0]);
+
+        PAL_setColor(0x1A, pColorsHalf[1]);
+        PAL_setColor(0x1B, pColors[1]);
+
+        PAL_setColor(0x2A, pColorsHalf[2]);
+        PAL_setColor(0x2B, pColors[2]);
+
+        PAL_setColor(0x3A, pColorsHalf[3]);
+        PAL_setColor(0x3B, pColors[3]);
+
+        // Font glyph set 1 (Colours 4-7)
+        PAL_setColor(0x08, pColorsHalf[4]);
+        PAL_setColor(0x09, pColors[4]);
+
+        PAL_setColor(0x18, pColorsHalf[5]);
+        PAL_setColor(0x19, pColors[5]);
+
+        PAL_setColor(0x28, pColorsHalf[6]);
+        PAL_setColor(0x29, pColors[6]);
+
+        PAL_setColor(0x38, pColorsHalf[7]);
+        PAL_setColor(0x39, pColors[7]);
+
+        // Font glyph set 2 (Colours 12-15)
+        PAL_setColor(0x0C, pColorsHalf[8]);
+        PAL_setColor(0x0D, pColors[8]);
+
+        PAL_setColor(0x1C, pColorsHalf[9]);
+        PAL_setColor(0x1D, pColors[9]);
+
+        PAL_setColor(0x2C, pColorsHalf[10]);
+        PAL_setColor(0x2D, pColors[10]);
+
+        PAL_setColor(0x3C, pColorsHalf[11]);
+        PAL_setColor(0x3D, pColors[11]);
+
+        // Font glyph set 3 (Colours 8-11)
+        PAL_setColor(0x0E, pColorsHalf[12]);
+        PAL_setColor(0x0F, pColors[12]);
+
+        PAL_setColor(0x1E, pColorsHalf[13]);
+        PAL_setColor(0x1F, pColors[13]);
+
+        PAL_setColor(0x2E, pColorsHalf[14]);
+        PAL_setColor(0x2F, pColors[14]);
+
+        PAL_setColor(0x3E, pColorsHalf[15]);
+        PAL_setColor(0x3F, pColors[15]);
+    }
+    else if (sv_Font == FONT_4x8_8)   // 4x8
     {
         // Font glyph set 0 (Colours 0-3)
         PAL_setColor(0x0C, pColorsHalf[0]);
@@ -200,10 +259,26 @@ void TTY_SetFontSize(u8 size)
 
     TTY_ReloadPalette();
 
-    if (sv_Font == FONT_4x8_8)   // 4x8 colour AA
+    if (sv_Font == FONT_4x8_16)   // 4x8 16 colour AA
     {
-        VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA, AVR_FONT0, DMA);
-        VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA_ALT, AVR_FONT1, DMA);
+        VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA_16, AVR_FONT0, DMA);
+        VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA_14, AVR_FONT1, DMA);
+        VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA_12, AVR_FONT0, DMA);
+        VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA_10, AVR_FONT1, DMA);
+
+        VDP_setHorizontalScroll(BG_A, HScroll+4);   // -4
+        VDP_setHorizontalScroll(BG_B, HScroll  );   // -8
+
+        LastCursor = 0x13;
+        EvenOdd = 1;
+
+        if (sv_TermColumns == D_COLUMNS_80) C_XMAX = DCOL4_128;
+        else C_XMAX = DCOL4_64;
+    }
+    else if (sv_Font == FONT_4x8_8)   // 4x8 8 colour AA
+    {
+        VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA_16, AVR_FONT0, DMA);
+        VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA_14, AVR_FONT1, DMA);
 
         VDP_setHorizontalScroll(BG_A, HScroll+4);   // -4
         VDP_setHorizontalScroll(BG_B, HScroll  );   // -8
@@ -216,7 +291,7 @@ void TTY_SetFontSize(u8 size)
     }
     else if (sv_Font == FONT_4x8_1)   // 4x8 mono AA
     {
-        VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA, AVR_FONT0, DMA);
+        VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA_16, AVR_FONT0, DMA);
 
         VDP_setHorizontalScroll(BG_A, HScroll+4);   // -4
         VDP_setHorizontalScroll(BG_B, HScroll  );   // -8
@@ -264,63 +339,42 @@ inline void TTY_PrintChar(u8 c)
         case FONT_8x8_16: // 8x8
         {
             addr = ((sx & 127) << 1) + YAddr_Table[sy & 31];
+            
+            *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(AVR_PLANE_B + addr);         // Set plane B VRAM address
+            *((vu16*) VDP_DATA_PORT) = 0x4000 + ColorFG;                                // Set plane B tilemap data
 
-            *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(AVR_PLANE_A + addr);
-            *((vu16*) VDP_DATA_PORT) = AVR_FONT0 + c + (bInverse ? 0x2000 : 0x2100);
-
-            *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(AVR_PLANE_B + addr);
-            *((vu16*) VDP_DATA_PORT) = 0x4000 + ColorFG;
+            *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(AVR_PLANE_A + addr);         // Set plane A VRAM address
+            *((vu16*) VDP_DATA_PORT) = AVR_FONT0 + c + (bInverse ? 0x2000 : 0x2100);    // Set plane A tilemap data
+            
             break;
         }
-        case FONT_4x8_8: // 4x8 Colour
+        case FONT_4x8_8: // 4x8 8 Colour
         {
-            addr = (((sx >> 1) & 127) << 1) + YAddr_Table[sy & 31];
+            addr = (sx & 254) + YAddr_Table[sy & 31];
+            
+            *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR((EvenOdd ? AVR_PLANE_B : AVR_PLANE_A) + addr);   // Set plane VRAM address
+            *((vu16*) VDP_DATA_PORT) = PF_Table[ColorFG & 0x7] + c + (bInverse ? 0 : 0x100);                // Set plane tilemap data
 
-            switch (EvenOdd)
-            {
-                case 0: // Plane A
-                {
-                    *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(AVR_PLANE_A + addr);
-                    break;
-                }
-
-                case 1: // Plane B
-                {
-                    *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(AVR_PLANE_B + addr);
-                    break;
-                }
-                
-                default:
-                break;
-            }
-
-            *((vu16*) VDP_DATA_PORT) = PF_Table[ColorFG & 0x7] + c + (bInverse ? 0 : 0x100);
             EvenOdd = sx & 1;
             break;
         }
         case FONT_4x8_1: // 4x8 Mono
         {
-            addr = (((sx >> 1) & 127) << 1) + YAddr_Table[sy & 31];
+            addr = (sx & 254) + YAddr_Table[sy & 31];
+            
+            *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR((EvenOdd ? AVR_PLANE_B : AVR_PLANE_A) + addr);   // Set plane VRAM address
+            *((vu16*) VDP_DATA_PORT) = AVR_FONT0 + c + (bInverse ? 0x4000 : 0x4100);                        // Set plane tilemap data
 
-            switch (EvenOdd)
-            {
-                case 0: // Plane A
-                {
-                    *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(AVR_PLANE_A + addr);
-                    break;
-                }
+            EvenOdd = sx & 1;
+            break;
+        }
+        case FONT_4x8_16: // 4x8 16 Colour
+        {
+            addr = (sx & 254) + YAddr_Table[sy & 31];
+            
+            *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR((EvenOdd ? AVR_PLANE_B : AVR_PLANE_A) + addr);   // Set plane VRAM address
+            *((vu16*) VDP_DATA_PORT) = PF_Table[ColorFG & 0xF] + c;                                         // Set plane tilemap data
 
-                case 1: // Plane B
-                {
-                    *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(AVR_PLANE_B + addr);
-                    break;
-                }
-                
-                default:
-                break;
-            }
-
-            *((vu16*) VDP_DATA_PORT) = AVR_FONT0 + c + (bInverse ? 0x4000 : 0x4100);
             EvenOdd = sx & 1;
             break;
         }
@@ -437,7 +491,8 @@ inline void TTY_ClearPartialLine(u16 y, u16 from_x, u16 to_x)
             break;
         }
 
-        case FONT_4x8_8: // 4x8 Colour
+        case FONT_4x8_16:// 4x8 16 Colour
+        case FONT_4x8_8: // 4x8 8 Colour
         case FONT_4x8_1: // 4x8 Mono
         {
             u16 from_x_ = from_x >> 1;

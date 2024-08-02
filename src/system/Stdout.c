@@ -7,6 +7,7 @@
 #include "Keyboard.h"
 
 Buffer stdout;
+bool bAutoFlushStdout = FALSE;
 
 
 // Hacky function to pause printing when screen has been filled
@@ -55,7 +56,8 @@ void Stdout_Push(const char *str)
 {
     for (u16 c = 0; c < strlen(str); c++)
     {
-        Buffer_Push(&stdout, (u8)str[c]);
+        if (bAutoFlushStdout) TELNET_ParseRX((u8)str[c]);
+        else Buffer_Push(&stdout, (u8)str[c]);
     }
 }
 
@@ -67,11 +69,11 @@ void Stdout_PushByte(u8 byte)
 void Stdout_Flush()
 {
     u8 data = 0;
-    s32 start = TTY_GetSY();
+    //s32 start = TTY_GetSY();
 
     while (Buffer_Pop(&stdout, &data) != 0xFF)
     {
         TELNET_ParseRX(data);
-        MoreFunc(&start);
+        //MoreFunc(&start);
     }
 }

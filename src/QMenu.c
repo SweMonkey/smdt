@@ -34,6 +34,7 @@ void WINFN_CUSTOM_FGCL();
 void WINFN_SCREENSAVER();
 void WINFN_CURSOR_CL();
 void WINFN_UITHEME();
+void WINFN_Backspace();
 
 extern u8 sv_IRCFont;
 extern u8 sv_TelnetFont;
@@ -122,14 +123,15 @@ static struct s_menu
      "CRLF"}
 },
 {//6
-    3,
+    4,
     0, 255, 0,
     NULL, NULL, NULL,
     "Variables",
-    {5, 21, 22},
+    {5, 21, 22, 29},
     {"Line ending",
      "Local echo",
-     "Line mode"}
+     "Line mode",
+     "Backspace key"}
 },
 {//7
     6,
@@ -179,15 +181,16 @@ static struct s_menu
      "300 Baud"}
 },
 {//11
-    4,
+    5,
     0, 255, 0,
     NULL, WINFN_FONT_TERM, NULL,
     "Terminal font",
-    {254, 254, 254, 254},
+    {254, 254, 254, 254, 254},
     {"8x8 16 Colour",
      "8x8 16 Colour bold",
-     "4x8 8 Colour + AA",
-     "4x8 Mono + AA"}
+     "4x8 Mono",
+     "4x8  8 Colour",
+     "4x8 16 Colour NoInv"}
 },
 {//12
     2,
@@ -199,16 +202,17 @@ static struct s_menu
      "SV (Swedish)"}
 },
 {//13
-    5,
+    6,
     0, 255, 0,
     NULL, WINFN_DEBUGSEL, NULL,
     "Debug",
-    {15, 23, 255, 255, 255},
+    {15, 23, 255, 255, 255, 255},
     {"TX/RX stats",
      "RX Buffer stats",
      "HexView - RX",
      "HexView - TX",
-     "HexView - STDOUT"}
+     "HexView - STDOUT",
+     "UI Tester"}
 },
 {//14
     3,
@@ -273,15 +277,16 @@ static struct s_menu
      "+16"}
 },
 {//20
-    4,
+    5,
     0, 255, 0,
     NULL, WINFN_FONT_TELNET, NULL,
     "Telnet font",
-    {254, 254, 254, 254},
+    {254, 254, 254, 254, 254},
     {"8x8 16 Colour",
      "8x8 16 Colour bold",
-     "4x8 8 Colour + AA",
-     "4x8 Mono + AA"}
+     "4x8 Mono",
+     "4x8  8 Colour",
+     "4x8 16 Colour NoInv"}
 },
 {//21
     2,
@@ -349,7 +354,7 @@ static struct s_menu
     {254, 254, 254},
     {"8x8 16 Colour",
      "8x8 16 Colour bold",
-     "4x8 Mono + AA"}
+     "4x8 Mono"}
 },
 {//28
     4,
@@ -361,6 +366,15 @@ static struct s_menu
      "Dark lime",
      "Dark amber",
      "High contrast"}
+},
+{//29
+    2,
+    0, 255, 0,
+    NULL, WINFN_Backspace, NULL,
+    "Backspace key",
+    {254, 254},
+    {"DEL",
+     "^H"}
 }};
 
 static const u8 QFrame[5][24] = 
@@ -416,6 +430,7 @@ void SetupQItemTags()
     MainMenu[24].tagged_entry = sv_bHighCL;
     MainMenu[25].tagged_entry = sv_bScreensaver;
     MainMenu[28].tagged_entry = sv_ThemeUI;
+    MainMenu[29].tagged_entry = vBackspace;
 
     switch (sv_TerminalFont)
     {
@@ -424,10 +439,13 @@ void SetupQItemTags()
         else MainMenu[11].tagged_entry = 0;
         break;
         case 1:
-        MainMenu[11].tagged_entry = 2;
+        MainMenu[11].tagged_entry = 3;
         break;
         case 2:
-        MainMenu[11].tagged_entry = 3;
+        MainMenu[11].tagged_entry = 2;
+        break;
+        case 3:
+        MainMenu[11].tagged_entry = 4;
         break;
 
         default:
@@ -442,10 +460,13 @@ void SetupQItemTags()
         else MainMenu[20].tagged_entry = 0;
         break;
         case 1:
-        MainMenu[20].tagged_entry = 2;
+        MainMenu[20].tagged_entry = 3;
         break;
         case 2:
-        MainMenu[20].tagged_entry = 3;
+        MainMenu[20].tagged_entry = 2;
+        break;
+        case 3:
+        MainMenu[20].tagged_entry = 4;
         break;
 
         default:
@@ -537,7 +558,7 @@ void DrawMenu(u8 idx)
     }
 
     // Redraw selected menu item text (highlight)
-    TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+4+SelectedIdx, PAL3);
+    TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+4+SelectedIdx, PAL0);
 
     // Mark activated option
     if (MainMenu[MenuIdx].tagged_entry < MainMenu[MenuIdx].num_entries)
@@ -587,14 +608,14 @@ void UpMenu()
 {
     TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+4+SelectedIdx, PAL1);
     SelectedIdx = (SelectedIdx == 0 ? MainMenu[MenuIdx].num_entries-1 : SelectedIdx-1);
-    TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+4+SelectedIdx, PAL3);
+    TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+4+SelectedIdx, PAL0);
 }
 
 void DownMenu()
 {
     TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+4+SelectedIdx, PAL1);
     SelectedIdx = (SelectedIdx == MainMenu[MenuIdx].num_entries-1 ? 0 : SelectedIdx+1);
-    TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+4+SelectedIdx, PAL3);
+    TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+4+SelectedIdx, PAL0);
 }
 
 void QMenu_Toggle()
@@ -771,10 +792,13 @@ void WINFN_FONT_TERM()
             sv_BoldFont = TRUE;
         break;
         case 2:
-            sv_TerminalFont = 1;
+            sv_TerminalFont = 2;
         break;
         case 3:
-            sv_TerminalFont = 2;
+            sv_TerminalFont = 1;
+        break;
+        case 4:
+            sv_TerminalFont = 3;
         break;
     
         default:
@@ -797,10 +821,13 @@ void WINFN_FONT_TELNET()
             sv_BoldFont = TRUE;
         break;
         case 2:
-            sv_TelnetFont = 1;
+            sv_TelnetFont = 2;
         break;
         case 3:
-            sv_TelnetFont = 2;
+            sv_TelnetFont = 1;
+        break;
+        case 4:
+            sv_TelnetFont = 3;
         break;
     
         default:
@@ -889,6 +916,10 @@ void WINFN_DEBUGSEL()
         case 4:
             QMenu_Toggle();
             HexView_Toggle(2);
+        break;
+        case 5:
+            QMenu_Toggle();
+            if (getState() == PS_Terminal) ChangeState(PS_Debug, 0, NULL);
         break;
     
         default:
@@ -1044,4 +1075,9 @@ void WINFN_UITHEME()
 {
     sv_ThemeUI = SelectedIdx;
     UI_ApplyTheme();
+}
+
+void WINFN_Backspace()
+{
+    vBackspace = SelectedIdx;
 }

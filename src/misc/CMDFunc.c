@@ -26,6 +26,7 @@ SM_CMDList CMDList[] =
 {
     {"telnet",  CMD_LaunchTelnet,   "<address:port>"},
     {"irc",     CMD_LaunchIRC,      "<address:port>"},
+    {"tty",     CMD_LaunchLinuxTTY, "- Init sane linux TTY"},
     {"echo",    CMD_Echo,           "- Echo string to screen"},
     {"kbc",     CMD_KeyboardSend,   "- Send command to keyboard"},
     {"menu",    CMD_LaunchMenu,     "- Run graphical start menu"},
@@ -73,6 +74,12 @@ void CMD_LaunchIRC(u8 argc, char *argv[])
 void CMD_LaunchMenu(u8 argc, char *argv[])
 {
     ChangeState(PS_Entry, argc, argv);
+}
+
+void CMD_LaunchLinuxTTY(u8 argc, char *argv[]) 
+{
+    char *arg[] = {argv[0], "-tty"};
+    ChangeState(PS_Telnet, 2, arg);
 }
 
 void CMD_SetAttr(u8 argc, char *argv[])
@@ -551,6 +558,47 @@ void CMD_Test(u8 argc, char *argv[])
         return;
     }*/
 
+    if ((argc > 1) && (strcmp("-c64", argv[1]) == 0))
+    {
+        /*PAL_setColor(32, 0x000);
+        PAL_setColor(33, RGB24_TO_VDPCOLOR(0x894036));
+        PAL_setColor(34, RGB24_TO_VDPCOLOR(0x68A941));
+        PAL_setColor(35, RGB24_TO_VDPCOLOR(0xD0DC71));
+        PAL_setColor(36, RGB24_TO_VDPCOLOR(0x3E31A2));
+        PAL_setColor(37, RGB24_TO_VDPCOLOR(0x8A46AE));
+        PAL_setColor(38, RGB24_TO_VDPCOLOR(0x7ABFC7));
+        PAL_setColor(39, RGB24_TO_VDPCOLOR(0xABABAB));
+        
+        PAL_setColor(40, RGB24_TO_VDPCOLOR(0x555555));
+        PAL_setColor(41, RGB24_TO_VDPCOLOR(0xBB776D));
+        PAL_setColor(42, RGB24_TO_VDPCOLOR(0xACEA88));
+        //PAL_setColor(43, RGB24_TO_VDPCOLOR(0x0));//LIGHT YELLOW
+        PAL_setColor(44, RGB24_TO_VDPCOLOR(0x7C70DA));
+        //PAL_setColor(45, RGB24_TO_VDPCOLOR(0x0));//LIGHT MAGENTA
+        //PAL_setColor(46, RGB24_TO_VDPCOLOR(0x0));//LIGHT TEAL
+        PAL_setColor(47, RGB24_TO_VDPCOLOR(0xFFFFFF));*/
+
+        PAL_setColor(32, 0x000);
+        PAL_setColor(33, RGB24_TO_VDPCOLOR(0x772D26));  // Red
+        PAL_setColor(34, RGB24_TO_VDPCOLOR(0x559E4A));  // Green
+        PAL_setColor(35, RGB24_TO_VDPCOLOR(0xBDCC71));  // Yellow
+        PAL_setColor(36, RGB24_TO_VDPCOLOR(0x42348B));  // Blue
+        PAL_setColor(37, RGB24_TO_VDPCOLOR(0xA85FB4));  // Magenta
+        PAL_setColor(38, RGB24_TO_VDPCOLOR(0x85D4DC));  // Teal
+        PAL_setColor(39, RGB24_TO_VDPCOLOR(0xABABAB));  // Light gray -
+        
+        PAL_setColor(40, RGB24_TO_VDPCOLOR(0x555555));  // Dark gray -
+        PAL_setColor(41, RGB24_TO_VDPCOLOR(0xB66862));  // Light red
+        PAL_setColor(42, RGB24_TO_VDPCOLOR(0x92DF87));  // Light green
+        PAL_setColor(43, RGB24_TO_VDPCOLOR(0xFFFFB0));  // Light yellow
+        PAL_setColor(44, RGB24_TO_VDPCOLOR(0x7E70CA));  // Light blue
+        PAL_setColor(45, RGB24_TO_VDPCOLOR(0xE99DF5));  // Light magenta
+        PAL_setColor(46, RGB24_TO_VDPCOLOR(0xC5FFFF));  // Light teal
+        PAL_setColor(47, RGB24_TO_VDPCOLOR(0xFFFFFF));  // White
+        
+        return;
+    }
+
     Stdout_Push("\
 [30m█[90m█\
 [91m█[31m█\
@@ -562,9 +610,6 @@ void CMD_Test(u8 argc, char *argv[])
 [97m█[37m█\
 [30m\n\r");
 
-    Stdout_Push("[97mBABABABABABABABA - Plane\n");
-    Stdout_Push("[97mLHHLLHHLLHHLLHHL - Priority\n");
-
 Stdout_Push("\n\
 [90m█[30m█\
 [31m█[91m█\
@@ -575,9 +620,6 @@ Stdout_Push("\n\
 [96m█[36m█\
 [37m█[97m█\
 [30m\n\r");
-
-    Stdout_Push("[97mBABABABABABABABA - Plane\n");
-    Stdout_Push("[97mHLLHHLLHHLLHHLLH - Priority\n");
 
 Stdout_Push("\n\
 [30m █ [90m█\

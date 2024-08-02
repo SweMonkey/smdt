@@ -15,6 +15,10 @@ typedef struct s_window
 #define UC_NONE 0
 #define UC_NOBORDER 1
 
+#define UC_MODEL_OK_CANCEL 0
+#define UC_MODEL_YES_NO 1
+#define UC_MODEL_APPLY_CANCEL 2
+
 void UI_ApplyTheme();
 void UI_Begin(SM_Window *w);
 void UI_End();
@@ -36,5 +40,8 @@ void UI_DrawVScrollbar(u8 x, u8 y, u8 height, u16 min, u16 max, u16 pos);
 void UI_DrawItemList(u8 x, u8 y, u8 width, u8 height, char *list[], u16 item_count, u16 scroll);
 void UI_DrawTextInput(u8 x, u8 y, u8 width, const char *caption, char str[], bool bShowCaret);
 //void UI_DrawItemListSelect(u8 x, u8 y, u8 width, u8 height, const char *caption, char *list[], u8 item_count, u8 selected_item);
+void UI_DrawColourPicker(u8 x, u8 y, u16 *rgb, u8 selected);
+void UI_DrawConfirmBox(u8 x, u8 y, u8 model, u8 selected);
+void UI_DrawTabs(u8 x, u8 y, u8 w, u8 num_tabs, u8 active_tab, u8 selected);
 
 #endif // UI_H_INCLUDED

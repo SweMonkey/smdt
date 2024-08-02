@@ -61,19 +61,19 @@
 #define TRM_CLEAR_INVISIBLE (0)     // For clearing area to invisible (Tile 0)
 
 // Debugging
-//#define EMU_BUILD   // Enable to build specialized debug version meant to run on emulators
-//#define ATT_LOGGING // Log attribute changes
-//#define IRC_LOGGING // Log IRC debug messages
-//#define TRM_LOGGING // Log terminal debug messages
-//#define IAC_LOGGING // Log IAC data
-//#define ESC_LOGGING // Log ESC data
-//#define UTF_LOGGING // Log UTF-8 messages
-//#define KB_DEBUG    // Log keyboard debug messages
-//#define KERNEL_BUILD
+//#define EMU_BUILD     // Enable to build specialized debug version meant to run on emulators
+//#define ATT_LOGGING   // Log attribute changes
+//#define IRC_LOGGING   // Log IRC debug messages
+//#define TRM_LOGGING   // Log terminal debug messages
+//#define IAC_LOGGING   // Log IAC data
+//#define ESC_LOGGING 1 // Log ESC data (1 = Log necessary info, 2 = LOG EVERYTHING)
+//#define UTF_LOGGING   // Log UTF-8 messages
+//#define KB_DEBUG      // Log keyboard debug messages
+//#define KERNEL_BUILD  // Enables file and filesystem support and various other "OS" like features
+#define ENABLE_CLOCK
 
 extern bool bPALSystem;
 extern bool bHardReset;
-extern u8 BootNextLine;     // Bootscreen text y position
 
 void TRM_SetStatusText(const char *t);
 void TRM_ResetStatusText();

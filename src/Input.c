@@ -28,13 +28,7 @@ void Input_Init()
 {
     memset(KeyMap, KEYSTATE_NONE, KM_SZ);
 
-    #ifdef EMU_BUILD
-        JOY_setSupport(PORT_1, JOY_SUPPORT_6BTN);
-        JOY_setEventHandler(Input_JP);
-    #else
-        JOY_setSupport(PORT_1, JOY_SUPPORT_OFF);
-    #endif
-
+    JOY_setSupport(PORT_1, JOY_SUPPORT_OFF);
     JOY_setSupport(PORT_2, JOY_SUPPORT_OFF);
 
     KB_Init();

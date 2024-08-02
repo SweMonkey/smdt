@@ -9,6 +9,7 @@
 #define LMSM_MODEACK 4
 
 extern u8 sv_AllowRemoteEnv;
+extern u8 vDECCKM;
 
 void TELNET_Init();
 void TELNET_ParseRX(u8 byte);

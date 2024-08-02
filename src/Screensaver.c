@@ -20,7 +20,7 @@ void ScreensaverInit()
     // Set up screensaver sprite here
     SetSprite_Y(SPRITE_ID_SCRSAV, 0);
     SetSprite_X(SPRITE_ID_SCRSAV, 0);
-    SetSprite_TILE(SPRITE_ID_SCRSAV, (0x8000 | AVR_SCRSAV));
+    SetSprite_TILE(SPRITE_ID_SCRSAV, (0xE000 | AVR_SCRSAV));
 
     // Point screensaver sprite link back to 0 or next sprite depending on which state smdt is in
     if (cs != PS_IRC) {SetSprite_SIZELINK(SPRITE_ID_SCRSAV, SPR_HEIGHT_1x4 | SPR_WIDTH_4x1, SPRITE_ID_CURSOR);}
@@ -36,17 +36,17 @@ void ScreensaverTick()
 
     if (InactiveCounter >= InactiveUpper)   // Screensaver is active, tick the sprite movement
     {        
-        if ((ScrCy < 0) || (ScrCy > (bPALSystem?208:184)))
+        if ((ScrCy < 0) || (ScrCy > (bPALSystem?208:192)))
         {
             ScrDy *= -1;
-            *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_CRAM_ADDR((u32)22);
+            *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_CRAM_ADDR((u32)110);
             *((vu16*) VDP_DATA_PORT) = random();
         }
 
         if ((ScrCx < 0) || (ScrCx > 288))
         {
             ScrDx *= -1;
-            *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_CRAM_ADDR((u32)22);
+            *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_CRAM_ADDR((u32)110);
             *((vu16*) VDP_DATA_PORT) = random();
         }
 

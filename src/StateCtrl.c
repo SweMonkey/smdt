@@ -35,14 +35,24 @@ void VBlank()
         RLN_Update();
     }
 
+    while (KB_Poll(&kbdata))
+    {
+        KB_Interpret_Scancode(kbdata);
+    }
+
     //if (CurrentState->VBlank) CurrentState->VBlank();
 
-    if ((is_KeyDown(KEY_RWIN) || is_KeyDown(KEY_F8)) && (CurrentStateEnum != PS_Entry) && (!bShowHexView)) QMenu_Toggle();   // Global quick menu
+    if ((is_KeyDown(KEY_RWIN) || is_KeyDown(KEY_F8)) && 
+        (CurrentStateEnum != PS_Entry) && 
+        (CurrentStateEnum != PS_Debug) && 
+        (!bShowHexView)) QMenu_Toggle();   // Global quick menu
 
     if (CurrentState->Input != NULL) CurrentState->Input(); // Current PRG
 
     InputTick();        // Pump IO system
+    #ifdef ENABLE_CLOCK
     TickClock();        // Clock will drift when interrupts are disabled!
+    #endif
     ScreensaverTick();  // Screensaver counter/animation
     CR_Blink();         // Cursor blink
 
@@ -172,9 +182,4 @@ void ResetSystem(bool bHard)
 void StateTick()
 {
     CurrentState->Run();
-
-    while (KB_Poll(&kbdata))
-    {
-        KB_Interpret_Scancode(kbdata);
-    }
 }
