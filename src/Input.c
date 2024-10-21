@@ -8,6 +8,7 @@
 static u8 KeyMap[KM_SZ];
 void QMenu_Input();
 void HexView_Input();
+void FavView_Input();
 
 
 void Input_JP(u16 joy, u16 changed, u16 state)
@@ -70,6 +71,7 @@ void InputTick()
 {
     QMenu_Input();
     HexView_Input();
+    FavView_Input();
 
     memset(KeyMap, KEYSTATE_NONE, KM_SZ);
 }

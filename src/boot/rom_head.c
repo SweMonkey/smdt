@@ -26,7 +26,7 @@ const ROMHeader rom_header = {
     "RA",
     0xF820,
     0x00200000,
-    0x0023FFFF,
+    0x0021FFFF,
     "            ",
     "SMD Terminal Emulator                   ",
     "EUJ             "

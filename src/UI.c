@@ -40,6 +40,7 @@ static const u8 Frame[30][40] =
 
 static SM_Window *Target = NULL;
 u8 sv_ThemeUI = 0;
+bool bModalWindowActive = FALSE;
 
 
 /// @brief Apply UI theme
@@ -50,18 +51,22 @@ void UI_ApplyTheme()
         case 0: // Dark blue
             PAL_setColor(21, 0xA40);    // Window shadow
             PAL_setColor(22, 0xE80);    // Window border
+            PAL_setColor(49, 0xE80);    // Cursor outline
         break;
         case 1: // Dark lime
             PAL_setColor(21, 0x0A4);    // Window shadow
             PAL_setColor(22, 0x0E8);    // Window border
+            PAL_setColor(49, 0x0E8);    // Cursor outline
         break;
         case 2: // Dark amber
             PAL_setColor(21, 0x04A);    // Window shadow
             PAL_setColor(22, 0x08E);    // Window border
+            PAL_setColor(49, 0x08E);    // Cursor outline
         break;
         case 3: // High contrast
             PAL_setColor(21, 0x000);    // Window shadow
             PAL_setColor(22, 0xEEE);    // Window border
+            PAL_setColor(49, 0xEEE);    // Cursor outline
         break;
     
         default:
@@ -330,36 +335,40 @@ void UI_DrawPanel(u8 x, u8 y, u8 width, u8 height)
 /// @param y Y position
 /// @param width Width of window
 /// @param height Height of window
-void UI_DrawWindow(u8 x, u8 y, u8 width, u8 height, const char *title)
+/// @param bChild Draw window inside another window
+/// @param title Window title
+void UI_DrawWindow(u8 x, u8 y, u8 width, u8 height, bool bChild, const char *title)
 {
     if (Target == NULL) return;
 
+    u8 m = (bChild ? 64 : 0);
+
     for (u8 i = 0; i < width-2; i++)
     {
-        Target->WinBuffer[y+3][x+2+i] = 0xC1;
-        Target->WinBuffer[y+4][x+2+i] = 0xC4;
-        Target->WinBuffer[y+5][x+2+i] = 0xC7;
+        Target->WinBuffer[y+3][x+2+i] = 0xC1 - m;
+        Target->WinBuffer[y+4][x+2+i] = 0xC4 - m;
+        Target->WinBuffer[y+5][x+2+i] = 0xC7 - m;
 
-        Target->WinBuffer[y+3+height-1][x+2+i] = 0xCD;
+        Target->WinBuffer[y+3+height-1][x+2+i] = 0xCD - m;
     }
 
-    Target->WinBuffer[y+4][x+1] = 0xC3;
-    Target->WinBuffer[y+4][x+1+width-1] = 0xC5;
+    Target->WinBuffer[y+4][x+1] = 0xC3 - m;
+    Target->WinBuffer[y+4][x+1+width-1] = 0xC5 - m;
 
-    Target->WinBuffer[y+5][x+1] = 0xC6;
-    Target->WinBuffer[y+5][x+1+width-1] = 0xC8;
+    Target->WinBuffer[y+5][x+1] = 0xC6 - m;
+    Target->WinBuffer[y+5][x+1+width-1] = 0xC8 - m;
 
     for (u8 i = 0; i < height-4; i++)
     {
-        Target->WinBuffer[y+6+i][x+1] = 0xC9;
-        Target->WinBuffer[y+6+i][x+1+width-1] = 0xCB;
+        Target->WinBuffer[y+6+i][x+1] = 0xC9 - m;
+        Target->WinBuffer[y+6+i][x+1+width-1] = 0xCB - m;
     }
 
-    Target->WinBuffer[y+3][x+1] = 0xC0;
-    Target->WinBuffer[y+3][x+1+width-1] = 0xC2;
+    Target->WinBuffer[y+3][x+1] = 0xC0 - m;
+    Target->WinBuffer[y+3][x+1+width-1] = 0xC2 - m;
 
-    Target->WinBuffer[y+3+height-1][x+1] = 0xCC;
-    Target->WinBuffer[y+3+height-1][x+1+width-1] = 0xCE;
+    Target->WinBuffer[y+3+height-1][x+1] = 0xCC - m;
+    Target->WinBuffer[y+3+height-1][x+1+width-1] = 0xCE - m;
 
     UI_FillRect(x+2, y+6, width-2, height-5, 0xCA);
 
@@ -451,26 +460,55 @@ void UI_DrawTextInput(u8 x, u8 y, u8 width, const char *caption, char str[], boo
 /// @param list Array of items to draw in list
 /// @param item_count Number of items in list
 /// @param selected_item Selected item in list
-/*void UI_DrawItemListSelect(u8 x, u8 y, u8 width, u8 height, const char *caption, char *list[], u8 item_count, u8 selected_item)
+/// @param flags ItemList flags (IL_None, IL_NoBorder)
+void UI_DrawItemListSelect(u8 x, u8 y, u8 width, u8 height, const char *caption, char *list[], u8 item_count, u8 selected_item, ItemListFlags flags)
 {
     if (Target == NULL) return;
 
-    u8 min_height = (height < item_count+4) ? item_count+4 : height;
-    u8 max_visible = min_height-4;
+    u8 min_height = 0;
+    u8 max_visible = 0;
+    u8 x_ = x;
+    u8 y_ = y+2;
+    u8 w_ = width;
 
-    UI_DrawPanel(x, y, width, min_height);
-    UI_DrawText(x+1, y, PAL1, caption);
+    if (flags & IL_NoBorder)
+    {
+        min_height = (item_count < height) ? item_count : height;
+        max_visible = height;
+        w_ -= 1;
+    }
+    else// TEST ME
+    {
+        min_height = (item_count < height+2) ? item_count : height; 
+        max_visible = height-2;
 
-    char tmp[width-3];
+        x_ += 1;
+        w_ -= 3;
+
+        UI_DrawPanel(x_, y_, w_+3, min_height);
+        UI_DrawText(x_+1, y_, PAL1, caption);
+    }
+
+    s16 pos = (((s8)selected_item) - (max_visible-1));
+    pos = pos < 0 ? 0 : pos;
+    //kprintf("max_vis: %u - pos: %u - items-max: %u - item: \"%s\"", max_visible, pos, (item_count-max_visible), list[selected_item]);
+
+    char tmp[40];
+
+    if (item_count > max_visible)
+    {
+        UI_DrawVScrollbar(x_+w_, y_, height, 0, (item_count-(max_visible-1)), pos);//item_count, selected_item+1);//
+    }
 
     for (u16 i = 0; i < (item_count < max_visible ? item_count : max_visible); i++)
     {
-        strncpy(tmp, list[i], width-3);
+        u8 n = i+pos;
+        snprintf(tmp, 38, "%-38s", list[n]);
         
-        if (selected_item == i) UI_DrawText(x+1, y+2+i, PAL3, tmp);
-        else UI_DrawText(x+1, y+2+i, PAL1, tmp);
+        if (selected_item == n) UI_DrawText(x_, y_+i, PAL0, tmp);
+        else UI_DrawText(x_, y_+i, PAL1, tmp);
     }
-}*/
+}
 
 /// @brief Draw a colour picker
 /// @param x X position
@@ -532,6 +570,10 @@ void UI_DrawConfirmBox(u8 x, u8 y, u8 model, u8 selected)
             UI_DrawText(x    , y, (selected == 0 ? PAL0 : PAL1), " Apply ");
             UI_DrawText(x + 8, y, (selected == 1 ? PAL0 : PAL1), " Cancel ");
         break;
+        case UC_MODEL_ADD_REMOVE:
+            UI_DrawText(x    , y, (selected == 0 ? PAL0 : PAL1), " Add ");
+            UI_DrawText(x + 8, y, (selected == 1 ? PAL0 : PAL1), " Remove ");
+        break;
     
         default:
         break;
@@ -544,38 +586,42 @@ void UI_DrawConfirmBox(u8 x, u8 y, u8 model, u8 selected)
 /// @param num_tabs Number of tabs
 /// @param active_tab Active tab
 /// @param selected Selected tab
-void UI_DrawTabs(u8 x, u8 y, u8 w, u8 num_tabs, u8 active_tab, u8 selected)
+void UI_DrawTabs(u8 x, u8 y, u8 w, u8 num_tabs, u8 active_tab, u8 selected, const char *tab_text[])
 {
     if (Target == NULL) return;
 
-    const char *tab_text[5] =
+    /*const char *tab_text[5] =
     {
         "Tab 1", "Tab 2", "Tab 3", "Tab 4", "Tab 5"
-    };
+    };*/
 
     u8 c;       // Down counter
     u8 len;     // Current tab title strlen
     u8 o = 0;   // Offset
 
+    c = 1; while (c++ <= 38) Target->WinBuffer[y+4][x-1+c] = 0xA3;    // Bottom line spanning the entire width (will be cleared underneath the active tab)
+
     for (u8 i = 0; i < num_tabs; i++)
     {
         len = strlen(tab_text[i]);
 
-        Target->WinBuffer[y+3][x+o] = ((x+o) == 0 ? 0xA4 : 0xA7);    // Left
+        Target->WinBuffer[y+3][x+o] = ((x+o) == 0 ? 0xA4 : 0xA7);    // Left tab side
 
-        c = len; while (c--) Target->WinBuffer[y+2][x+1+c+o] = (y == 0) ? 0xA5 : 0xA8;    // Top
+        c = len; while (c--) Target->WinBuffer[y+2][x+1+c+o] = (y == 0) ? 0xA5 : 0xA8;    // Top tab side
 
-        Target->WinBuffer[y+3][x+len+1+o] = ((x+len+1+o) == 39 ? 0xA6 : 0xA9);    // Right
+        Target->WinBuffer[y+3][x+len+1+o] = ((x+len+1+o) == 39 ? 0xA6 : 0xA9);    // Right tab side
+
+        //c = 1; while (c++ <= 38) Target->WinBuffer[y+4][x-1+c] = 0xA8-5;    // Bottom
 
         if (active_tab != i) 
         {
-            c = len; while (c--) Target->WinBuffer[y+4][x+1+c+o] = 0xA3;    // Inactive tab bottom border
+            //c = len; while (c--) Target->WinBuffer[y+4][x+1+c+o] = 0xA3;    // Inactive tab bottom border
         
             UI_DrawText(x+o, y, PAL1, tab_text[i]);
         }
         else 
         {
-            c = len; while (c--) Target->WinBuffer[y+4][x+1+c+o] = 0x20;    // Active tab bottom border (None)
+            c = len; while (c--) Target->WinBuffer[y+4][x+1+c+o] = 0x20;    // Active tab bottom border (None, clear the line under it)
             
             UI_DrawText(x+o, y, (selected ? PAL1 : PAL0), tab_text[i]);
         }
@@ -583,7 +629,8 @@ void UI_DrawTabs(u8 x, u8 y, u8 w, u8 num_tabs, u8 active_tab, u8 selected)
         o += len+2;
     }
     
-    c = o; while (c++ <= 38) Target->WinBuffer[y+3][x-1+c] = 0xA8;    // Bottom
+    //c = o; while (c++ <= 38) Target->WinBuffer[y+4][x-1+c] = 0xA8-5;    // Bottom
 
-    if (w >= 38) Target->WinBuffer[y+3][x+39] = 0xA1;
+    if (x ==  0) Target->WinBuffer[y+4][0]    = 0xA2;   // Point where the left window border meets the tab bar
+    if (w >= 38) Target->WinBuffer[y+4][x+39] = 0xA1;   // Point where the right window border meets the tab bar
 }

@@ -43,6 +43,7 @@ SM_Device *DevList[DEV_MAX];        // Device list
 u8 DevSeq = 0;                      // Number of devices
 bool bRLNetwork = FALSE;            // Use RetroLink cartridge instead of built-in UART
 bool bXPNetwork = FALSE;            // Use XPort network adapter
+bool bMegaCD = FALSE;               // Mega/Sega CD detected flag
 DevPort sv_ListenPort = DP_Port2;   // Default UART port to listen on
 
 
@@ -124,26 +125,27 @@ void SetDevicePort(SM_Device *d, DevPort p)
 void DetectDevices()
 {
     u8 bNoKeyboard = TRUE;
-    u8 DevId0 = 0;
-    u8 DevId1 = 0;
-    u8 DevId2 = 0;
-
-    DevId0 = GetDeviceID(DP_Port1);
-    DevId1 = GetDeviceID(DP_Port2);
-    DevId2 = GetDeviceID(DP_Port3);
+    u8 DevId0 = GetDeviceID(DP_Port1);
+    u8 DevId1 = GetDeviceID(DP_Port2);
+    u8 DevId2 = GetDeviceID(DP_Port3);
 
     // -- PS/2 Keyboard setup --------------------------
     bool ps2_r = FALSE;
     
-    if ( DevId0 == DEVICE_UNKNOWN)            {ps2_r = KB_PS2_Init(DP_Port1);}
-    if ((DevId1 == DEVICE_UNKNOWN) && !ps2_r) {ps2_r = KB_PS2_Init(DP_Port2);}
-    if ((DevId2 == DEVICE_UNKNOWN) && !ps2_r) {ps2_r = KB_PS2_Init(DP_Port3);}
-
-    if (ps2_r)
+    // Try to find the keyboard twice... because apparently that is needed in some cases
+    for (u8 i = 0; i < 2; i++)
     {
-        DevList[DevSeq++] = &DRV_KBPS2;
-        TRM_SetStatusIcon(ICO_KB_OK, ICO_POS_0);
-        bNoKeyboard = FALSE;
+        if ( DevId0 == DEVICE_UNKNOWN)            {ps2_r = KB_PS2_Init(DP_Port1);}
+        if ((DevId1 == DEVICE_UNKNOWN) && !ps2_r) {ps2_r = KB_PS2_Init(DP_Port2);}
+        if ((DevId2 == DEVICE_UNKNOWN) && !ps2_r) {ps2_r = KB_PS2_Init(DP_Port3);}
+
+        if (ps2_r)
+        {
+            DevList[DevSeq++] = &DRV_KBPS2;
+            TRM_SetStatusIcon(ICO_KB_OK, ICO_POS_0);
+            bNoKeyboard = FALSE;
+            break;
+        }
     }
 
     // -- Saturn Keyboard setup ------------------------
@@ -163,7 +165,7 @@ void DetectDevices()
 
     if (bNoKeyboard)
     {
-        Stdout_Push("No keyboard found.\n");
+        Stdout_Push("└[93mNo keyboard found.[0m\n");
         kprintf("No KB found - Press F1 to continue");
     }
 
@@ -191,7 +193,20 @@ void DetectDevices()
         }
     }
 
-    // -- UART setup --------------------------
+    // -- SEGA/MEGA CD setup ---------------------------
+    /*u8 SCDver = *((vu8*) 0xA10001) & 0x20;
+    char SEGASTR[5] = {0, 0, 0, 0, 0};
+    memcpyU32((u32*)SEGASTR, (u32*)0x400100, 1);
+
+    //stdout_printf("SEGASTR= \"%s\" -- SCDver= %u\n%c %c %c %c\n", SEGASTR, SCDver, *((vu8*) 0x400100), *((vu8*) 0x400101), *((vu8*) 0x400102), *((vu8*) 0x400103));
+
+    if ((SCDver) || (strcmp(SEGASTR, "SEGA") == 0))
+    {
+        stdout_printf("%s CD found.\n", bPALSystem ? "SEGA" : "MEGA");
+        bMegaCD = TRUE;
+    }*/
+
+    // -- UART setup -----------------------------------
     DRV_UART.Id.sName = "UART";
     DRV_UART.Id.Bitmask = 0x40; // Pin 7
     DRV_UART.Id.Bitshift = 0;
@@ -204,7 +219,7 @@ void DetectDevices()
     #ifndef EMU_BUILD
     u8 xpn_r = 0;
 
-    Stdout_Push("Checking for network adapters...\n");
+    Stdout_Push("[97mChecking for network adapters...[0m\n");
 
     if (RLN_Initialize())   // Check if RetroLink network adapter is present
     {
@@ -217,11 +232,11 @@ void DetectDevices()
         NET_SetGetIPFunc(RLN_GetIP);
         NET_SetPingFunc(RLN_PingIP);
         
-        Stdout_Push("RLN: RetroLink found\n");
+        Stdout_Push("└[92mRLN: RetroLink found[0m\n");
     }
-    else if ((xpn_r = XPN_Initialize())) // Check if xPico device is present
+    else if ((xpn_r = XPN_Initialize())) // Check if xPort device is present
     {
-        DRV_UART.Id.sName = "xPico UART";
+        DRV_UART.Id.sName = "xPort UART";
 
         DEV_SetCtrl(DRV_UART, 0x40);
         DEV_ClrData(DRV_UART);
@@ -236,10 +251,10 @@ void DetectDevices()
         switch (xpn_r)
         {
             case 1:
-                Stdout_Push("XPN: xPico module OK\n");
+                Stdout_Push("└[92mXPN: xPort module OK[0m\n");
             break;
             case 2:
-                Stdout_Push("XPN: Error\n");
+                Stdout_Push("└[91mXPN: Error[0m\n");
             break;
         
             default:
@@ -252,8 +267,8 @@ void DetectDevices()
         bRLNetwork = FALSE;
         bXPNetwork = FALSE;
 
-        Stdout_Push("No network adapters found\n");
-        Stdout_Push("Listening on built in UART\n");
+        Stdout_Push("├[93mNo network adapters found[0m\n");
+        Stdout_Push("└[97mListening on built in UART[0m\n");
     }
 }
 
@@ -269,6 +284,7 @@ void DeviceManager_Init()
     
     bRLNetwork = FALSE;
     bXPNetwork = FALSE;
+    bMegaCD = FALSE;
 
     DetectDevices();    // Detect and setup
 }

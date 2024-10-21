@@ -5,37 +5,47 @@
 #include "Utils.h"
 #include "system/Stdout.h"
 
-static u32 FileOffset = 0;
-static s16 ScrollY = 0;
-static SM_Window HexWindow;
-static Buffer *bufptr = NULL;
-static char WinTitle[16];
 bool bShowHexView = FALSE;
+static u16 FileOffset = 0;
+static s16 ScrollY = 0;
+static SM_Window *HexWindow = NULL;
+static char *bufptr = NULL;
+static u16 bufsize = 0;
+static char WinTitle[38];
+static bool bIOFILE = FALSE;
 
 
-void DrawDataLine(u8 Line)
+static void DrawDataLine(u8 Line)
 {
     char buf[41];
-    sprintf(buf, "%04lX %02X %02X %02X %02X %02X %02X %02X %02X %c%c%c%c%c%c%c%c", 
-    FileOffset, bufptr->data[FileOffset+0], bufptr->data[FileOffset+1], bufptr->data[FileOffset+2], bufptr->data[FileOffset+3], bufptr->data[FileOffset+4], bufptr->data[FileOffset+5], bufptr->data[FileOffset+6], bufptr->data[FileOffset+7],
-    (char)((bufptr->data[FileOffset+0] >= 0x20) && (bufptr->data[FileOffset+0] <= 0x7E) ? bufptr->data[FileOffset+0] : '.'), 
-    (char)((bufptr->data[FileOffset+1] >= 0x20) && (bufptr->data[FileOffset+1] <= 0x7E) ? bufptr->data[FileOffset+1] : '.'), 
-    (char)((bufptr->data[FileOffset+2] >= 0x20) && (bufptr->data[FileOffset+2] <= 0x7E) ? bufptr->data[FileOffset+2] : '.'), 
-    (char)((bufptr->data[FileOffset+3] >= 0x20) && (bufptr->data[FileOffset+3] <= 0x7E) ? bufptr->data[FileOffset+3] : '.'), 
-    (char)((bufptr->data[FileOffset+4] >= 0x20) && (bufptr->data[FileOffset+4] <= 0x7E) ? bufptr->data[FileOffset+4] : '.'), 
-    (char)((bufptr->data[FileOffset+5] >= 0x20) && (bufptr->data[FileOffset+5] <= 0x7E) ? bufptr->data[FileOffset+5] : '.'), 
-    (char)((bufptr->data[FileOffset+6] >= 0x20) && (bufptr->data[FileOffset+6] <= 0x7E) ? bufptr->data[FileOffset+6] : '.'), 
-    (char)((bufptr->data[FileOffset+7] >= 0x20) && (bufptr->data[FileOffset+7] <= 0x7E) ? bufptr->data[FileOffset+7] : '.'));
+    sprintf(buf, "%04X %02X %02X %02X %02X %02X %02X %02X %02X %c%c%c%c%c%c%c%c", 
+    (u16)FileOffset, 
+    FileOffset+0 < bufsize ? (u8)bufptr[FileOffset+0] : 0, 
+    FileOffset+1 < bufsize ? (u8)bufptr[FileOffset+1] : 0, 
+    FileOffset+2 < bufsize ? (u8)bufptr[FileOffset+2] : 0, 
+    FileOffset+3 < bufsize ? (u8)bufptr[FileOffset+3] : 0, 
+    FileOffset+4 < bufsize ? (u8)bufptr[FileOffset+4] : 0, 
+    FileOffset+5 < bufsize ? (u8)bufptr[FileOffset+5] : 0, 
+    FileOffset+6 < bufsize ? (u8)bufptr[FileOffset+6] : 0, 
+    FileOffset+7 < bufsize ? (u8)bufptr[FileOffset+7] : 0,
+    (char)(((bufptr[FileOffset+0] >= 0x20) && (bufptr[FileOffset+0] <= 0x7E) && (FileOffset+0 < bufsize)) ? (u8)bufptr[FileOffset+0] : '.'), 
+    (char)(((bufptr[FileOffset+1] >= 0x20) && (bufptr[FileOffset+1] <= 0x7E) && (FileOffset+1 < bufsize)) ? (u8)bufptr[FileOffset+1] : '.'), 
+    (char)(((bufptr[FileOffset+2] >= 0x20) && (bufptr[FileOffset+2] <= 0x7E) && (FileOffset+2 < bufsize)) ? (u8)bufptr[FileOffset+2] : '.'), 
+    (char)(((bufptr[FileOffset+3] >= 0x20) && (bufptr[FileOffset+3] <= 0x7E) && (FileOffset+3 < bufsize)) ? (u8)bufptr[FileOffset+3] : '.'), 
+    (char)(((bufptr[FileOffset+4] >= 0x20) && (bufptr[FileOffset+4] <= 0x7E) && (FileOffset+4 < bufsize)) ? (u8)bufptr[FileOffset+4] : '.'), 
+    (char)(((bufptr[FileOffset+5] >= 0x20) && (bufptr[FileOffset+5] <= 0x7E) && (FileOffset+5 < bufsize)) ? (u8)bufptr[FileOffset+5] : '.'), 
+    (char)(((bufptr[FileOffset+6] >= 0x20) && (bufptr[FileOffset+6] <= 0x7E) && (FileOffset+6 < bufsize)) ? (u8)bufptr[FileOffset+6] : '.'), 
+    (char)(((bufptr[FileOffset+7] >= 0x20) && (bufptr[FileOffset+7] <= 0x7E) && (FileOffset+7 < bufsize)) ? (u8)bufptr[FileOffset+7] : '.'));
 
     UI_DrawText(0, Line, PAL1, buf);
 }
 
-void UpdateView()
+static void UpdateView()
 {
     u16 p = ScrollY << 3;
     FileOffset = p;
 
-    UI_Begin(&HexWindow);
+    UI_Begin(HexWindow);
 
     for (u8 l = 0; l < 23; l++) 
     {
@@ -45,14 +55,14 @@ void UpdateView()
 
     UI_DrawVLine(4, 0, 23);
     UI_DrawVLine(28, 0, 23);
-    UI_DrawVScrollbar(37, 0, 23, 0, (BUFFER_LEN-1)-0xB8+64, p);   // 0xFFF = Buffer size - 0xB8 = amount of data on a single screen + 64 to make sure slider doesn't go over down arrow
+    UI_DrawVScrollbar(37, 0, 23, 0, (bufsize-1)-0xB8+64, p);   // 0xFFF = Buffer size - 0xB8 = amount of data on a single screen + 64 to make sure slider doesn't go over down arrow
 
     UI_End();
 }
 
 void HexView_Input()
 {
-    if (!bShowHexView) return;
+    if (!bShowHexView || (HexWindow == NULL)) return;
 
     if (is_KeyDown(KEY_UP))
     {
@@ -65,7 +75,7 @@ void HexView_Input()
 
     if (is_KeyDown(KEY_DOWN))
     {
-        if (ScrollY < ((BUFFER_LEN/8)-23)) 
+        if (ScrollY < ((bufsize/8)-23)) 
         {
             ScrollY++;
             UpdateView();
@@ -88,34 +98,34 @@ void HexView_Input()
 
     if (is_KeyDown(KEY_RIGHT))
     {
-        if (ScrollY < ((BUFFER_LEN/8)-31))
+        if (ScrollY < ((bufsize/8)-31))
         {
             ScrollY += 8;
             UpdateView();
         }
-        else if (ScrollY < ((BUFFER_LEN/8)-23))
+        else if (ScrollY < ((bufsize/8)-23))
         {
-            ScrollY += ((BUFFER_LEN/8)-23)-ScrollY;
+            ScrollY += ((bufsize/8)-23)-ScrollY;
             UpdateView();
         }
     }
 
     if (is_KeyDown(KEY_ESCAPE))
     {
-        HexView_Toggle(0);
+        HexView_Close();
     }
 
     return;
 }
 
-void DrawHexView()
+static void DrawHexView()
 {
     TRM_SetWinHeight(30);
     TRM_ClearArea(0, 1, 40, 26, PAL1, TRM_CLEAR_BG);  // h=27
 
-    UI_CreateWindow(&HexWindow, WinTitle, UC_NONE);
+    UI_CreateWindow(HexWindow, WinTitle, UC_NONE);
 
-    UI_Begin(&HexWindow);
+    UI_Begin(HexWindow);
     UI_FillRect(0, 27, 40, 2, 0xDE);
     UI_End();
 
@@ -125,42 +135,102 @@ void DrawHexView()
     UpdateView();
 }
 
-void HexView_Toggle(u8 bufnum)
+void HexView_Open(const char *filename)
 {
-    if (bShowHexView)
-    {
-        TRM_SetWinHeight(1);
+    char fn_buf[FILE_MAX_FNBUF];
+    FS_ResolvePath(filename, fn_buf);
+    bIOFILE = FALSE;
 
-        // Clear hex viewer window tiles
-        TRM_ClearArea(0, 1, 40, 26 + (bPALSystem?2:0), PAL1, TRM_CLEAR_BG);
+    if (strcmp(fn_buf, "/system/rxbuffer.io") == 0)
+    {
+        strcpy(WinTitle, "HexView - Rx Buffer");
         
-        // Erase bottom most row tiles (May obscure IRC text input box). 
-        // Normally the entire window should be erased by this call, but not all other windows may fill in the erased (black opaque) tiles.
-        TRM_ClearArea(0, 27 + (bPALSystem?2:0), 40, 1, PAL1, TRM_CLEAR_INVISIBLE);
+        bufptr = (char*)RxBuffer.data;
+        bufsize = BUFFER_LEN;
+        bIOFILE = TRUE;
+    }
+    else if (strcmp(fn_buf, "/system/txbuffer.io") == 0)
+    {
+        strcpy(WinTitle, "HexView - Tx Buffer");
+        
+        bufptr = (char*)TxBuffer.data;
+        bufsize = BUFFER_LEN;
+        bIOFILE = TRUE;
+    }
+    else if (strcmp(fn_buf, "/system/stdout.io") == 0)
+    {
+        strcpy(WinTitle, "HexView - Stdout");
+        
+        bufptr = (char*)stdout.data;
+        bufsize = BUFFER_LEN;
+        bIOFILE = TRUE;
     }
     else
     {
-        switch (bufnum)
+        SM_File *f = F_Open(fn_buf, FM_RDONLY);
+        if (f == NULL) 
         {
-            case 0:
-                strcpy(WinTitle, "HexView - Rx Buffer");
-                bufptr = &RxBuffer;
-            break;
-            case 1:
-                strcpy(WinTitle, "HexView - Tx Buffer");
-                bufptr = &TxBuffer;
-            break;
-            case 2:
-                strcpy(WinTitle, "HexView - Stdout");
-                bufptr = &stdout;
-            break;
-        
-            default:
-            break;
+            stdout_printf("Failed to open file \"%s\"\n", filename);
+            return;
         }
-        
-        DrawHexView();
+
+        F_Seek(f, 0, SEEK_END);
+        bufsize = F_Tell(f);
+
+        bufptr = (char*)malloc(bufsize);    
+        if (bufptr == NULL)
+        {
+            stdout_printf("Failed to allocate buffer\n");
+            F_Close(f);
+            return;
+        }
+
+        memset(bufptr, 0, bufsize);
+        F_Seek(f, 0, SEEK_SET);
+        F_Read(bufptr, bufsize, 1, f);
+
+        F_Close(f);
+
+        snprintf(WinTitle, 38, "HexView - %s", filename);
     }
 
-    bShowHexView = !bShowHexView;
+    HexWindow = malloc(sizeof(SM_Window));
+
+    if (HexWindow == NULL)
+    {
+        Stdout_Push("[91mFailed to allocate memory;\nCan't create HexWindow[0m\n");
+        return;
+    }
+
+    DrawHexView();
+
+    bShowHexView = TRUE;
+}
+
+void HexView_Close()
+{
+    TRM_SetWinHeight(1);
+
+    // Clear hex viewer window tiles
+    TRM_ClearArea(0, 1, 40, 26 + (bPALSystem?2:0), PAL1, TRM_CLEAR_BG);
+    
+    // Erase bottom most row tiles (May obscure IRC text input box). 
+    // Normally the entire window should be erased by this call, but not all other windows may fill in the erased (black opaque) tiles.
+    TRM_ClearArea(0, 27 + (bPALSystem?2:0), 40, 1, PAL1, TRM_CLEAR_INVISIBLE);
+
+    if (bIOFILE == FALSE)
+    {
+        free(bufptr);
+        bufptr = NULL;
+    }
+
+    if (HexWindow != NULL)
+    {
+        free(HexWindow);
+        HexWindow = NULL;
+        MEM_pack();
+    }
+
+    bufsize = 0;
+    bShowHexView = FALSE;
 }

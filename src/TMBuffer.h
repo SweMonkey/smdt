@@ -18,7 +18,7 @@ typedef struct s_tmbuffer
     u8 ColorFG;
     u16 Updates;
     u16 LastAddr;
-    u8 BufferA[TMB_BUFFER_SIZE]; // <- 128x32 saved tilemap for plane a/b (Add the rest of the attributes and tileidx needed when using)
+    u8 BufferA[TMB_BUFFER_SIZE]; // <- 128x32 or 64x32 saved tilemap for plane a/b (Add the rest of the attributes and tileidx needed when using)
     u8 BufferB[TMB_BUFFER_SIZE];
 } TMBuffer;
 

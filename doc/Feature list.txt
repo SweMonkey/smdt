@@ -1,14 +1,14 @@
 SMDTC v0.29
 
-See Changelog.txt for full list of additions.
+This document is very outdated, see Changelog.txt for full list of additions.
 
 - Autodetected extra hardware support -
-Preliminary support for b1tsh1ft3rs RetroLink cartridge and xPico module using any controller port.
+Preliminary support for b1tsh1ft3rs RetroLink cartridge and xPort module using any controller port.
 PS/2 Keyboard support, can be in any port, max 2 PS/2 devices per port.
 Sega Saturn keyboard support, can be in any port, max 1 keyboard per port.
 Joypad support from SGDK.
 Sega devices detection support (4bit ID).
-Hardware is autodetected on bootup and can to an extent exist on the same port; Example: 2 PS/2 keyboards and an xPico module can all be on a single controller port.
+Hardware is autodetected on bootup and can to an extent exist on the same port; Example: 2 PS/2 keyboards and an xPort module can all be on a single controller port.
 
 
 - Misc features -
@@ -34,7 +34,7 @@ Multiple resolutions by using different font sizes;
 
 - Terminal emulator -
 Command prompt.
-Commands to debug keyboards and xPico modules.
+Commands to debug keyboards and xPort modules.
 A few common terminal commands built in. More planned.
 
 

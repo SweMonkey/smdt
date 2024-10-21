@@ -6,10 +6,12 @@
 #include "Utils.h"
 #include "UI.h"
 #include "Network.h"
-#include "devices/RL_Network.h"
-#include "SRAM.h"
 #include "Screensaver.h"
 #include "HexView.h"
+
+#include "devices/RL_Network.h"
+#include "misc/ConfigFile.h"
+#include "system/Stdout.h"
 
 /*
     USERLIST WARNING:
@@ -30,7 +32,7 @@ static u8 rxdata;
 #endif
 
 static u8 bOnce = FALSE;
-static SM_Window UserWin;
+static SM_Window *UserWin = NULL;
 static u16 UserListScroll = 0;
 static u8 KBTxData[40];            // Buffer for the last 40 typed characters from the keyboard
 u8 sv_IRCFont = FONT_4x8_1;
@@ -65,14 +67,19 @@ void Enter_IRC(u8 argc, char *argv[])
         else C_XMAX = 126;         // Wrap at >126
     }
 
-
     // Setup window plane to accomodate user list window on the right side
     TRM_SetWinParam(FALSE, TRUE, 20, 1);
     TRM_SetStatusText(STATUS_TEXT_SHORT);
 
     PAL_setColor( 1, 0x0AE);    // Set the red icon colour to a brighter shade to avoid colour bleed when using RF/Composite CRT (Colour entry used for selected channel BG and by the Tx icon)
 
-    UI_CreateWindow(&UserWin, "", UC_NOBORDER);
+    UserWin = malloc(sizeof(SM_Window));
+    if (UserWin == NULL)
+    {
+        Stdout_Push("[91mFailed to allocate memory;\nCan't create UserWin[0m\n");
+        RevertState();
+    }
+    UI_CreateWindow(UserWin, "", UC_NOBORDER);
 
     memset(KBTxData, 0, 40);
     PrintTextLine(KBTxData);    // Calling this here to clear VRAM tiles used for textbox
@@ -125,8 +132,6 @@ void Enter_IRC(u8 argc, char *argv[])
             TRM_SetStatusText(TitleBuf);*/
         }
     }
-
-    //kprintf("free: %u - free_block: %u", MEM_getFree(), MEM_getLargestFreeBlock());
 }
 
 void ReEnter_IRC()
@@ -145,6 +150,12 @@ void Exit_IRC()
     TRM_SetWinParam(FALSE, FALSE, 0, 1);// Restore default window parameters
     PAL_setColor( 1, 0x00e);            // Restore icon red colour
     TRM_ClearArea(26, 1, 14, 25, PAL1, TRM_CLEAR_BG); // Clear area where the user list window may have been drawn
+
+    if (UserWin != NULL)
+    {
+        free(UserWin);
+        UserWin = NULL;
+    }
 }
 
 void Reset_IRC()
@@ -183,12 +194,12 @@ void Run_IRC()
 
     if (bPG_UpdateUserlist)
     {
-        if (UI_GetVisible(&UserWin) && !bShowHexView)
+        if (UI_GetVisible(UserWin) && !bShowHexView)
         {
             if (PG_UserNum > 0)
             {
-                UI_Begin(&UserWin);
-                UI_DrawWindow(25, 0, 14, 26, "Nick list");
+                UI_Begin(UserWin);
+                UI_DrawWindow(25, 0, 14, 26, FALSE, "Nick list");
                 UI_ClearRect(26, 3, 12, 22);
                 UI_DrawItemList(26, 3, 12, 22, PG_UserList, PG_UserNum, UserListScroll);                
                 UI_End();
@@ -197,8 +208,8 @@ void Run_IRC()
             }
             else if (bPG_UpdateUserlist == 2)
             {
-                UI_Begin(&UserWin);
-                UI_DrawWindow(25, 0, 14, 26, "Nick list");
+                UI_Begin(UserWin);
+                UI_DrawWindow(25, 0, 14, 26, FALSE, "Nick list");
                 UI_ClearRect(26, 3, 12, 22);
                 UI_DrawText(26, 11, PAL1, "Requesting");
                 UI_DrawText(26, 12, PAL1, "nick list.");
@@ -218,12 +229,13 @@ void Run_IRC()
 
     if (bPG_UpdateMessage)
     {
-        TRM_DrawChar('1', 29, 0, PG_CurrentIdx == 0 ? PAL0 : (bPG_HasNewMessages[0] ? PAL3 : PAL1) );
-        TRM_DrawChar('2', 30, 0, PG_CurrentIdx == 1 ? PAL0 : (bPG_HasNewMessages[1] ? PAL3 : PAL1) );
-        TRM_DrawChar('3', 31, 0, PG_CurrentIdx == 2 ? PAL0 : (bPG_HasNewMessages[2] ? PAL3 : PAL1) );
-        TRM_DrawChar('4', 32, 0, PG_CurrentIdx == 3 ? PAL0 : (bPG_HasNewMessages[3] ? PAL3 : PAL1) );
-        TRM_DrawChar('5', 33, 0, PG_CurrentIdx == 4 ? PAL0 : (bPG_HasNewMessages[4] ? PAL3 : PAL1) );
-        TRM_DrawChar('6', 34, 0, PG_CurrentIdx == 5 ? PAL0 : (bPG_HasNewMessages[5] ? PAL3 : PAL1) );
+        TRM_DrawChar('1', (35-IRC_MAX_CHANNELS)  , 0, PG_CurrentIdx == 0 ? PAL0 : (bPG_HasNewMessages[0] ? PAL3 : PAL1) );  // 29
+        TRM_DrawChar('2', (35-IRC_MAX_CHANNELS)+1, 0, PG_CurrentIdx == 1 ? PAL0 : (bPG_HasNewMessages[1] ? PAL3 : PAL1) );  // 30
+        TRM_DrawChar('3', (35-IRC_MAX_CHANNELS)+2, 0, PG_CurrentIdx == 2 ? PAL0 : (bPG_HasNewMessages[2] ? PAL3 : PAL1) );  // 31
+        TRM_DrawChar('4', (35-IRC_MAX_CHANNELS)+3, 0, PG_CurrentIdx == 3 ? PAL0 : (bPG_HasNewMessages[3] ? PAL3 : PAL1) );  // 32
+        TRM_DrawChar('5', (35-IRC_MAX_CHANNELS)+4, 0, PG_CurrentIdx == 4 ? PAL0 : (bPG_HasNewMessages[4] ? PAL3 : PAL1) );  // 33
+
+        if (IRC_MAX_CHANNELS == 6) TRM_DrawChar('6', (35-IRC_MAX_CHANNELS)+5, 0, PG_CurrentIdx == 5 ? PAL0 : (bPG_HasNewMessages[5] ? PAL3 : PAL1) );  // 34
 
         bPG_UpdateMessage = FALSE;
     }
@@ -237,7 +249,7 @@ void ChangePage(u8 num)
     PG_CurrentIdx = num;
     //TMB_SetActiveBuffer(PG_Buffer[PG_CurrentIdx]);
 
-    //if (PG_CurrentIdx == 0) UI_SetVisible(&UserWin, FALSE);
+    //if (PG_CurrentIdx == 0) UI_SetVisible(UserWin, FALSE);
 
     if (strcmp(PG_Buffer[PG_CurrentIdx]->Title, PG_EMPTYNAME) == 0)
     {
@@ -402,7 +414,7 @@ u8 ParseTx()
 
             // TODO: CHECK RESPONSE, NICK MAY NOT BE VALID!
 
-            SRAM_SaveData();
+            CFG_SaveData();
         }
         else
         {
@@ -563,9 +575,9 @@ void Input_IRC()
 
             //if (PG_CurrentIdx != 0)
             {
-                UI_ToggleVisible(&UserWin);
+                UI_ToggleVisible(UserWin);
 
-                if (UserWin.bVisible)
+                if (UserWin->bVisible)
                 {
                     TRM_SetWinParam(FALSE, TRUE, 13, 1);
 

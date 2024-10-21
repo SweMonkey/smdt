@@ -247,7 +247,6 @@ char *strtok(char *s, char d)
     return result;
 }
 
-#ifdef KERNEL_BUILD
 #define SYSCALL_RET(x) {n=x;return 0;}
 u32 syscall(register vu32 n, register vu32 a, register vu32 b, register vu32 c, register vu32 d, register vu32 e, register vu32 f)
 {
@@ -255,7 +254,6 @@ u32 syscall(register vu32 n, register vu32 a, register vu32 b, register vu32 c, 
 
     return 0;
 }
-#endif
 
 // strncat, modified strcat from SGDK
 char *strncat(char *to, const char *from, u16 num)
@@ -638,26 +636,6 @@ u16 stdout_printf(const char *fmt, ...)
     return i;
 }
 
-div_t div(s32 __numer, s32 __denom)
-{
-    div_t ret;
-
-    ret.quot = (s32)__numer / __denom;
-    ret.rem = __numer % __denom;
-
-    return ret;
-}
-
-ldiv_t ldiv(s32 __numer, s32 __denom)
-{
-    ldiv_t ret;
-
-    ret.quot = (s32)__numer / __denom;
-    ret.rem = __numer % __denom;
-
-    return ret;
-}
-
 s32 memcmp(const void *s1, const void *s2, u32 n)
 {
     const u8 *p1 = s1, *p2 = s2;
@@ -669,4 +647,42 @@ s32 memcmp(const void *s1, const void *s2, u32 n)
     }
 
     return 0;
+}
+
+// Used by: LittleFS
+size_t strspn(const char *str1, const char *str2)
+{
+    size_t n;
+    const char *p;
+
+    for (n = 0; *str1; str1++, n++)
+    {
+        for (p = str2; *p && *p != *str1; p++);
+
+        if (!*p) break;
+    }
+
+    return n;
+}
+
+size_t strcspn(const char *str1, const char *str2)
+{
+    const char *sc1, *sc2;
+
+    for (sc1 = str1; *sc1 != '\0'; ++sc1) 
+    {
+        for (sc2 = str2; *sc2 != '\0'; ++sc2) 
+        {
+            if (*sc1 == *sc2) return (sc1 - str1);
+        }
+    }
+
+    return (sc1 - str1);
+}
+
+const char *strchr(const char *str, int character)
+{
+    for (; *str != '\0'; ++str) if (*str == character) return (char *) str;
+
+    return NULL;
 }

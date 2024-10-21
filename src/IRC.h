@@ -5,9 +5,9 @@
 #include "TMBuffer.h"
 
 #define PG_EMPTYNAME "EMPTY PAGE"
-#define IRC_MAX_CHANNELS 6      // 3 if using a tilemap width of 128 - otherwise 6
-#define IRC_MAX_USERLIST 300    //512
-#define IRC_MAX_USERNAME_LEN 12 //11
+#define IRC_MAX_CHANNELS 5      // 3 if using a tilemap width of 128 - otherwise 6
+#define IRC_MAX_USERLIST 320    // 280-512
+#define IRC_MAX_USERNAME_LEN 12 // 11
 
 extern char sv_Username[];     // Saved preferred IRC nickname
 extern char v_UsernameReset[]; // Your IRC nickname modified to suit the server (nicklen etc)

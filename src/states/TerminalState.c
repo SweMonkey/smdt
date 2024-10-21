@@ -10,11 +10,7 @@
 
 #include "system/Stdout.h"
 #include "system/Time.h"
-
-#ifdef KERNEL_BUILD
-#include "system/File.h"
 #include "system/Filesystem.h"
-#endif
 
 #define INPUT_SIZE 128
 #define INPUT_SIZE_ARGV 64
@@ -35,6 +31,7 @@ u8 ParseInputString()
     u8 data;        // Byte buffer
     u16 i = 0;      // Buffer iterator
     u16 l = 0;      // List position
+    u8 ret = 0;
 
     memset(inbuf, 0, INPUT_SIZE);
 
@@ -73,7 +70,8 @@ u8 ParseInputString()
     // Filter out Ctrl^ sequences
     if (argv[0][0] < ' ')
     {
-        return 0;
+        ret = 0;
+        goto Exit;
     }
 
     // Iterate argv0 through the command list and call bound function
@@ -81,11 +79,12 @@ u8 ParseInputString()
     {
         if (strcmp(argv[0], CMDList[l].id) == 0)
         {
+            Stdout_Flush();
+
             CMDList[l].fptr(argc, argv);
 
-            for (u8 a = 0; a < argc; a++) free(argv[a]);                // !!!
-
-            return 1;
+            ret = 1;
+            goto Exit;
         }
 
         l++;
@@ -95,10 +94,18 @@ u8 ParseInputString()
     if (strlen(argv[0]) > 0)
     {
         stdout_printf("Command \"[36m%s[0m\" not found...\n", argv[0]);
-        return 1;
+        ret = 1;
+        goto Exit;
     }
 
-    return 0;
+    Exit:
+    for (u8 a = 0; a < argc; a++)
+    {
+        free(argv[a]);
+        argv[a] = NULL;
+    }
+    MEM_pack();
+    return ret;
 }
 
 u8 DoBackspace()
@@ -109,11 +116,11 @@ u8 DoBackspace()
 
     if (!sv_Font)
     {
-        VDP_setTileMapXY(BG_B, TILE_ATTR_FULL(2, 0, 0, 0, 0), TTY_GetSX(), sy);
+        VDP_setTileMapXY(BG_B, TILE_ATTR_FULL(2, 0, 0, 0, 0), TTY_GetSX()+BufferSelect, sy);
     }
     else
     {
-        VDP_setTileMapXY(!(TTY_GetSX() & 1), TILE_ATTR_FULL(2, 0, 0, 0, 0), TTY_GetSX()>>1, sy);
+        VDP_setTileMapXY(!(TTY_GetSX() & 1), TILE_ATTR_FULL(2, 0, 0, 0, 0), (TTY_GetSX()+BufferSelect)>>1, sy);
     }
 
     Buffer_ReversePop(&TxBuffer);
@@ -132,19 +139,22 @@ void SetupTerminal()
     sv_bWrapAround = TRUE;
 
     TTY_SetFontSize(sv_TerminalFont);
-    C_XMAX = (sv_TerminalFont == 0 ? 39 : 79);  // Make the cursor wrap at screen edge
 
     //DoTimeSync(sv_TimeServer);
 
     Buffer_Flush(&TxBuffer);
+
+    MEM_pack();
 }
 
 void Enter_Terminal(u8 argc, char *argv[])
 {
     SetupTerminal();
-    Stdout_Push("SMDTC Command Interpreter v0.2\nType \"[32mhelp[0m\" for available commands\n\n");
+    Stdout_Push("SMDTC Command Interpreter v0.2\n");
+    stdout_printf("Type \"[32mhelp[0m\" for available commands%s", sv_Font?" - ":"\n");
+    Stdout_Push("Press [32mF8[0m for quick menu\n\n");
 
-    Stdout_Push(">");
+    stdout_printf("%s> ", FS_GetCWD());
 }
 
 void ReEnter_Terminal()
@@ -156,7 +166,7 @@ void ReEnter_Terminal()
 
     if (Buffer_IsEmpty(&stdout))
     {
-        Stdout_Push(">");
+        stdout_printf("%s> ", FS_GetCWD());
     }
 }
 
@@ -215,7 +225,7 @@ void Input_Terminal()
             }
         }
 
-        if (is_KeyDown(KEY_KP4_LEFT))
+        /*if (is_KeyDown(KEY_KP4_LEFT))
         {
             if (!sv_Font)
             {
@@ -249,11 +259,18 @@ void Input_Terminal()
             }
             
             TTY_MoveCursor(TTY_CURSOR_DUMMY);
-        }
+        }*/
 
         if (is_KeyDown(KEY_DELETE))
         {
         }
+
+        // Temp - cant type ^[ in emulator
+        /*if (is_KeyDown(KEY_END))
+        {
+            TTY_PrintChar(0x1B);
+            NET_SendChar(0x1B, 0);
+        }*/
 
         if (is_KeyDown(KEY_RETURN))
         {
@@ -268,7 +285,7 @@ void Input_Terminal()
 
             if (isCurrentState(PS_Terminal))
             {
-                Stdout_Push(">");
+                stdout_printf("%s> ", FS_GetCWD());
             }
         }
 
@@ -277,11 +294,11 @@ void Input_Terminal()
             DoBackspace();
         }
 
-        // ^C
+        // ^C special case
         if (is_KeyDown(KEY_C) && bKB_Ctrl)
         {
             Stdout_Flush();
-            Stdout_Push("\n>");
+            stdout_printf("\n%s> ", FS_GetCWD());
             Buffer_Flush0(&TxBuffer);
         }
     }

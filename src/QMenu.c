@@ -1,15 +1,17 @@
 #include "QMenu.h"
 #include "HexView.h"
+#include "FavView.h"
 #include "Terminal.h"
 #include "Input.h"
 #include "StateCtrl.h"
 #include "Utils.h"
-#include "SRAM.h"
 #include "Cursor.h"         // sv_CursorCL
 #include "Network.h"        // sv_ListenPort
 #include "Keyboard.h"       // sv_KeyLayout
 #include "Screensaver.h"    // sv_bScreensaver
 #include "UI.h"             // UI_ApplyTheme
+
+#include "misc/ConfigFile.h"
 
 // Forward decl.
 void WINFN_Reset();
@@ -35,6 +37,7 @@ void WINFN_SCREENSAVER();
 void WINFN_CURSOR_CL();
 void WINFN_UITHEME();
 void WINFN_Backspace();
+void WINFN_StartMenu();
 
 extern u8 sv_IRCFont;
 extern u8 sv_TelnetFont;
@@ -57,26 +60,25 @@ static struct s_menu
 {{//0
     5,
     0, 255, 0,
-    NULL, NULL, NULL,
+    NULL, WINFN_StartMenu, NULL,
     "Quick Menu",
-    {1, 3, 4, 13, 255},
+    {1, 3, 4, 255, 13},
     {"System",
      "Settings",
      "Mega Drive settings",
-     "Debug",
-     "About"}
+     "Bookmarks",
+     "Debug"}
 },
 {//1
-    5,
+    4,
     0, 255, 0,
     NULL, WINFN_Reset, NULL,
     "System",
-    {255, 255, 255, 255, 255},
+    {255, 255, 255, 255},
     {"Return to terminal",
      "Hard reset",
      "Soft reset",
-     "Save config to SRAM",
-     "Erase SRAM"}
+     "Save config"}
 },
 {//2
     3,
@@ -202,23 +204,22 @@ static struct s_menu
      "SV (Swedish)"}
 },
 {//13
-    6,
+    5,
     0, 255, 0,
     NULL, WINFN_DEBUGSEL, NULL,
     "Debug",
-    {15, 23, 255, 255, 255, 255},
+    {15, 23, 255, 255, 255},
     {"TX/RX stats",
      "RX Buffer stats",
      "HexView - RX",
      "HexView - TX",
-     "HexView - STDOUT",
-     "UI Tester"}
+     "HexView - Stdout"}
 },
 {//14
     3,
     0, 255, 0,
     NULL, NULL, NULL,
-    "About",
+    "EMPTY SLOT",
     {255, 255, 255},
     {"","",""}
 },
@@ -657,13 +658,13 @@ void WINFN_Reset()
             SYS_hardReset();
         break;
         case 2: // Soft reset
-            ChangeState(getState(), 0, NULL);
+            SYS_reset();
         break;
-        case 3: // Save config to SRAM
-            SRAM_SaveData();
+        case 3: // Save config to file
+            CFG_SaveData();
         break;
-        case 4: // Erase SRAM
-            SRAM_ClearSRAM();
+        case 4: // Erase config
+            //CFG_ClearConfig();
         break;
     
         default:
@@ -805,7 +806,12 @@ void WINFN_FONT_TERM()
         break;
     }
 
-    if (getState() == PS_Terminal) TTY_SetFontSize(sv_TerminalFont);
+    if (getState() == PS_Terminal) 
+    {
+        TTY_SetFontSize(sv_TerminalFont);
+        TTY_Reset(TRUE);
+        stdout_printf("%s> ", FS_GetCWD());
+    }
 }
 
 void WINFN_FONT_TELNET()
@@ -907,19 +913,15 @@ void WINFN_DEBUGSEL()
     {
         case 2:
             QMenu_Toggle();
-            HexView_Toggle(0);
+            HexView_Open("/system/rxbuffer.io");
         break;
         case 3:
             QMenu_Toggle();
-            HexView_Toggle(1);
+            HexView_Open("/system/txbuffer.io");
         break;
         case 4:
             QMenu_Toggle();
-            HexView_Toggle(2);
-        break;
-        case 5:
-            QMenu_Toggle();
-            if (getState() == PS_Terminal) ChangeState(PS_Debug, 0, NULL);
+            HexView_Open("/system/stdout.io");
         break;
     
         default:
@@ -963,6 +965,14 @@ void WINFN_DEVLISTENTRY()
         {
             sprintf(buf, "P%u:D= %s", p, DevList[i]->Id.sName);
         }
+
+        ChangeText(7, d, buf);
+        d++;
+    }
+
+    if (bMegaCD)
+    {
+        sprintf(buf, "EXTD= %s", bPALSystem ? "Sega CC" : "Mega CD");
 
         ChangeText(7, d, buf);
         d++;
@@ -1080,4 +1090,18 @@ void WINFN_UITHEME()
 void WINFN_Backspace()
 {
     vBackspace = SelectedIdx;
+}
+
+void WINFN_StartMenu()
+{
+    switch (SelectedIdx)
+    {
+        case 3:
+            QMenu_Toggle();
+            FavView_Toggle();
+        break;
+    
+        default:
+        break;
+    }
 }

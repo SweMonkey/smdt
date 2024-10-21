@@ -9,7 +9,7 @@
 #define DTIME 500
 
 u32 sv_ConnTimeout = CTIME;    // Connection timeout (waiting for connection to remote server)
-u32 sv_ReadTimeout = RTIME;    // Readback timeout (waiting for response from xpico)
+u32 sv_ReadTimeout = RTIME;    // Readback timeout (waiting for response from xport)
 u32 sv_DelayTime   = DTIME;    // Milliseconds of delay between sending a command and reading the response
 static u8 bIsInMonitorMode = FALSE;
 static u8 rxdata = 0;
@@ -156,7 +156,7 @@ void XPN_Disconnect()
 
     XPN_FlushBuffers();
 
-    // Set CP3 pin to tell the xPico to disconnect from the remote server
+    // Set CP3 pin to tell the xPort to disconnect from the remote server
     DEV_SetData(DRV_UART, 0x40);// Set pin 7 high
     waitMs(500);
     DEV_ClrData(DRV_UART);      // Set pin 7 low

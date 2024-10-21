@@ -2,9 +2,8 @@
 #include "Filesystem.h"
 #include "Utils.h"
 
-#ifdef KERNEL_BUILD
-
 #define MAX_FD 64
+#define MAX_PRINTF_BUF 256
 
 static u16 FD_Count = 0;    // Open file descriptors
 
@@ -30,12 +29,11 @@ SM_File *F_Open(const char *filename, FileMode openmode)
         return NULL;
     }
 
-    u32 r = FS_OpenFile(filename, openmode, &file->fi);
+    s32 r = FS_OpenFile(filename, openmode, &file->f);
 
     if (r)
     {
-        stdout_printf("Error opening file \"%s\"\nError code $%lX\n", filename, r);
-
+        //stdout_printf("Error opening file \"%s\"\nError code $%lX (%ld)\n", filename, r, r);
         return NULL;
     }
 
@@ -48,9 +46,10 @@ u8 F_Close(SM_File *file)
 {
     if (file == NULL) 
     {
-        stdout_printf("Error closing file\n");
         return -1; // EOF
     }
+
+    FS_Close(&file->f);
 
     free(file);
     file = NULL;
@@ -64,9 +63,9 @@ u16 F_Read(void *dest, u32 size, u32 count, SM_File *file)
 {
     if (file == NULL) return 0;
 
-    if (file->fi.mode == FM_READ)
+    if ((file->f.flags & FM_RDWR) || (file->f.flags & FM_RDONLY))
     {
-        return FS_ReadFile(&file->fi, dest, size*count);;
+        return FS_ReadFile(dest, size*count, &file->f);
     }
 
     return 0;    
@@ -76,9 +75,9 @@ u16 F_Write(void *src, u32 size, u32 count, SM_File *file)
 {
     if (file == NULL) return 0;
 
-    if (file->fi.mode == FM_WRITE)
+    if ((file->f.flags & FM_RDWR) || (file->f.flags & FM_WRONLY))
     {
-        return FS_WriteFile(&file->fi, src, size*count);;
+        return FS_WriteFile(src, size*count, &file->f);
     }
 
     return 0;    
@@ -86,31 +85,28 @@ u16 F_Write(void *src, u32 size, u32 count, SM_File *file)
 
 s8 F_Seek(SM_File *file, s32 offset, FileOrigin origin)
 {
-    switch (origin)
-    {
-        case SEEK_SET:
-        {
-            file->fi.pointer = offset;
-            return 0;
-        }
-        case SEEK_CUR:
-        {
-            file->fi.pointer += offset;
-            return 0;
-        }
-        case SEEK_END:
-        {
-            file->fi.pointer = file->fi.filelen;
-            return 0;
-        }
-    }
-
-    return -1;
+    return FS_Seek(&file->f, offset, origin);
 }
 
 u16 F_Tell(SM_File *file)
 {
-    return file->fi.pointer;
+    return FS_Tell(&file->f);
 }
 
-#endif // KERNEL_BUILD
+u16 vsnprintf(char *buf, u16 size, const char *fmt, va_list args);
+u16 F_Printf(SM_File *file, const char *fmt, ...)
+{
+    va_list args;
+    u16 i;
+    char *buffer = malloc(MAX_PRINTF_BUF);
+
+    va_start(args, fmt);
+    i = vsnprintf(buffer, MAX_PRINTF_BUF, fmt, args);
+    va_end(args);
+
+    F_Write(buffer, i, 1, file);
+
+    free(buffer);
+
+    return i;
+}

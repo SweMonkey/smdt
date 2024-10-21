@@ -20,7 +20,8 @@ Row     Column      Usage                                               Index
 1       6           Window border                                       22
 1       7           Colour picker (Reserved)                            23
 
-3       2           Window text FG Inverted                             50
+3       1           Pointer outline (Inverted)                          49
+3       2           Window text FG Inverted & Pointer inner (Inverted)  50
 3       3           Window text BG Inverted                             51
 
 3       6           Screensaver colour 0                                54

@@ -2,10 +2,12 @@
 #define HEXVIEW_H_INCLUDED
 
 #include <genesis.h>
+#include "system/File.h"
 
 extern bool bShowHexView;
 
-void HexView_Input();
-void HexView_Toggle(u8 bufnum);
+void HexViewFile_Input();
+void HexView_Open(const char *filename);
+void HexView_Close();
 
 #endif // HEXVIEW_H_INCLUDED

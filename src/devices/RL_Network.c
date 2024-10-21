@@ -127,7 +127,8 @@ void RLN_Update(void)
     u32 timeout = 0;
     //u8 n = 0;
 
-    if (Buffer_IsEmpty(&RxBuffer) != 0xFF) return;
+    SYS_setInterruptMaskLevel(7);
+    //if (Buffer_IsEmpty(&RxBuffer) != 0xFF) return;
 
     while (Buffer_IsFull(&RxBuffer) != 0xFF)
     {
@@ -142,6 +143,7 @@ void RLN_Update(void)
 
         //if (n++ >= 96) break;
     }
+    SYS_setInterruptMaskLevel(0);
 
     /*while ((RLN_RXReady()) && (!Buffer_IsFull(&RxBuffer)))
     {

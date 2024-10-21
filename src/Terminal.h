@@ -15,10 +15,10 @@
 #define D_COLUMNS_40 64
 
 // Max number of columns available
-#define DCOL4_64  126   // Using 4x8 font with 64 wide tilemap
-#define DCOL4_128 254   // Using 4x8 font with 128 wide tilemap
-#define DCOL8_64  39    // Using 8x8 font with 64 wide tilemap
-#define DCOL8_128 126   // Using 8x8 font with 128 wide tilemap
+#define DCOL4_64  80//126   // Using 4x8 font with 64 wide tilemap
+#define DCOL4_128 80//254   // Using 4x8 font with 128 wide tilemap
+#define DCOL8_64  40//39    // Using 8x8 font with 64 wide tilemap
+#define DCOL8_128 40//126   // Using 8x8 font with 128 wide tilemap
 
 // Default cursor minmaxing
 #define C_YMAX_PAL 29
@@ -57,6 +57,8 @@ extern u8 C_XMAX;
 extern u8 C_YMAX;
 extern u8 sv_bWrapAround;
 extern u8 sv_TermColumns;
+extern u16 BufferSelect;
+extern s16 Saved_VScroll;
 
 extern u16 sv_CBGCL;
 extern u16 sv_CFG0CL;   // Custom text colour for 4x8 font
@@ -90,7 +92,7 @@ void TTY_SetAttribute(u8 v);
 void TTY_SetSX(s32 x);
 s32 TTY_GetSX();
 
-void TTY_SetSY_A(s32 x);    // Set SY without VScroll   (VScroll gets added in function)
+void TTY_SetSY_A(s32 y);    // Set SY without VScroll   (VScroll gets added in function)
 s32 TTY_GetSY_A();          // Get SY without VScroll   (VScroll gets removed in function)
 void TTY_SetSY(s32 y);      // Set SY + VScroll         (VScroll does NOT get added in function)
 s32 TTY_GetSY();            // Get SY + VScroll         (VScroll does NOT get removed in function)

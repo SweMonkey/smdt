@@ -44,6 +44,7 @@ void MoreFunc(s32 *start)
                 TTY_MoveCursor(TTY_CURSOR_UP, 1); // Only move up in case the initial \n is printed above
                 break;
             }
+
             SYS_doVBlankProcess();
         }
 
@@ -54,10 +55,18 @@ void MoreFunc(s32 *start)
 
 void Stdout_Push(const char *str)
 {
+    u8 r = 0;
     for (u16 c = 0; c < strlen(str); c++)
     {
         if (bAutoFlushStdout) TELNET_ParseRX((u8)str[c]);
-        else Buffer_Push(&stdout, (u8)str[c]);
+        else r = Buffer_Push(&stdout, (u8)str[c]);
+
+        // Check if stdout is full, if it is then flush it
+        if (r)
+        {
+            Stdout_Flush();
+            Buffer_Push(&stdout, (u8)str[c]);   // Push character again since it was previously dropped
+        }
     }
 }
 

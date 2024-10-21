@@ -2,6 +2,7 @@
 #include "Input.h"
 #include "QMenu.h"
 #include "HexView.h"
+#include "FavView.h"
 #include "Cursor.h"
 #include "Screensaver.h"
 #include "DevMgr.h"             // bRLNetwork
@@ -14,9 +15,9 @@
 extern PRG_State DummyState;
 extern PRG_State TelnetState;
 extern PRG_State IRCState;
-extern PRG_State EntryState;
 extern PRG_State DebugState;
 extern PRG_State TerminalState;
+extern PRG_State GopherState;
 
 static PRG_State *CurrentState = &DummyState;
 static PRG_State *PrevState = &DummyState;
@@ -30,11 +31,6 @@ bool bWindowActive = FALSE;
 
 void VBlank()
 {
-    if (bRLNetwork)
-    {
-        RLN_Update();
-    }
-
     while (KB_Poll(&kbdata))
     {
         KB_Interpret_Scancode(kbdata);
@@ -42,10 +38,9 @@ void VBlank()
 
     //if (CurrentState->VBlank) CurrentState->VBlank();
 
-    if ((is_KeyDown(KEY_RWIN) || is_KeyDown(KEY_F8)) && 
-        (CurrentStateEnum != PS_Entry) && 
+    if ((is_KeyDown(KEY_RWIN) || is_KeyDown(KEY_F8)) &&
         (CurrentStateEnum != PS_Debug) && 
-        (!bShowHexView)) QMenu_Toggle();   // Global quick menu
+        (!bShowHexView) && (!bShowFavView)) QMenu_Toggle();   // Global quick menu
 
     if (CurrentState->Input != NULL) CurrentState->Input(); // Current PRG
 
@@ -56,7 +51,7 @@ void VBlank()
     ScreensaverTick();  // Screensaver counter/animation
     CR_Blink();         // Cursor blink
 
-    bWindowActive = (bShowQMenu || bShowHexView);
+    bWindowActive = (bShowQMenu || bShowHexView || bShowFavView);
 }
 
 void ChangeState(State new_state, u8 argc, char *argv[])
@@ -86,12 +81,6 @@ void ChangeState(State new_state, u8 argc, char *argv[])
         break;
     }
 
-    case PS_Entry:
-    {
-        CurrentState = &EntryState;
-        break;
-    }
-
     case PS_Debug:
     {
         CurrentState = &DebugState;
@@ -107,6 +96,12 @@ void ChangeState(State new_state, u8 argc, char *argv[])
     case PS_Terminal:
     {
         CurrentState = &TerminalState;
+        break;        
+    }
+
+    case PS_Gopher:
+    {
+        CurrentState = &GopherState;
         break;        
     }
     
@@ -182,4 +177,9 @@ void ResetSystem(bool bHard)
 void StateTick()
 {
     CurrentState->Run();
+
+    if (bRLNetwork)
+    {
+        RLN_Update();
+    }
 }

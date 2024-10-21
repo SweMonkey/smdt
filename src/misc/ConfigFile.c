@@ -1,49 +1,37 @@
-#include "SRAM.h"
+#include "ConfigFile.h"
 #include "Utils.h"              // For EMU_BUILD define
 #include "misc/VarList.h"
+#include "system/File.h"
 
-#define SAVE_VERSION 2
+static const u8 CFG_Magic[5] = {'S', 'M', 'D', 'T', 0};
+static const u16 CFG_Version = 3;
 
 static u32 Offset = 0;
+static u8 *cfgbuf = NULL;
 
 
-void SRAM_ClearSRAM()
+void CFG_ClearConfig()
 {
-    vu32 *SStart = (u32*)0x1B4;
-    vu32 *SEnd = (u32*)0x1B8;
-    u16 SSize = (*SEnd-*SStart) >> 1;
-    //kprintf("SRAM Size: $%X", SSize);
-
-    #ifdef KERNEL_BUILD
-    return;
-    #endif
-
-    SRAM_enable();
-
-    for (u16 i = 0; i < SSize; i++)
-    {
-        SRAM_writeByte(i, 0);
-    }
-
-    SRAM_disable();
 }
 
-void WriteByte(u8 *b)
+void WriteByte(const u8 *b)
 {
-    SRAM_writeByte(Offset, *b);
+    cfgbuf[Offset] = *b;
     Offset += 1;
 }
 
-void WriteWord(u16 *w)
+void WriteWord(const u16 *w)
 {
-    SRAM_writeWord(Offset, *w);
-    Offset += 2;
+    cfgbuf[Offset++] = *w >> 8;
+    cfgbuf[Offset++] = *w & 0xFF;
 }
 
-void WriteLong(u32 *l)
+void WriteLong(const u32 *l)
 {
-    SRAM_writeLong(Offset, *l);
-    Offset += 4;
+    cfgbuf[Offset++] = (*l >> 24) & 0xFF;
+    cfgbuf[Offset++] = (*l >> 16) & 0xFF;
+    cfgbuf[Offset++] = (*l >> 8) & 0xFF;
+    cfgbuf[Offset++] = *l & 0xFF;
 }
 
 void WriteStringPtr(char **str)
@@ -52,10 +40,10 @@ void WriteStringPtr(char **str)
     u16 len = strlen(s);
     for (u16 i = 0; i < len; i++)
     {
-        SRAM_writeByte(Offset+i, s[i]);
+        cfgbuf[Offset+i] = s[i];
     }
     
-    SRAM_writeByte(Offset+len, 0);
+    cfgbuf[Offset+len] = 0;
 
     Offset += len+1;
 }
@@ -65,35 +53,40 @@ void WriteCharArr(char *str)
     u16 len = strlen(str);
     for (u16 i = 0; i < len; i++)
     {
-        SRAM_writeByte(Offset+i, str[i]);
+        cfgbuf[Offset+i] = str[i];
     }
     
-    SRAM_writeByte(Offset+len, 0);
+    cfgbuf[Offset+len] = 0;
 
     Offset += len+1;
 }
 
-void SRAM_SaveData()
+void CFG_SaveData()
 {
     u16 i = 0;
     u8 bBreak = FALSE;
 
-    #ifdef KERNEL_BUILD
-    return;
-    #endif
-
-    SRAM_ClearSRAM();
-
-    SRAM_enable();
-
     Offset = 0;
+    
+    SM_File *f = F_Open("/system/smdt_cfg.bin", FM_CREATE | FM_WRONLY);
 
-    SRAM_writeByte(Offset++, 'S');
-    SRAM_writeByte(Offset++, 'M');
-    SRAM_writeByte(Offset++, 'D');
-    SRAM_writeByte(Offset++, 'T');
-    SRAM_writeWord(Offset, SAVE_VERSION); Offset += 2;
+    if (f == NULL) return;
 
+    cfgbuf = malloc(256);
+
+    if (cfgbuf == NULL) 
+    {
+        F_Close(f);
+        return;
+    }
+
+    WriteByte(&CFG_Magic[0]);
+    WriteByte(&CFG_Magic[1]);
+    WriteByte(&CFG_Magic[2]);
+    WriteByte(&CFG_Magic[3]);
+    WriteByte(&CFG_Magic[4]);
+    WriteWord(&CFG_Version);
+    
     while (!bBreak)
     {
         switch (VarList[i].size)
@@ -122,25 +115,32 @@ void SRAM_SaveData()
         i++;
     }
 
-    SRAM_disable();
+    F_Write(cfgbuf, Offset, 1, f);
+
+    F_Close(f);
+    free(cfgbuf);
+    cfgbuf = NULL;
+
+    return;
 }
 
 void ReadByte(u8 *b)
 {
-    *b = SRAM_readByte(Offset);
-    Offset += 1;
+    *b = cfgbuf[Offset++];
 }
 
 void ReadWord(u16 *w)
 {
-    *w = SRAM_readWord(Offset);
-    Offset += 2;
+    *w  = (cfgbuf[Offset++] << 8);
+    *w |= (cfgbuf[Offset++]     );
 }
 
 void ReadLong(u32 *l)
 {
-    *l = SRAM_readLong(Offset);
-    Offset += 4;
+    *l  = (cfgbuf[Offset++] << 24);
+    *l |= (cfgbuf[Offset++] << 16);
+    *l |= (cfgbuf[Offset++] <<  8);
+    *l |= (cfgbuf[Offset++]      );
 }
 
 void ReadStringPtr(char **str)
@@ -151,7 +151,7 @@ void ReadStringPtr(char **str)
 
     for (u16 i = 0; i < 1024; i++)
     {
-        c = (char)SRAM_readByte(Offset+i);
+        c = (char)cfgbuf[Offset+i];
 
         s[i] = c;
 
@@ -172,7 +172,7 @@ void ReadCharArr(char *str)
 
     for (u16 i = 0; i < 1024; i++)
     {
-        c = (char)SRAM_readByte(Offset+i);
+        c = (char)cfgbuf[Offset+i];
 
         str[i] = c;
 
@@ -186,36 +186,49 @@ void ReadCharArr(char *str)
     Offset += len+1;
 }
 
-u8 SRAM_LoadData()
+u8 CFG_LoadData()
 {
     u16 i = 0;
     u8 bBreak = FALSE;
-    char magic[5];
+    u8 magic[5];
     u16 version;
-
-    #ifdef KERNEL_BUILD
-    return 0;
-    #endif
-
-    SRAM_enableRO();
-
     Offset = 0;
 
-    magic[0] = SRAM_readByte(Offset++);
-    magic[1] = SRAM_readByte(Offset++);
-    magic[2] = SRAM_readByte(Offset++);
-    magic[3] = SRAM_readByte(Offset++);
-    magic[4] = 0;
-    
-    version = SRAM_readWord(Offset); Offset += 2;
+    SM_File *f = F_Open("/system/smdt_cfg.bin", FM_RDONLY);
+    if (f == NULL) return 1;
 
-    if ((strcmp("SMDT", magic) != 0) || (version != SAVE_VERSION))
+    F_Seek(f, 0, SEEK_END);
+    u16 size = F_Tell(f);
+
+    cfgbuf = (u8*)malloc(size);
+    if (cfgbuf == NULL) 
+    {
+        F_Close(f);
+        return 1;
+    }
+
+    memset(cfgbuf, 0, size);
+    F_Seek(f, 0, SEEK_SET);
+    F_Read(cfgbuf, size, 1, f);
+
+    ReadByte(&magic[0]);
+    ReadByte(&magic[1]);
+    ReadByte(&magic[2]);
+    ReadByte(&magic[3]);
+    magic[4] = 0;
+    Offset++;
+    ReadWord(&version);
+
+    if ((strcmp((char*)CFG_Magic, (char*)magic) != 0) || (version != CFG_Version))
     {
         #ifdef EMU_BUILD
         kprintf("Save is invalid; Magic = \"%s\" - Version: %u", magic, version);
         #endif
+        
+        F_Close(f);
+        free(cfgbuf);
+        cfgbuf = NULL;
 
-        SRAM_disable();
         return 1;
     }
 
@@ -247,6 +260,9 @@ u8 SRAM_LoadData()
         i++;
     }
 
-    SRAM_disable();
+    F_Close(f);
+    free(cfgbuf);
+    cfgbuf = NULL;
+
     return 0;
 }

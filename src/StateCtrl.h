@@ -3,7 +3,7 @@
 
 #include <genesis.h>
 
-typedef enum e_state {PS_Dummy = 0, PS_Telnet = 1, PS_Entry = 2, PS_Debug = 3, PS_IRC = 4, PS_Terminal = 5} State;
+typedef enum e_state {PS_Dummy = 0, PS_Telnet = 1, PS_Debug = 3, PS_IRC = 4, PS_Terminal = 5, PS_Gopher = 6} State;
 
 typedef void StateArg_CB(u8 argc, char *argv[]);
 

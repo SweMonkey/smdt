@@ -18,4 +18,6 @@ typedef const struct s_varlist
 
 extern SM_VarList VarList[];
 
+void getenv(const char *name, char *ret);
+
 #endif // VARLIST_H_INCLUDED

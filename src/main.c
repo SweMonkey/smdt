@@ -5,13 +5,18 @@
 #include "../res/system.h"
 #include "Utils.h"
 #include "HexView.h"    // bShowHexView
+#include "FavView.h"    // bShowFavView
 #include "QMenu.h"      // bShowQMenu
 #include "UI.h"         // UI_ApplyTheme
 #include "Network.h"
-#include "SRAM.h"
 #include "Terminal.h"
 #include "Telnet.h"
+
+#include "misc/ConfigFile.h"
+
 #include "system/Stdout.h"
+#include "system/File.h"
+#include "system/Filesystem.h"
 
 
 int main(bool hardReset)
@@ -61,7 +66,7 @@ int main(bool hardReset)
     PSG_init();
     PSG_setEnvelope(0, PSG_ENVELOPE_MAX);
     PSG_setTone(0, 200);
-    waitMs(200);
+    waitMs(200);    
     PSG_setEnvelope(0, PSG_ENVELOPE_MIN);
     
     // Setup initial colour values needed for boot
@@ -95,7 +100,7 @@ int main(bool hardReset)
     
     VDP_setEnable(TRUE);
  
-    Stdout_Push("Initializing system...\n");
+    Stdout_Push("[97mInitializing system...[0m\n");
 
     Input_Init();
 
@@ -104,13 +109,16 @@ int main(bool hardReset)
     TRM_SetStatusIcon(ICO_NET_IDLE_SEND, ICO_POS_2);
     TRM_SetStatusIcon(ICO_NONE,          ICO_POS_3);
 
-    Stdout_Push("Loading config...\n");
-    if (SRAM_LoadData()) 
+    Stdout_Push("[97mMounting filesystem...[0m\n");
+    FS_Init();
+
+    Stdout_Push("[97mLoading config...[0m\n");
+    if (CFG_LoadData()) 
     {
-        Stdout_Push("Failed to load config from SRAM...\n");
-        SRAM_SaveData();
+        Stdout_Push("└[91mFailed to load config file![0m\n");
+        CFG_SaveData();
     }
-    else Stdout_Push("Successfully loaded config from SRAM\n");
+    else Stdout_Push("└[92mSuccessfully loaded config file[0m\n");
         
     VDP_setReg(0xB, 0x8);               // Enable VDP ext interrupt (Enable: 8 - Disable: 0)
     SYS_setInterruptMaskLevel(0);       // Enable all interrupts
@@ -119,12 +127,13 @@ int main(bool hardReset)
     // Enable interrupts during driver init, certain devices will need ExtIRQ working for detection
     SYS_enableInts();
 
-    Stdout_Push("Configuring devices...\n");
+    Stdout_Push("[97mConfiguring devices...[0m\n");
     DeviceManager_Init();
 
     SYS_disableInts();
     
     bShowHexView = FALSE;
+    bShowFavView = FALSE;
     bShowQMenu = FALSE;
 
     #if (HALT_Z80_ON_IO != 0)
@@ -178,6 +187,7 @@ int main(bool hardReset)
     //ChangeState(PS_Telnet, 0, NULL);
     //ChangeState(PS_Entry, 0, NULL);
     //ChangeState(PS_IRC, 0, NULL);
+    //ChangeState(PS_Gopher, 0, NULL);
     ChangeState(PS_Terminal, 0, NULL);
 
     while(TRUE)

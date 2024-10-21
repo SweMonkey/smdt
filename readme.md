@@ -1,5 +1,5 @@
 
-# SMD Terminal emulator, Telnet and IRC client v0.30+
+# SMD Terminal emulator, Telnet and IRC client v0.31+
 A terminal emulator, telnet and IRC client for the Sega Mega Drive/Genesis with support for keyboards and RS-232 communication.<br>
 ![Screenshot of the telnet client](https://deceptsoft.com/smdtc_extra_git/v30/telnet_small.png)
 ![Screenshot of the IRC client](https://deceptsoft.com/smdtc_extra_git/v30/irc_small.png)
@@ -20,10 +20,12 @@ A terminal emulator, telnet and IRC client for the Sega Mega Drive/Genesis with 
   * [Pin configuration of the MD controller ports](#pin-configuration-of-the-md-controller-ports)
   * [PS/2 pin reference](#ps2-pin-reference)
   * [MD UART pin reference](#md-uart-pin-reference)
+* [Filesystem](#filesystem)
 * [Shortcuts](#shortcuts)
   * [Quick menu](#quick-menu)
   * [IRC client](#irc-client)
   * [Telnet client](#telnet-client)
+  * [Gopher client](#gopher-client)
   * [Terminal emulator](#terminal-emulator)
 
 ## Disclaimer
@@ -35,10 +37,11 @@ A terminal emulator, telnet and IRC client for the Sega Mega Drive/Genesis with 
 <br>
 
 ## Thanks to
-b1tsh1ft3r - Testing, improvement ideas and RetroLink/xPico support<br>
+b1tsh1ft3r - Testing, improvement ideas and RetroLink/xPort support<br>
 RKT - For creating a 4x8 extended ASCII font tileset<br>
 Stef - For creating [SGDK](https://github.com/Stephane-D/SGDK)<br>
 Sik - For creating the website [Plutiedev](https://plutiedev.com/) with valuable information regarding the MD<br>
+[littlefs](https://github.com/littlefs-project/littlefs) - For an awesome little filesystem<br>
 <br>
 
 ## Building SMDTC from source
@@ -58,7 +61,7 @@ Other emulators may have issues running SMDTC and it is unlikely they will have 
 
 ## Required hardware
 1. A PS/2 keyboard or a Sega Saturn keyboard (not strictly required but preferred).
-2. A **5 volt** RS-232 serial connection or an xPico/xPort module.
+2. A **5 volt** RS-232 serial connection or an xPort/xPort module.
 3. A Mega Drive or Genesis and a way to run roms on it.
 <br>
 
@@ -86,7 +89,7 @@ All detected devices can be viewed in the "Connected devices" list (Quick menu -
 PS/2 Keyboard.<br>
 Sega Saturn keyboard.<br>
 Sega 3/6 button joypad.<br>
-xPico module connected to built in UART (May require you to set the correct serial port as described above)<br>
+xPort module connected to built in UART (May require you to set the correct serial port as described above)<br>
 RetroLink network adapter cartridge (Currently being worked on, support may be iffy)<br>
 <br>
 
@@ -145,6 +148,19 @@ P3:1 = Port 3 @ pin 3+4<br>
 P3:S = Port 3 UART<br>
 P3:D = Port 3 Parallel+UART Mode<br>
 
+## Filesystem
+SMDT features a [littlefs](https://github.com/littlefs-project/littlefs) formatted filesystem that lives in SRAM.<br>
+It is currently hardcoded to a 32KB partition and SRAM is configured as BYTE/ODD. Maybe I'll add support for flashcart SD cards in the future?<br>
+SMDT will still work without SRAM but with no possibility to save settings due to obvious reasons.<br>
+The filesystem can be navigated and manipulated in the terminal using basic UNIX commands such as: ls, mv, cp, cat, touch, mkdir, rm, lsblk etc etc.<br>
+<br>
+This is still very much WIP, beware data loss and bugs!<br>
+<br>
+The little filesystem<br>
+Copyright (c) 2022, The littlefs authors.<br>
+Copyright (c) 2017, Arm Limited. All rights reserved.<br>
+[See littlefs on github](https://github.com/littlefs-project/littlefs)<br>
+
 ## Shortcuts
 
 ### Quick menu
@@ -160,16 +176,19 @@ F2  = Channel 2 tab<br>
 F3  = Channel 3 tab<br>
 F4  = Channel 4 tab<br>
 F5  = Channel 5 tab<br>
-F6  = Channel 6 tab<br>
-Left arrow key = Switch to previous channel<br>
+Left arrow key  = Switch to previous channel<br>
 Right arrow key = Switch to next channel<br>
 Tab = Toggle channel user list<br>
 Numpad 4 = Scroll left<br>
 Numpad 6 = Scroll right<br>
 
 ### Telnet client
-F1  = Scroll left<br>
-F2  = Scroll right<br>
+None<br>
+
+### Gopher client
+Very WIP gopher client, use at your own risk!<br>
+Cursor keys = Move the cursor on screen<br>
+Enter       = Go to link highlighted by the cursor<br>
 
 ### Terminal emulator
 Type `help` for a list of all available built in commands.<br>

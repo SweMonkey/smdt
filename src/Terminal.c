@@ -9,9 +9,11 @@
 
 #ifdef EMU_BUILD
 #include "StateCtrl.h"
+extern u32 StreamPos;   // Stream replay position
 #endif
 
 #define TTY_CURSOR_X (((sv_Font?(sx << 2):(sx << 3))) + HScroll + 128)
+//#define TTY_CURSOR_X (((sv_Font?(sx << 2):(sx << 3))) + (HScroll-(BufferSelect<<4)) + 128)
 #define TTY_CURSOR_Y ((sy << 3) - VScroll + 128)
 
 // Modifiable variables
@@ -39,6 +41,8 @@ u8 bIntense = FALSE;                    // Text highlighed
 u8 bInverse = FALSE;                    // Text BG/FG reversed
 u8 sv_bWrapAround = TRUE;               // Force wrap around at column 40/80
 u8 sv_TermColumns = D_COLUMNS_80;       // Number of terminal character columns (40/80)
+u16 BufferSelect = 0;
+s16 Saved_VScroll = 0;
 
 // Colours
 u16 sv_CBGCL = 0;       // Custom BG colour
@@ -107,6 +111,9 @@ void TTY_Reset(u8 bClearScreen)
     bIntense = FALSE;
     bInverse = FALSE;
     bDoCursorBlink = TRUE;
+
+    BufferSelect = 0;
+    Saved_VScroll = 0;
 
     TTY_SetFontSize(sv_Font);
 
@@ -338,7 +345,7 @@ inline void TTY_PrintChar(u8 c)
     {
         case FONT_8x8_16: // 8x8
         {
-            addr = ((sx & 127) << 1) + YAddr_Table[sy & 31];
+            addr = (((sx+BufferSelect) & 127) << 1) + YAddr_Table[sy & 31];
             
             *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(AVR_PLANE_B + addr);         // Set plane B VRAM address
             *((vu16*) VDP_DATA_PORT) = 0x4000 + ColorFG;                                // Set plane B tilemap data
@@ -350,7 +357,7 @@ inline void TTY_PrintChar(u8 c)
         }
         case FONT_4x8_8: // 4x8 8 Colour
         {
-            addr = (sx & 254) + YAddr_Table[sy & 31];
+            addr = ((sx+BufferSelect) & 254) + YAddr_Table[sy & 31];
             
             *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR((EvenOdd ? AVR_PLANE_B : AVR_PLANE_A) + addr);   // Set plane VRAM address
             *((vu16*) VDP_DATA_PORT) = PF_Table[ColorFG & 0x7] + c + (bInverse ? 0 : 0x100);                // Set plane tilemap data
@@ -360,7 +367,7 @@ inline void TTY_PrintChar(u8 c)
         }
         case FONT_4x8_1: // 4x8 Mono
         {
-            addr = (sx & 254) + YAddr_Table[sy & 31];
+            addr = ((sx+BufferSelect) & 254) + YAddr_Table[sy & 31];
             
             *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR((EvenOdd ? AVR_PLANE_B : AVR_PLANE_A) + addr);   // Set plane VRAM address
             *((vu16*) VDP_DATA_PORT) = AVR_FONT0 + c + (bInverse ? 0x4000 : 0x4100);                        // Set plane tilemap data
@@ -370,7 +377,7 @@ inline void TTY_PrintChar(u8 c)
         }
         case FONT_4x8_16: // 4x8 16 Colour
         {
-            addr = (sx & 254) + YAddr_Table[sy & 31];
+            addr = ((sx+BufferSelect) & 254) + YAddr_Table[sy & 31];
             
             *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR((EvenOdd ? AVR_PLANE_B : AVR_PLANE_A) + addr);   // Set plane VRAM address
             *((vu16*) VDP_DATA_PORT) = PF_Table[ColorFG & 0xF] + c;                                         // Set plane tilemap data
@@ -394,36 +401,79 @@ inline void TTY_PrintString(const char *str)
 
 inline void TTY_ClearLine(u16 y, u16 line_count)
 {
-    u16 addr = YAddr_Table[y & 31];
     u16 j;
-
-    //*((vu16*) VDP_CTRL_PORT) = 0x8F02;  // Set VDP autoinc to 2
-    *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR((u32) AVR_PLANE_B + addr);
-
     u16 i = line_count;
-    while (i--)
-    {
+    *((vu16*) VDP_CTRL_PORT) = 0x8F02;  // Set VDP autoinc to 2
 
-        j = 32; // 16 = 64 column tilemap - 32 = 128 column tilemap
-        while (j--)
+    switch (sv_Font)
+    {
+        case FONT_8x8_16: // 8x8
         {
-            *((vu16*) VDP_DATA_PORT) = 0;
-            *((vu16*) VDP_DATA_PORT) = 0;
-            *((vu16*) VDP_DATA_PORT) = 0;
-            *((vu16*) VDP_DATA_PORT) = 0;
+            while (i--)
+            {
+                *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR((u32) AVR_PLANE_B + YAddr_Table[(y+i) & 31] + (BufferSelect<<1));
+
+                j = 10; // 16 = 64 column tilemap - 32 = 128 column tilemap
+                while (j--)
+                {
+                    *((vu16*) VDP_DATA_PORT) = 0;
+                    *((vu16*) VDP_DATA_PORT) = 0;
+                    *((vu16*) VDP_DATA_PORT) = 0;
+                    *((vu16*) VDP_DATA_PORT) = 0;
+                }
+            }
+
+            break;
+        }
+
+        default:    // 4x8
+        {
+            while (i--)
+            {
+                *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR((u32) AVR_PLANE_B + YAddr_Table[(y+i) & 31] + (BufferSelect));
+
+                j = 10; // 16 = 64 column tilemap - 32 = 128 column tilemap
+                while (j--)
+                {
+                    *((vu16*) VDP_DATA_PORT) = 0;
+                    *((vu16*) VDP_DATA_PORT) = 0;
+                    *((vu16*) VDP_DATA_PORT) = 0;
+                    *((vu16*) VDP_DATA_PORT) = 0;
+                }
+            }
+
+            i = line_count;
+            while (i--)
+            {
+                *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR((u32) AVR_PLANE_A + YAddr_Table[(y+i) & 31] + (BufferSelect));
+
+                j = 10; // 16 = 64 column tilemap - 32 = 128 column tilemap
+                while (j--)
+                {
+                    *((vu16*) VDP_DATA_PORT) = 0;
+                    *((vu16*) VDP_DATA_PORT) = 0;
+                    *((vu16*) VDP_DATA_PORT) = 0;
+                    *((vu16*) VDP_DATA_PORT) = 0;
+                }
+            }
+
+            break;
         }
     }
+}
 
-    // Clear BGA too if using 4x8 font
-    if (sv_Font)
+inline void TTY_ClearLineSingle(u16 y)
+{
+    u16 j;
+    *((vu16*) VDP_CTRL_PORT) = 0x8F02;  // Set VDP autoinc to 2
+
+    switch (sv_Font)
     {
-        *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR((u32) AVR_PLANE_A + addr);
-
-        i = line_count;
-        while (i--)
+        case FONT_8x8_16: // 8x8
         {
+            *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR((u32) AVR_PLANE_B + YAddr_Table[y & 31] + (BufferSelect<<1));
 
-            j = 32; // 16 = 64 column tilemap - 32 = 128 column tilemap
+            j = 10; // 16 = 64 column tilemap - 32 = 128 column tilemap
             while (j--)
             {
                 *((vu16*) VDP_DATA_PORT) = 0;
@@ -431,39 +481,35 @@ inline void TTY_ClearLine(u16 y, u16 line_count)
                 *((vu16*) VDP_DATA_PORT) = 0;
                 *((vu16*) VDP_DATA_PORT) = 0;
             }
+
+            break;
         }
-    }
-}
 
-inline void TTY_ClearLineSingle(u16 y)
-{
-    u16 addr = YAddr_Table[y & 31];
-    u16 j;
-
-    //*((vu16*) VDP_CTRL_PORT) = 0x8F02;  // Set VDP autoinc to 2
-    *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR((u32) AVR_PLANE_B + addr);
-
-    j = 32; // 16 = 64 column tilemap - 32 = 128 column tilemap
-    while (j--)
-    {
-        *((vu16*) VDP_DATA_PORT) = 0;
-        *((vu16*) VDP_DATA_PORT) = 0;
-        *((vu16*) VDP_DATA_PORT) = 0;
-        *((vu16*) VDP_DATA_PORT) = 0;
-    }
-
-    // Clear BGA too if using 4x8 font
-    if (sv_Font)
-    {
-        *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR((u32) AVR_PLANE_A + addr);
-
-        j = 32; // 16 = 64 column tilemap - 32 = 128 column tilemap
-        while (j--)
+        default:    // 4x8
         {
-            *((vu16*) VDP_DATA_PORT) = 0;
-            *((vu16*) VDP_DATA_PORT) = 0;
-            *((vu16*) VDP_DATA_PORT) = 0;
-            *((vu16*) VDP_DATA_PORT) = 0;
+            *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR((u32) AVR_PLANE_B + YAddr_Table[y & 31] + (BufferSelect));
+
+            j = 10; // 16 = 64 column tilemap - 32 = 128 column tilemap
+            while (j--)
+            {
+                *((vu16*) VDP_DATA_PORT) = 0;
+                *((vu16*) VDP_DATA_PORT) = 0;
+                *((vu16*) VDP_DATA_PORT) = 0;
+                *((vu16*) VDP_DATA_PORT) = 0;
+            }
+
+            *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR((u32) AVR_PLANE_A + YAddr_Table[y & 31] + (BufferSelect));
+
+            j = 10; // 16 = 64 column tilemap - 32 = 128 column tilemap
+            while (j--)
+            {
+                *((vu16*) VDP_DATA_PORT) = 0;
+                *((vu16*) VDP_DATA_PORT) = 0;
+                *((vu16*) VDP_DATA_PORT) = 0;
+                *((vu16*) VDP_DATA_PORT) = 0;
+            }
+
+            break;
         }
     }
 }
@@ -471,16 +517,15 @@ inline void TTY_ClearLineSingle(u16 y)
 inline void TTY_ClearPartialLine(u16 y, u16 from_x, u16 to_x)
 {
     u16 j;
-
     *((vu16*) VDP_CTRL_PORT) = 0x8F02;  // Set VDP autoinc to 2
 
     switch (sv_Font)
     {
         case FONT_8x8_16: // 8x8
         {
-            *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR((u32) AVR_PLANE_B + (((from_x & 127) + ((y & 31) << 7)) << 1));
+            *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR((u32) AVR_PLANE_B + (((from_x & 127) + ((y & 31) << 7)) << 1) + (BufferSelect<<1));
 
-            j = (to_x - from_x) >> 3;   // NumChar / 8 --> Below sends 2 bytes * 4 (8 bytes every loop)
+            j = (to_x - from_x) >> 2;   // NumChar / 8 --> Below sends 2 bytes * 4 (8 bytes every loop)
             while (j--)
             {
                 *((vu16*) VDP_DATA_PORT) = 0;
@@ -491,38 +536,33 @@ inline void TTY_ClearPartialLine(u16 y, u16 from_x, u16 to_x)
             break;
         }
 
-        case FONT_4x8_16:// 4x8 16 Colour
-        case FONT_4x8_8: // 4x8 8 Colour
-        case FONT_4x8_1: // 4x8 Mono
+        default:    // 4x8
         {
             u16 from_x_ = from_x >> 1;
             u16 to_x_ = to_x >> 1;
-            u16 num = (to_x_ - from_x_) >> 3;   // Should be >> 2 without setting autoinc to 2?
+            u16 num = (to_x_ - from_x_);   // >>3
 
-            *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR((u32) AVR_PLANE_A + ((( (from_x_) & 127) + ((y & 31) << 7)) << 1));        
+            *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR((u32) AVR_PLANE_A + ((( (from_x_) & 127) + ((y & 31) << 7)) << 1) + (BufferSelect));        
             j = num;    // NumChar / 8 --> Below sends 2 bytes * 4 (8 bytes every loop)
             while (j--)
             {
                 *((vu16*) VDP_DATA_PORT) = 0;
-                *((vu16*) VDP_DATA_PORT) = 0;
-                *((vu16*) VDP_DATA_PORT) = 0;
-                *((vu16*) VDP_DATA_PORT) = 0;
+                //*((vu16*) VDP_DATA_PORT) = 0;
+                //*((vu16*) VDP_DATA_PORT) = 0;
+                //*((vu16*) VDP_DATA_PORT) = 0;
             }
             
-            *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR((u32) AVR_PLANE_B + ((( (from_x_ + !EvenOdd ) & 127) + ((y & 31) << 7)) << 1));
+            *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR((u32) AVR_PLANE_B + ((( (from_x_ + !EvenOdd ) & 127) + ((y & 31) << 7)) << 1) + (BufferSelect));
             j = num;    // NumChar / 8 --> Below sends 2 bytes * 4 (8 bytes every loop)
             while (j--)
             {
                 *((vu16*) VDP_DATA_PORT) = 0;
-                *((vu16*) VDP_DATA_PORT) = 0;
-                *((vu16*) VDP_DATA_PORT) = 0;
-                *((vu16*) VDP_DATA_PORT) = 0;
+                //*((vu16*) VDP_DATA_PORT) = 0;
+                //*((vu16*) VDP_DATA_PORT) = 0;
+                //*((vu16*) VDP_DATA_PORT) = 0;
             }
             break;
         }
-    
-        default:
-        break;
     }
 }
 
@@ -577,7 +617,7 @@ inline void TTY_SetAttribute(u8 v)
             bInverse = FALSE;
 
             #ifdef ATT_LOGGING
-            kprintf("Text reset");
+            kprintf("Text reset at $%lX", StreamPos);
             #endif
         break;
 
@@ -587,7 +627,7 @@ inline void TTY_SetAttribute(u8 v)
             bIntense = TRUE;
 
             #ifdef ATT_LOGGING
-            kprintf("Text increased intensity");
+            kprintf("Text increased intensity at $%lX", StreamPos);
             #endif
         break;
 
@@ -597,7 +637,7 @@ inline void TTY_SetAttribute(u8 v)
             bIntense = FALSE;
 
             #ifdef ATT_LOGGING
-            kprintf("Text decreased intensity");
+            kprintf("Text decreased intensity at $%lX", StreamPos);
             #endif
         break;
 
@@ -605,7 +645,7 @@ inline void TTY_SetAttribute(u8 v)
             bInverse = TRUE;
 
             #ifdef ATT_LOGGING
-            kprintf("Text inverse on");
+            kprintf("Text inverse on at $%lX", StreamPos);
             #endif
         break;
 
@@ -615,7 +655,7 @@ inline void TTY_SetAttribute(u8 v)
             bIntense = FALSE;
 
             #ifdef ATT_LOGGING
-            kprintf("Text Normal intensity");
+            kprintf("Text Normal intensity at $%lX", StreamPos);
             #endif
         break;
 
@@ -623,13 +663,13 @@ inline void TTY_SetAttribute(u8 v)
             bInverse = FALSE;
 
             #ifdef ATT_LOGGING
-            kprintf("Text inverse off");
+            kprintf("Text inverse off at $%lX", StreamPos);
             #endif
         break;
 
         case 38:    // Set foreground color
             #ifdef ATT_LOGGING
-            kprintf("Text set foreground color");
+            kprintf("Text set foreground color at $%lX", StreamPos);
             #endif
         break;
 
@@ -637,7 +677,7 @@ inline void TTY_SetAttribute(u8 v)
             ColorFG = CL_FG;
 
             #ifdef ATT_LOGGING
-            kprintf("Text FG color reset");
+            kprintf("Text FG color reset at $%lX", StreamPos);
             #endif
         break;
 
@@ -645,7 +685,7 @@ inline void TTY_SetAttribute(u8 v)
             ColorBG = CL_BG;
 
             #ifdef ATT_LOGGING
-            kprintf("Text BG color reset");
+            kprintf("Text BG color reset at $%lX", StreamPos);
             #endif
         break;
 
@@ -696,28 +736,37 @@ inline void TTY_MoveCursor(u8 dir, u8 num)
     switch (dir)
     {
         case TTY_CURSOR_RIGHT:
-            if (sx+num > C_XMAX)
+        {
+            if (sx+num >= C_XMAX)
             {
                 if (sv_bWrapAround) 
                 {
-                    sy++;
-
-                    if (sy > (C_YMAX + (VScroll >> 3)))
+                    if (BufferSelect == 0)
                     {
-                        TTY_ClearLineSingle(sy);
-                        VScroll += 8;
-                        
-                        // Update vertical scroll
-                        *((vu32*) VDP_CTRL_PORT) = 0x40000010;
-                        *((vu16*) VDP_DATA_PORT) = VScroll;
-                        *((vu32*) VDP_CTRL_PORT) = 0x40020010;
-                        *((vu16*) VDP_DATA_PORT) = VScroll;
+                        sy++;
+
+                        if (sy > (C_YMAX + (VScroll >> 3)))
+                        {
+                            TTY_ClearLineSingle(sy);
+
+                            // Update vertical scroll
+                            VScroll += 8;
+                            
+                            *((vu32*) VDP_CTRL_PORT) = 0x40000010;
+                            *((vu16*) VDP_DATA_PORT) = VScroll;
+                            *((vu32*) VDP_CTRL_PORT) = 0x40020010;
+                            *((vu16*) VDP_DATA_PORT) = VScroll;
+                        }
+                    }
+                    else
+                    {
+                        if ((sy + 1) <= C_YMAX) sy++;
                     }
                     
                     spry = TTY_CURSOR_Y;
                     SetSprite_Y(SPRITE_ID_CURSOR, spry);
                 }
-                TTY_SetSX((sx+num)-C_XMAX-2);
+                TTY_SetSX(num-1);
             }
             else
             {
@@ -726,21 +775,30 @@ inline void TTY_MoveCursor(u8 dir, u8 num)
 
             sprx = TTY_CURSOR_X;
             SetSprite_X(SPRITE_ID_CURSOR, sprx);
-        break;
+            
+            break;
+        }
 
         case TTY_CURSOR_DOWN:
-            sy += num;
-            
-            if (sy > (C_YMAX + (VScroll >> 3)))
+            if (BufferSelect == 0)
             {
-                TTY_ClearLine((sy-num)+1, num);
-                VScroll += 8 * num;
+                sy += num;
+                if (sy > (C_YMAX + (VScroll >> 3)))
+                {
+                    TTY_ClearLine((sy-num)+1, num);
 
-                // Update vertical scroll
-                *((vu32*) VDP_CTRL_PORT) = 0x40000010;
-                *((vu16*) VDP_DATA_PORT) = VScroll;
-                *((vu32*) VDP_CTRL_PORT) = 0x40020010;
-                *((vu16*) VDP_DATA_PORT) = VScroll;
+                    // Update vertical scroll
+                    VScroll += 8 * num;
+
+                    *((vu32*) VDP_CTRL_PORT) = 0x40000010;
+                    *((vu16*) VDP_DATA_PORT) = VScroll;
+                    *((vu32*) VDP_CTRL_PORT) = 0x40020010;
+                    *((vu16*) VDP_DATA_PORT) = VScroll;
+                }
+            }
+            else
+            {
+                if ((sy + num) <= C_YMAX) sy += num;
             }
 
             spry = TTY_CURSOR_Y;

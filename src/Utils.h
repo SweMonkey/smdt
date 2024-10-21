@@ -4,7 +4,7 @@
 #include <genesis.h>
 
 // Title bar prefix
-#define STATUS_TEXT "SMDTC v0.30"
+#define STATUS_TEXT "SMDTC v0.31"
 #define STATUS_TEXT_SHORT "SMDTC"
 
 // VRAM memory addresses for various graphics in tile units (/32)
@@ -34,8 +34,9 @@
 #define ICO_NONE  5
 
 // Sprite indices
-#define SPRITE_ID_CURSOR 0     // Cursor sprite index
-#define SPRITE_ID_SCRSAV 1     // Screensaver sprite index
+#define SPRITE_ID_CURSOR  0     // Cursor sprite index
+#define SPRITE_ID_SCRSAV  1     // Screensaver sprite index
+#define SPRITE_ID_POINTER 2     // Mouse pointer
 
 // Check if a character is printable
 #define isPrintable(x) ((x != '\n')&&(x))
@@ -69,7 +70,7 @@
 //#define ESC_LOGGING 1 // Log ESC data (1 = Log necessary info, 2 = LOG EVERYTHING)
 //#define UTF_LOGGING   // Log UTF-8 messages
 //#define KB_DEBUG      // Log keyboard debug messages
-//#define KERNEL_BUILD  // Enables file and filesystem support and various other "OS" like features
+//#define GOP_LOGGING
 #define ENABLE_CLOCK
 
 extern bool bPALSystem;
@@ -104,24 +105,24 @@ u16 snprintf(char *buffer, u16 size, const char *fmt, ...) __attribute__ ((forma
 u16 stdout_printf(const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
 
 
-#ifdef KERNEL_BUILD
 u32 syscall(register vu32 n, register vu32 a, register vu32 b, register vu32 c, register vu32 d, register vu32 e, register vu32 f);
-#endif // KERNEL_BUILD
 
-typedef struct
-{
-    s32 quot;			// Quotient.
-    s32 rem;			// Remainder.
-} div_t;
-
-typedef struct
-{
-    s32 quot;		// Quotient.
-    s32 rem;		// Remainder.
-} ldiv_t;
-
-div_t div(s32 __numer, s32 __denom);
-ldiv_t ldiv(s32 __numer, s32 __denom);
 s32 memcmp(const void *s1, const void *s2, u32 n);
+
+
+// Used by: LittleFS
+#define true 1
+#define false 0
+typedef u32 size_t;
+#define LFS_NO_ASSERT
+#define LFS_NO_DEBUG
+#define LFS_NO_WARN
+#define LFS_NO_ERROR
+#define ORDER_BIG_ENDIAN 1
+#define BYTE_ORDER ORDER_BIG_ENDIAN
+
+size_t strspn(const char *str1, const char *str2);
+size_t strcspn(const char *str1, const char *str2);
+const char *strchr(const char *str, int character);
 
 #endif // UTILS_H_INCLUDED

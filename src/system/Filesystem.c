@@ -1,316 +1,444 @@
 // FS
 #include "Filesystem.h"
 #include "Utils.h"
+#include "Stdout.h"
 
-#ifdef KERNEL_BUILD
+#define MAX_PATH_LENGTH 256
 
-asm(".global diskimg\ndiskimg:\n.incbin \"res/Default_disk2.img\"");
-extern const unsigned char diskimg[];
-
-#define FS_OFFSET 0//0x400
-
-u8 sector[SECTOR_SIZE];
-u32 pstart, psize, i;
-u8 pactive, ptype;
-VOLINFO vi;
-DIRINFO di;
-DIRENT de;
-
-static bool bInitFail = FALSE;
+char cwd[MAX_PATH_LENGTH];
+static int InitFail = 0;
 
 
-u32 DFS_ReadSector(u8 unit, u8 *buffer, u32 sector, u32 count)
+// Variables used by the filesystem
+lfs_t lfs;
+lfs_file_t file;
+
+// Read a region in a block. Negative error codes are propagated to the user.
+int bd_read(const struct lfs_config *c, lfs_block_t block, lfs_off_t off, void *buffer, lfs_size_t size)
 {
-    /*if (bInitFail)
-    {
-        kprintf("ReadSector: bInitFail = TRUE");
-        return 1;
-    }*/
-
-    u32 i = 0;
-
+    u8 *buf = (u8*)buffer;
     SRAM_enableRO();
 
-    kprintf("Sector read from: $%lX to $%lX", FS_OFFSET + (sector * SECTOR_SIZE), (FS_OFFSET + (sector * SECTOR_SIZE)) + ((SECTOR_SIZE+count)-1));
-
-    if ((FS_OFFSET + (sector * SECTOR_SIZE) >= 0x20000) || ((FS_OFFSET + (sector * SECTOR_SIZE)) + ((SECTOR_SIZE+count)-1) >= 0x20000)) return 1;
-
-    while ((i < (SECTOR_SIZE+count-1)) )// && (i < 0x1FFFF))
-    {
-        buffer[i] = SRAM_readByte(FS_OFFSET + (sector * SECTOR_SIZE) + i);
-        i++;
-    }
+    for (lfs_size_t i = 0; i < size; i++)
+        buf[i] = SRAM_readByte((block * c->block_size) + off + i);
 
     SRAM_disable();
-
     return 0;
 }
 
-u32 DFS_WriteSector(u8 unit, u8 *buffer, u32 sector, u32 count)
+// Program a region in a block. The block must have previously
+// been erased. Negative error codes are propagated to the user.
+// May return LFS_ERR_CORRUPT if the block should be considered bad.
+int bd_prog(const struct lfs_config *c, lfs_block_t block, lfs_off_t off, const void *buffer, lfs_size_t size)
 {
-    /*if (bInitFail)
-    {
-        kprintf("WriteSector: bInitFail = TRUE");
-        return 1;
-    }*/
+    u8 *buf = (u8*)buffer;
+    SRAM_enable();
 
-    u32 i = 0;
+    for (lfs_size_t i = 0; i < size; i++)
+        SRAM_writeByte((block * c->block_size) + off + i, buf[i]);
+
+    SRAM_disable();
+    return 0;
+}
+
+// Erase a block. A block must be erased before being programmed.
+// The state of an erased block is undefined. Negative error codes are propagated to the user.
+// May return LFS_ERR_CORRUPT if the block should be considered bad.
+int bd_erase(const struct lfs_config *c, lfs_block_t block)
+{
+    SRAM_enable();
+
+    for (lfs_size_t i = 0; i < c->block_size; i++)
+        SRAM_writeByte((block * c->block_size) + i, 0);
+
+    SRAM_disable();
+    return 0;
+}
+
+// Sync the state of the underlying block device. Negative error codes are propagated to the user.
+int bd_sync(const struct lfs_config *c)
+{
+    return 0;
+}
+
+// configuration of the filesystem is provided by this struct
+const struct lfs_config cfg = 
+{
+    // block device operations
+    .read  = bd_read,
+    .prog  = bd_prog,
+    .erase = bd_erase,
+    .sync  = bd_sync,
+
+    // block device configuration
+    .read_size = 1,
+    .prog_size = 1,
+    .block_size = 256,
+    .block_count = 128,
+    .cache_size = 16,
+    .lookahead_size = 16,
+    .block_cycles = -1,
+};
+
+bool FS_EraseSRAM()
+{
+    vu32 *SStart = (u32*)0x1B4;
+    vu32 *SEnd = (u32*)0x1B8;
+    u16 SSize = (*SEnd-*SStart) >> 1;
 
     SRAM_enable();
 
-    //kprintf("Sector write sector: $%lu - count: $%lu", sector, count);
-    //kprintf("Sector write from: $%lX to $%lX", FS_OFFSET + (sector * SECTOR_SIZE), 
-    //                                          (FS_OFFSET + (sector * SECTOR_SIZE)) + ((SECTOR_SIZE+count)-1));
-                                              
-    if ((FS_OFFSET + (sector * SECTOR_SIZE) >= 0x20000) || ((FS_OFFSET + (sector * SECTOR_SIZE)) + ((SECTOR_SIZE+count)-1) >= 0x20000)) return 1;
+    // Check if SRAM is present
+    SRAM_writeByte(0, 0xDE);
+    SRAM_writeByte(1, 0xAD);
+    SRAM_writeByte(SSize-2, 0xBE);
+    SRAM_writeByte(SSize-1, 0xEF);
 
-    while ((i < (SECTOR_SIZE+count-1)) )// && (i < 0x1FFFF))
+    u8 r1 = SRAM_readByte(0);
+    u8 r2 = SRAM_readByte(1);
+    u8 r3 = SRAM_readByte(SSize-2);
+    u8 r4 = SRAM_readByte(SSize-1);
+
+    // Erase SRAM if present
+    if ((u32)((r1 << 24) | (r2 << 16) | (r3 << 8) | (r4)) == 0xDEADBEEF)
     {
-        SRAM_writeByte(FS_OFFSET + (sector * SECTOR_SIZE) + i, buffer[i]);
+        stdout_printf(" └[92mSRAM detected[0m\n");
+        //stdout_printf(" └%u KB SRAM detected\n", (SSize+1)/1024);
+        //cfg.block_count = (SSize+1) / cfg.block_size; // Set lfs filesystem size to SRAM size
 
-        i++;
+        for (u16 i = 0; i < SSize; i++)
+        {
+            SRAM_writeByte(i, 0);
+        }
+
+        SRAM_disable();
+        return TRUE;
     }
-
-    //kprintf("Writing \"%s\" to $%lX -> $%lX", (char*)buffer, FS_OFFSET + (sector * SECTOR_SIZE), (FS_OFFSET + (sector * SECTOR_SIZE)) + ((SECTOR_SIZE+count)-1));
-
+    
+    stdout_printf(" └[91mNo SRAM detected!\n[0m");
     SRAM_disable();
-
-    return 0;
+    return FALSE;
 }
 
 void FS_Init()
 {
-    bInitFail = FALSE;
+    // Mount the filesystem
+    InitFail = lfs_mount(&lfs, &cfg);
 
-    //kprintf("Calling FS_Init()");
-
-    SRAM_enableRO();
-    u16 dskchk = SRAM_readWord(FS_OFFSET + 0x1FE);//0x55AA; // = SRAM @ 0x10..
-    SRAM_disable();
-    
-    // Temp - always write a blank disk image to SRAM on init
-    /*SRAM_enable();
-    for (u16 i = 0; i < 7800; i++)
+    // Reformat if we can't mount the filesystem
+    // This should only happen on the first boot
+    if (InitFail) 
     {
-        SRAM_writeByte(FS_OFFSET + i, diskimg[i]);
-    }
-    SRAM_disable();*/
-    // Temp
-
-    //Retry:
-
-    if (dskchk != 0x55AA)  // 55AA
-    {
-        stdout_printf("Disk error! Signature check failed (r = $%X)\n", dskchk);
-        //kprintf("Disk error! Signature check failed (r = $%X)", dskchk);
-
-        SRAM_enable();
-        for (u32 i = 0; i < 0x20000; i++)
+        Stdout_Push("└[91mFilesystem error! Reformatting...[0m\n");
+        if (FS_EraseSRAM())
         {
-            SRAM_writeByte(FS_OFFSET + i, diskimg[i]);
+            lfs_format(&lfs, &cfg);
+            lfs_mount(&lfs, &cfg);
+            FS_MkDir("/system");
+            FS_MkDir("/system/tmp");
+
+            lfs_file_t f;
+            FS_OpenFile("/system/rxbuffer.io", LFS_O_CREAT, &f);
+            FS_Close(&f);
+            FS_OpenFile("/system/txbuffer.io", LFS_O_CREAT, &f);
+            FS_Close(&f);
+            FS_OpenFile("/system/stdout.io", LFS_O_CREAT, &f);
+            FS_Close(&f);
+            FS_OpenFile("/system/stdin.io", LFS_O_CREAT, &f);
+            FS_Close(&f);
         }
-
-        //kprintf("Written new disk image... (r = $%X)", SRAM_readWord(FS_OFFSET + 0x1FE));
-
-        SRAM_disable();
-
-        //goto Retry;
     }
 
-    pstart = DFS_GetPtnStart(0, sector, 0, &pactive, &ptype, &psize);
-
-    if (pstart == DFS_ERRMISC)
-    {
-        stdout_printf("Cannot find first partition\n");
-        //kprintf("Cannot find first partition");
-        bInitFail = TRUE;
-    }
-    else if (DFS_GetVolInfo(0, sector, pstart, &vi))
-    {
-        stdout_printf("Error getting volume information\n");
-        //kprintf("Error getting volume information");
-        bInitFail = TRUE;
-    }
+    strclr(cwd);
+    strcat(cwd, "/");
 
     return;
 }
 
-void FS_PrintVolInfo()
+void FS_PrintBlockDevices()
 {
-    if (bInitFail) return;
+    stdout_printf("%5s %6s %12s  %-16s\n", "Name", "Size", "Allocated", "Mount");
+    stdout_printf("%5s %6ld %12ld  %-16s\n", "SRAM", cfg.block_count*cfg.block_size/1024, lfs_fs_size(&lfs), "/");
+}
 
-    stdout_printf("Volume label: %s", vi.label);
-
-    stdout_printf("\nSector/s per cluster: %u", vi.secperclus);
-    stdout_printf("\nReserved sector/s: %u", vi.reservedsecs);
-    stdout_printf("\nVolume total sectors: %lu", vi.numsecs);
-
-    stdout_printf("\nSectors per FAT: %lu", vi.secperfat);
-    stdout_printf("\nFirst FAT at sector: %lu", vi.fat1);
-    stdout_printf("\nRoot dir at: %lu", vi.rootdir);
-
-    stdout_printf("\nRoot dir entries: %u", vi.rootentries);
-    stdout_printf("\nData area commences at sector: %lu", vi.dataarea);
-
-    stdout_printf("\nClusters: %lu", vi.numclusters);
-    stdout_printf("\nBytes: %lu", vi.numclusters * vi.secperclus * SECTOR_SIZE);
-
-    stdout_printf("\nFilesystem IDd as: ");
-
-    if (vi.filesystem == FAT12)
-        stdout_printf("FAT12.\n");
-    else if (vi.filesystem == FAT16)
-        stdout_printf("FAT16.\n");
-    else if (vi.filesystem == FAT32)
-        stdout_printf("FAT32.\n");
-    else
-        stdout_printf("[unknown]\n");
+char *FS_GetCWD()
+{
+    return cwd;
 }
 
 void FS_ListDir(char *dir)
 {
-    if (bInitFail) return;
+    char *path = malloc(64);
+    FS_ResolvePath(dir, path);
 
-    di.scratch = sector;
+    lfs_dir_t d;
+    u32 err = lfs_dir_open(&lfs, &d, path);
 
-    if (DFS_OpenDir(&vi, (u8*)dir, &di))
+    free(path);
+    if (err) return;
+
+    struct lfs_info info;
+    char *fbuf = malloc(1024);
+    char *dbuf = malloc(1024);
+    char *nbuf = malloc(64);
+
+    memset(fbuf, 0, 1024);
+    memset(dbuf, 0, 1024);
+
+    while (true) 
     {
-        stdout_printf("Error opening directory \"%s\"\n", dir);
-        return;
-    }
+        int res = lfs_dir_read(&lfs, &d, &info);
+        if (res < 0) goto OnExit;
 
-    stdout_printf("Directory listing of %s\n", dir);
+        if (res == 0) break;
 
-    u16 filecnt = 0;     // Num files in directory
-    u32 fileszcnt = 0;   // Size of all files in directory
-    u16 dircnt = 0;      // Num of directories
-    u32 fsz = 0;         // Temporary individual file count
-    char name[12];       // Formatted entry name
-    char attr[16];       // Formatted entry attributes
+        if (info.name[0] == '.') continue;
 
-    while (!DFS_GetNext(&vi, &di, &de))
-    {
-        if (de.name[0])
+        memset(nbuf, 0, 64);
+
+        switch (info.type) 
         {
-            memset(name, '\0', 12);
-
-            u8 nlen = strlen((const char*)de.name);
-
-            strncpy(name, (const char*)de.name, (nlen > 11) ? 11 : nlen);
-
-            switch (de.attr)
+            case LFS_TYPE_REG:
             {
-                case ATTR_READ_ONLY:
-                    strncpy(attr, "<RDO>", 16);
+                u8 nlen = strlen(info.name);
+                snprintf(nbuf, 64, "%s%-30s[0m %4lu %s\n", ((info.name[nlen-2] == 'i') && (info.name[nlen-1] == 'o') ? "[95m" : ""), info.name, info.size >= 1024 ? info.size/1024 : info.size, info.size >= 1024 ? "KB" : "B");
+                strncat(fbuf, nbuf, 1024);
                 break;
-
-                case ATTR_HIDDEN:
-                    strncpy(attr, "<HID>", 16);
-                break;
-
-                case ATTR_SYSTEM:
-                    strncpy(attr, "<SYS>", 16);
-                break;
-
-                case ATTR_VOLUME_ID:
-                    strncpy(attr, "<VOL>", 16);
-                break;
-
-                case ATTR_DIRECTORY:
-                    strncpy(attr, "<DIR>", 16);
-                break;
-
-                case ATTR_ARCHIVE:
-                    strncpy(attr, "<BIN>", 16);
-                break;
-
-                case ATTR_LONG_NAME:
-                    strncpy(attr, "<LFN>", 16);
-                break;
-
-                default:
-                    strncpy(attr, "<UNK>", 16);
+            }
+            case LFS_TYPE_DIR:
+            {
+                snprintf(nbuf, 64, "[94m%-30s[0m\n", info.name);
+                strncat(dbuf, nbuf, 1024);
                 break;
             }
 
-            u32 wrtd = (de.wrtdate_h << 8) | (de.wrtdate_l);
-
-            u16 y = ((wrtd & 0xFE00) >> 9)+1980;
-            u16 M = (wrtd & 0x1E0) >> 5;
-            u16 d = (wrtd & 0x1F);
-
-            u32 wrtt = (de.wrttime_h << 8) | (de.wrttime_l);
-
-            u16 h = ((wrtt & 0xF800) >> 11);
-            u16 m = (wrtt & 0x7E0) >> 5;
-            u16 s = (wrtt & 0x1F) * 2;
-
-            if ((de.attr & ATTR_DIRECTORY) || (de.attr & ATTR_VOLUME_ID))
+            default:
             {
-                 stdout_printf("%u-%02u-%02u %02u:%02u:%02u            %s %s\n", y, M, d, h, m, s, attr, name);
-
-                 if (((de.attr & ATTR_VOLUME_ID) == 0) && (name[0] != '.')) dircnt++;
-            }
-            else
-            {
-                fsz = ((de.filesize_3 << 24) | (de.filesize_2 << 16) | (de.filesize_1 << 8) | de.filesize_0);
-                stdout_printf("%u-%02u-%02u %02u:%02u:%02u %10lu %s %s\n", y, M, d, h, m, s, fsz, attr, name);
-                filecnt++;
-                fileszcnt += fsz;
+                snprintf(nbuf, 64, "[91m%-30s[0m %4lu %s\n", info.name, info.size >= 1024 ? info.size/1024 : info.size, info.size >= 1024 ? "KB" : "B");
+                strncat(fbuf, nbuf, 1024);
+                break;
             }
         }
     }
+    
+    Stdout_Push(dbuf);
+    Stdout_Push(fbuf);
 
-    stdout_printf("\n%7u file%s           %10lu bytes\n", filecnt, ((filecnt == 1) ? " " : "s"), fileszcnt);
-    stdout_printf("%7u director%s      %11lu bytes total\n", dircnt, ((dircnt == 1) ? "y" : "ies"), vi.numclusters * vi.secperclus * SECTOR_SIZE); // Todo swap total to free bytes
+    OnExit:
+    free(fbuf);
+    free(dbuf);
+    free(nbuf);
+    lfs_dir_close(&lfs, &d);
+    return;
 }
 
-u32 FS_OpenFile(const char *filename, u8 openmode, PFILEINFO fi)
+int FS_OpenFile(const char *filename, int flags, lfs_file_t *membuf)
 {
-    return DFS_OpenFile(&vi, (u8*)filename, openmode, sector, fi);
+    return lfs_file_open(&lfs, membuf, filename, flags);
 }
 
-u32 FS_ReadFile(PFILEINFO fi, void *dest, u32 len)
+lfs_ssize_t FS_ReadFile(void *dest, lfs_ssize_t len, lfs_file_t *membuf)
 {
-    u32 r = DFS_ReadFile(fi, sector, (u8*)dest, &i, len);
+    return lfs_file_read(&lfs, membuf, dest, len);
+}
 
-    switch (r)
+lfs_ssize_t FS_WriteFile(void *src, lfs_ssize_t len, lfs_file_t *membuf)
+{
+    return lfs_file_write(&lfs, membuf, src, len);
+}
+
+int FS_Remove(const char *filename)
+{
+    return lfs_remove(&lfs, filename);
+}
+
+int FS_Rename(const char *old, const char *new)
+{
+    return lfs_rename(&lfs, old, new);
+}
+
+int FS_MkDir(const char *path)
+{
+    return lfs_mkdir(&lfs, path);
+}
+
+lfs_soff_t FS_Seek(lfs_file_t *membuf, lfs_soff_t off, int whence)
+{
+    return lfs_file_seek(&lfs, membuf, off, whence);
+}
+
+lfs_soff_t FS_Tell(lfs_file_t *membuf)
+{
+    return lfs_file_tell(&lfs, membuf);
+}
+
+int FS_Close(lfs_file_t *membuf)
+{
+    return lfs_file_close(&lfs, membuf);
+}
+
+int FS_SetAttr(const char *path, u8 type, const void *buffer, lfs_size_t size)
+{
+    return lfs_setattr(&lfs, path, type, buffer, size);
+}
+
+int FS_GetAttr(const char *path, u8 type, void *buffer, lfs_size_t size)
+{
+    return lfs_getattr(&lfs, path, type, buffer, size);
+}
+
+
+int path_exists(const char *path) 
+{
+    lfs_dir_t d;
+    u32 err = lfs_dir_open(&lfs, &d, path);
+    lfs_dir_close(&lfs, &d);
+
+    return !err;
+}
+
+// Function to join two paths, taking care of slashes and buffer limits
+void join_paths(char *result, const char *path1, const char *path2) 
+{
+    if (strlen(path1) + strlen(path2) + 2 > MAX_PATH_LENGTH) 
     {
-        case DFS_ERRMISC:
-        case DFS_OK:
-        case DFS_EOF:
-        default:
-        break;
+        stdout_printf("Path too long!\n");
+        return;
+    }
+    if (strcmp(path1, "/") == 0) 
+    {
+        // If path1 is the root, don't add an extra slash
+        snprintf(result, MAX_PATH_LENGTH, "/%s", path2);
+    } 
+    else 
+    {
+        snprintf(result, MAX_PATH_LENGTH, "%s/%s", path1, path2);
+    }
+}
+
+// Function to go up one directory level
+void FS_GoUpDirectory(char *path)
+{
+    int len = strlen(path);
+
+    if (len <= 1) 
+    {
+        strcpy(path, "/"); // Already at root
+        return;
     }
 
-    return i;
-}
-
-u32 FS_WriteFile(PFILEINFO fi, void *src, u32 len)
-{
-    u32 r = DFS_WriteFile(fi, sector, src, &i, len);
-
-    switch (r)
+    // Traverse backwards to find the last '/'
+    for (int i = len - 1; i >= 0; --i) 
     {
-        case DFS_ERRMISC:
-        case DFS_OK:
-        case DFS_EOF:
-        default:
-        break;
+        if (path[i] == '/') 
+        {
+            // End the string here
+            path[i] = '\0';
+            break;
+        }
     }
 
-    return i;
+    // If path becomes empty, set it to root
+    if (strlen(path) == 0) 
+    {
+        strcpy(path, "/");
+    }
 }
 
-u8 FS_Unlink(const char *filename)
+// Function to change the directory
+void FS_ChangeDir(const char *path)
 {
-    if (DFS_UnlinkFile(&vi, (u8*)filename, sector)) 
+    char new_path[MAX_PATH_LENGTH];    
+    
+    // Handle absolute path
+    if (path[0] == '/')
     {
-        stdout_printf("Error unlinking file \"%s\"\n", filename);
-        return 1;
+        strncpy(new_path, path, MAX_PATH_LENGTH);
+    }
+    // Handle relative path
+    else
+    {
+        strncpy(new_path, cwd, MAX_PATH_LENGTH);
+        char *token = strtok((char *)path, '/');
+
+        while (token != NULL) 
+        {
+            // Current directory, do nothing
+            if (strcmp(token, ".") == 0) 
+            {
+            }
+            // Go up one level
+            else if (strcmp(token, "..") == 0) 
+            {
+                FS_GoUpDirectory(new_path);
+            }
+            // Go down into a directory
+            else
+            {
+                char temp[MAX_PATH_LENGTH];
+                join_paths(temp, new_path, token);
+                strncpy(new_path, temp, MAX_PATH_LENGTH);
+            }
+            token = strtok(NULL, '/');
+        }
     }
 
-    return 0;
+    // Check if the final path exists
+    if (path_exists(new_path)) 
+    {
+        // Update the current directory
+        strncpy(cwd, new_path, MAX_PATH_LENGTH);
+    } 
+    else 
+    {
+        stdout_printf("Error: Path does not exist.\n");
+    }
 }
 
-#endif // KERNEL_BUILD
+void FS_ResolvePath(const char *path, char *resolved_path) 
+{
+    // Buffer to build the resolved path
+    char temp_path[MAX_PATH_LENGTH];
+
+    // Case 1: Absolute path
+    if (path[0] == '/') 
+    {
+        strncpy(temp_path, path, MAX_PATH_LENGTH);
+    }
+    // Case 2: Relative path starting with "." or ".."
+    else if (path[0] == '.') 
+    {
+        // Initialize with the current directory
+        strncpy(temp_path, cwd, MAX_PATH_LENGTH);
+
+        char *token = strtok((char *)path, '/');
+        while (token != NULL) 
+        {
+            if (strcmp(token, ".") == 0) 
+            {
+                // Ignore, as it points to the current directory
+            } 
+            else if (strcmp(token, "..") == 0)
+            {
+                // Navigate up one level
+                FS_GoUpDirectory(temp_path);
+            } 
+            else
+            {
+                // Add the directory to the path
+                char temp[MAX_PATH_LENGTH];
+                join_paths(temp, temp_path, token);
+                strncpy(temp_path, temp, MAX_PATH_LENGTH);
+            }
+            token = strtok(NULL, '/');
+        }
+    }
+    // Case 3: Any other relative path (no . or ..)
+    else 
+    {
+        snprintf(temp_path, MAX_PATH_LENGTH, "%s/%s", cwd, path);
+    }
+
+    // Copy the resolved path to the output parameter
+    strncpy(resolved_path, temp_path, MAX_PATH_LENGTH);
+}

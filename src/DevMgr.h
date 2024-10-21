@@ -57,17 +57,21 @@ typedef struct s_device
 #define DEV_SLOT(device) (device.Id.Bitshift >> 1)
 #define DEV_FULL(device) DEV_PORT, DEV_SLOT(device)
 
-#define DEV_SetCtrl(d, b) (*d.Ctrl  =  (*d.Ctrl & ~(d.Id.Bitmask << d.Id.Bitshift)) | ((b & d.Id.Bitmask) << d.Id.Bitshift))
-#define DEV_ClrCtrl(d)    (*d.Ctrl &= ~(d.Id.Bitmask << d.Id.Bitshift))
+#define DEV_MASK_SHIFT(d) (d.Id.Bitmask << d.Id.Bitshift)                                           // Helper macro to get the shifted mask
+#define DEV_MASK_AND_SHIFT(d, b) ((b & d.Id.Bitmask) << d.Id.Bitshift)                              // Helper macro to apply the mask and shift to a value 'b'
 
-#define DEV_SetData(d, b) (*d.Data  =  (*d.Ctrl & ~(d.Id.Bitmask << d.Id.Bitshift)) | ((b & d.Id.Bitmask) << d.Id.Bitshift))
-#define DEV_ClrData(d)    (*d.Data &= ~(d.Id.Bitmask << d.Id.Bitshift))
-#define DEV_GetData(d, b) (*d.Data & ((b & d.Id.Bitmask) << d.Id.Bitshift) >> d.Id.Bitshift)
+#define DEV_SetCtrl(d, b) (*d.Ctrl =  (*d.Ctrl & ~DEV_MASK_SHIFT(d)) | DEV_MASK_AND_SHIFT(d, b))    // Set control byte (set pin direction), d = SM_Device, b = byte (0 = input, 1 = output)
+#define DEV_ClrCtrl(d)    (*d.Ctrl &= ~DEV_MASK_SHIFT(d))                                           // Clear control byte (set pin direction to input for masked bits), d = SM_Device
+
+#define DEV_SetData(d, b) (*d.Data =  (*d.Ctrl & ~DEV_MASK_SHIFT(d)) | DEV_MASK_AND_SHIFT(d, b))    // Set data byte (pin output), d = SM_Device, b = byte
+#define DEV_ClrData(d)    (*d.Data &= ~DEV_MASK_SHIFT(d))                                           // Clear data byte (set pin output low), d = SM_Device
+#define DEV_GetData(d, b) (*d.Data & DEV_MASK_AND_SHIFT(d, b) >> d.Id.Bitshift)                     // Get data byte (read pin input), d = SM_Device, b = mask for bits of interest
 
 extern SM_Device *DevList[DEV_MAX];
 extern DevPort sv_ListenPort;   // Default UART port to listen on
 extern bool bRLNetwork;
 extern bool bXPNetwork;
+extern bool bMegaCD;
 
 void SetDevicePort(SM_Device *d, DevPort p);
 void DeviceManager_Init();

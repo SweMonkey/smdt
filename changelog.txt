@@ -1,3 +1,37 @@
+v0.31:
+Terminal: Added a few IAC's; Go-Ahead, NOP and End-Of-Record, these will be treated as NOP most of the time. SMDTC does not respond with GA / To GA. Fixes a few bytes that previously got swallowed up by the IAC parser.
+Terminal: Added the alternate buffer (mode ?1049 and ?47). Max 80 columns is now enforced when using 4x8 fonts, likewise for the 8x8 fonts a max of 40 columns is enforced. In the future this could be increased to a max of 128 and 64 columns respectively.
+Terminal: Minor wraparound fix, terminal wrote 1 character beyond wrap limit.
+Gopher: Initial gopher client, WIP.
+Filesystem: Added littleFS support. SRAM is now a littlefs filesystem, which means previous SRAM configurations will be lost. New config file will be saved under "/system/smdt_cfg.bin".
+Filesystem: New terminal commands: touch, mkdir, ls, rm, cat, mv, cp.
+Filesystem: File ops support: r/w, seek, tell and close.
+Filesystem: Minimal lsblk implementation.
+Filesystem: Scrapped dosFS support.
+Misc: Initial bookmark list window, WIP.
+Misc: Fixed descender on lowercase g in the 4x8 font set, rounding looks a bit off however.
+Misc: Graphics is now compressed in ROM to keep the ROM size below 256 KB.
+Misc: Mega/Sega CD can now be detected, for reasons.
+Misc: HexViewer can now open and view files on the filesystem.
+Misc: Added "About SMDTC" command "about".
+Misc: Setting font size now clears text on screen instead of leaving it in a odd looking state.
+Misc: Coloured boot messages indicating fail/ok and indentation for submessages.
+Misc: Removed some unnecessary menu entries in the quick menu.
+
+Todo:
+Gopher: Going back or forward a page.
+Gopher: More testing on hardware to see if it can still crash the mega drive.
+Bookmarks: Add/Edit bookmark functionality is currently not implemented (Only the window logic is programmed).
+
+Known bugs:
+IRC: Nick list is missing 1 nick, see command 353 in IRC.c
+IRC: Erroneous string comparison in command 353, in IRC.c
+Drivers: PS/2 keyboards may not always be detected when plugged into pin 3+4 (as opposed to pin 1+2). Also needs more testing on NTSC systems.
+Drivers: RetroLink cartridge rx issues.
+Drivers: xPort device may not be found during startup if the xPort device does not have an IP and or not being ready yet.
+
+Temporary fix, in cases where a device was not detected: try running the command "test -devinit" ( if you can (^: )
+
 v0.30.3:
 Terminal: 16 colour support for the 4x8 font. Achieved by sacrificing the inverted character set (only when using 16 colour 4x8!).
 Terminal: Added the "tty" command; it initializes the SMDTC TTY to a sane enviroment for a linux tty, although still somewhat iffy and some functionality is still missing.
@@ -65,7 +99,7 @@ Hex viewer can now show the rx buffer, tx buffer and stdout buffer.
 
 v0.29:
 IRC: Cursor fix.
-Added initial support for xPico module connected to an MD UART port.
+Added initial support for xPort module connected to an MD UART port.
 PS2KB: Reworked keyboard reading method, it now works on NTSC/MD2 models (Thanks to b1tsh1ft3r).
 PS2KB: SendCommand() has been rewritten.
 Quality of life improvement to the terminal emulator.

@@ -2,8 +2,6 @@
 #include "File.h"
 #include "Stdout.h"
 
-#ifdef KERNEL_BUILD
-
 #define ELF_NIDENT	16
 
 typedef u16 Elf32_Half;	 // Unsigned half int
@@ -145,7 +143,7 @@ void *ram_space = NULL;
 
 void *ELF_LoadProc(const char *fn)
 {
-    SM_File *file = F_Open(fn, FM_READ);
+    SM_File *file = F_Open(fn, FM_RDONLY);
 
     if (file == NULL)
     {
@@ -178,7 +176,7 @@ void *ELF_LoadProc(const char *fn)
     F_Read(&phdr, hdr.e_phentsize, hdr.e_phnum, file);
 
     // this might not always be TRUE...
-    u32 top = hdr.e_entry;
+    //u32 top = hdr.e_entry;
 
     for (u8 p = 0; p < 1; p++)//hdr.e_phnum; p++)
     {
@@ -212,7 +210,7 @@ void *ELF_LoadProc(const char *fn)
             kprintf("Failed to allocate proc_space");
         }
 
-        memset(hdr.e_entry, 0, phdr[p].p_memsz);
+        memset((void*)hdr.e_entry, 0, phdr[p].p_memsz);
 
         F_Seek(file, phdr[p].p_vaddr, SEEK_SET);
         F_Read(proc_space, phdr[p].p_memsz, 1, file);
@@ -224,5 +222,3 @@ void *ELF_LoadProc(const char *fn)
 
     return (void*)hdr.e_entry;
 }
-
-#endif // KERNEL_BUILD

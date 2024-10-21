@@ -16,26 +16,13 @@ bool KB_PS2_Init(DevPort port)
 
     DRV_KBPS2.Id.sName = "PS/2 Keyboard";
     DRV_KBPS2.Id.Mode = DEVMODE_PARALLEL;
+    SetDevicePort(&DRV_KBPS2, port);
+    DRV_KBPS2.Id.Bitmask = 0x3;
 
-    // Iterate through all ports/pins in search for a keyboard. First found keyboard will be used
+    // Iterate through pins 1+2 and 3+4 in search for a keyboard
     for (u8 s = 0; s < 2; s++)
     {
-        switch (s)
-        {
-            case 0: // Pin 1 and 2
-                SetDevicePort(&DRV_KBPS2, port);
-                DRV_KBPS2.Id.Bitmask = 0x3;
-                DRV_KBPS2.Id.Bitshift = 0;
-            break;
-            case 1: // Pin 3 and 4
-                SetDevicePort(&DRV_KBPS2, port);
-                DRV_KBPS2.Id.Bitmask = 0x3;
-                DRV_KBPS2.Id.Bitshift = 2;
-            break;
-        
-            default:
-            break;
-        }
+        DRV_KBPS2.Id.Bitshift = s<<1;    // Pin 1+2 (0*2 = 0) - Pin 3+4 (1*2 = 2)
         
         #ifndef EMU_BUILD        
         ret = KB_PS2_SendCommand(0xEE); // Send echo command to keyboard
@@ -44,7 +31,7 @@ bool KB_PS2_Init(DevPort port)
         // Did we receive an echo back from the keyboard?
         if ((ret == 0xFE) || (ret == 0xEE)) // FE = Fail+Resend, EE = Successfull echo back
         {
-            stdout_printf("Found PS/2 KB @ slot %u:%u (r=$%X)\n", DEV_FULL(DRV_KBPS2), ret);
+            stdout_printf("└[92mFound PS/2 KB @ slot %u:%u[0m\n", DEV_FULL(DRV_KBPS2));
 
             KB_SetKeyboard(&KB_PS2_Poll);
 

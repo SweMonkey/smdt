@@ -5,6 +5,7 @@
 #include "Input.h"
 #include "Utils.h"
 #include "Network.h"
+#include "Cursor.h"             // bDoCursorBlink
 #include "devices/RL_Network.h"
 #include "system/Stdout.h"
 
@@ -15,7 +16,7 @@ static u8 rxdata;
 
 #ifdef EMU_BUILD
 #include "kdebug.h"
-asm(".global telnetdump\ntelnetdump:\n.incbin \"tmp/streams/rx_nethack_lines2.log\"");
+asm(".global telnetdump\ntelnetdump:\n.incbin \"tmp/streams/telnetdump.log\"");
 extern const unsigned char telnetdump[];
 u32 StreamPos = 0;
 #endif
@@ -76,7 +77,7 @@ void Enter_Telnet(u8 argc, char *argv[])
     // rx_bottomlessabyss_cp437 46209
     u8 data;
     u32 p = 0;
-    u32 s = 365971;
+    u32 s = 14;//0x8D4
     StreamPos = p;
 
     kprintf("Stream replay start.");
@@ -99,7 +100,7 @@ void Enter_Telnet(u8 argc, char *argv[])
             StreamPos++;
             #endif
 
-            //waitMs(1);
+            waitMs(4);
         }
     }
 
@@ -114,6 +115,8 @@ void ReEnter_Telnet()
 
 void Exit_Telnet()
 {
+    bDoCursorBlink = TRUE;
+
     Stdout_Flush();
     Buffer_Flush(&TxBuffer);
     NET_Disconnect();
@@ -189,7 +192,7 @@ void Input_Telnet()
             TTY_MoveCursor(TTY_CURSOR_DUMMY);
         }
 
-        if (is_KeyDown(KEY_F1))
+        /*if (is_KeyDown(KEY_F1))
         {
             if (!sv_Font)
             {
@@ -223,7 +226,7 @@ void Input_Telnet()
             }
             
             TTY_MoveCursor(TTY_CURSOR_DUMMY);
-        }
+        }*/
 
         if (is_KeyDown(KEY_DELETE))
         {
