@@ -124,12 +124,10 @@ void IRC_Reset()
             RevertState();
             return;
         }
-        memset(PG_Buffer[ch], 0, sizeof(TMBuffer));
+        TMB_SetActiveBuffer(PG_Buffer[ch]);
+        TMB_ZeroCurrentBuffer();
         strcpy(PG_Buffer[ch]->Title, PG_EMPTYNAME);
         PG_Buffer[ch]->sy = C_YSTART;
-
-        TMB_SetActiveBuffer(PG_Buffer[ch]);
-        TMB_ClearBuffer();
     }
 
     // Allocate line buffer

@@ -1,12 +1,12 @@
 
 # SMD Terminal emulator, Telnet and IRC client v0.31+
 A terminal emulator, telnet and IRC client for the Sega Mega Drive/Genesis with support for keyboards and RS-232 communication.<br>
-![Screenshot of the telnet client in 80 column + 16 colour mode](https://deceptsoft.com/smdtc_extra_git/v31/telnet.png)
-![Screenshot of the IRC client](https://deceptsoft.com/smdtc_extra_git/v31/irc.png)
-![Screenshot of the terminal emulator showing nano](https://deceptsoft.com/smdtc_extra_git/v30/blastem_20240401_104314.png)
-![Screenshot of a debugging utility to inspect streams](https://deceptsoft.com/smdtc_extra_git/v30/hexview_small.png)
-![Screenshot of the telnet client in 80 column + 8 colour mode](https://deceptsoft.com/smdtc_extra_git/v30/blastem_20240401_203819.png)
-![Screenshot of the terminal emulator](https://deceptsoft.com/smdtc_extra_git/v31/terminal.png)
+![Screenshot of the telnet client in 80 column + 16 colour mode](https://deceptsoft.com/smdtc_extra_git/v311/telnet.png)
+![Screenshot of the IRC client](https://deceptsoft.com/smdtc_extra_git/v311/irc.png)
+![Screenshot of the terminal emulator showing nano](https://deceptsoft.com/smdtc_extra_git/v311/nano.png)
+![Screenshot of a debugging utility to inspect streams](https://deceptsoft.com/smdtc_extra_git/v311/hexview.png)
+![Screenshot of the telnet client in 80 column + 8 colour mode](https://deceptsoft.com/smdtc_extra_git/v311/nethack.png)
+![Screenshot of the terminal emulator](https://deceptsoft.com/smdtc_extra_git/v311/terminal.png)
 
 ##### Table of Contents
 * [Disclaimer](#disclaimer)
@@ -64,8 +64,9 @@ I highly recommend the emulator [BlastEm 0.6.3+](https://www.retrodev.com/blaste
 To run SMDTC on blastEm you need setup IO devices in blastEm, this is partially done by going into the system settings in blastEm (Settings -> System)<br><br>
 For IO Port 1 Device, select "Saturn keyboard"<br><br>
 To setup IO Port 2 Device you need to navigate to your `blastem.cfg` file, on linux this file is by default located in `~/.config/blastem/`<br>
-Open `blastem.cfg` and scroll down to the `io` section, in the `device` block change `2 <some device>` to `2 serial`<br>
-After the `device block`, add this line `socket smdtsock.sock`<br>
+Open `blastem.cfg` and scroll down to the `io` section.<br>
+In the `device` block change `2 <some device>` to `2 serial`<br>
+After the `device block`, add this line: `socket smdtsock.sock`<br>
 
 Your `io` section should now look something like this:<br>
 ```
@@ -102,8 +103,14 @@ If all is well SMDT should print out "XPN: xPort module OK" to the boot messages
 <br>
 
 > [!NOTE]
-> Do note that the SMDT-PC tool is "emulating" an xport device for the purpose of reusing the XPN driver in SMDT, it may lack certain features or contain bugs.<br>
+> Do note that the SMDT-PC tool is "emulating" an xport device for the purpose of reusing the XPN driver in SMDT. It may lack certain features or contain bugs.<br>
 
+> [!NOTE]
+> It is not strictly required to use Port 1 and Port 2;<br>
+> SMDT will autodetect which port the keyboard is plugged into.<br>
+> If you want to have the serial port on a different controller port then you will need to change where SMDT looks for it using the Quick Menu (F8): Mega Drive Settings -> Select serial port.<br>
+
+<br>
 
 ## Required hardware
 1. A PS/2 keyboard or a Sega Saturn keyboard (not strictly required but preferred).
@@ -254,3 +261,9 @@ A: Make sure to save your settings by either using the Quick menu (System -> Sav
 <br>
 Q: How do I change my IRC nick?<br>
 A: In the terminal, run the command `setvar username yournick` OR in the IRC client, type `/nick yournick` and press Enter.<br>
+<br>
+Q: How do I join a channel?<br>
+A: Type `/join #channel` in the text input box at the bottom and press Enter.<br>
+<br>
+Q: I get double characters typed when I type on certain telnet servers?<br>
+A: Either the server or SMDT failed to setup local echo. You can change this manually in the Quick meu (Settings -> Client settings -> Terminal -> Variables -> Local echo -> On).<br>
