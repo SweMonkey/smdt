@@ -87,7 +87,10 @@ bool XPN_EnterMonitorMode()
     
     while (!XPN_RXReady() || XPN_ReadByte() != '>')
     {
-        if (timeout++ >= sv_ReadTimeout) return FALSE;
+        if (timeout++ >= sv_ReadTimeout) 
+        {
+            return FALSE;
+        }
     }
 
     bIsInMonitorMode = TRUE;
@@ -100,7 +103,7 @@ bool XPN_ExitMonitorMode()
 {
     u32 timeout = 0;
 
-    if (!bIsInMonitorMode) return TRUE;
+    //if (!bIsInMonitorMode) return TRUE;
 
     XPN_FlushBuffers();
     XPN_SendMessage("QU\n");
@@ -153,6 +156,11 @@ void XPN_Disconnect()
 {
     u32 timeout = 0;
     u8 byte = 0;
+
+    // This is not needed on a real xport. Its only here to tell a fake xport emulator to disconnect, since it can't read the CP3 pin for obvious reasons
+    XPN_EnterMonitorMode();
+    XPN_ExitMonitorMode();
+    // -----------------------------
 
     XPN_FlushBuffers();
 

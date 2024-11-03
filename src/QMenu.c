@@ -10,6 +10,7 @@
 #include "Keyboard.h"       // sv_KeyLayout
 #include "Screensaver.h"    // sv_bScreensaver
 #include "UI.h"             // UI_ApplyTheme
+#include "IRC.h"            // IRC_SetFontSize
 
 #include "misc/ConfigFile.h"
 
@@ -38,11 +39,15 @@ void WINFN_CURSOR_CL();
 void WINFN_UITHEME();
 void WINFN_Backspace();
 void WINFN_StartMenu();
+void WINFN_WrapAtScreenEdge();
+void WINFN_ShowJQMsg();
 
 extern u8 sv_IRCFont;
 extern u8 sv_TelnetFont;
 extern u8 sv_TerminalFont;
 extern u8 sv_ThemeUI;
+extern u8 sv_ShowJoinQuitMsg;
+extern u8 sv_WrapAtScreenEdge;
 
 static struct s_menu
 {
@@ -91,14 +96,13 @@ static struct s_menu
      "IRC font"}
 },
 {//3
-    7,
+    6,
     0, 255, 0,
     NULL, NULL, NULL,
     "Settings",
-    {8, 6, 9, 2, 25, 12, 28},
-    {"Colour",
-     "Variables",
-     "Terminal type",
+    {8, 14, 2, 25, 12, 28},
+    {"Colours",
+     "Client settings",
      "Default fonts",
      "Screensaver",
      "Keyboard layout",
@@ -152,7 +156,7 @@ static struct s_menu
     4,
     0, 255, 0,
     NULL, NULL, NULL,
-    "Colour",
+    "Colours",
     {17, 18, 24, 26},
     {"BG Colour",
      "4x8 Mono colour",
@@ -216,12 +220,13 @@ static struct s_menu
      "HexView - Stdout"}
 },
 {//14
-    3,
+    2,
     0, 255, 0,
     NULL, NULL, NULL,
-    "EMPTY SLOT",
-    {255, 255, 255},
-    {"","",""}
+    "Client settings",
+    {30, 31},
+    {"Terminal",
+     "IRC"}
 },
 {//15
     2,
@@ -376,6 +381,42 @@ static struct s_menu
     {254, 254},
     {"DEL",
      "^H"}
+},
+{//30
+    2,
+    0, 255, 0,
+    NULL, NULL, NULL,
+    "Terminal",
+    {9, 6},
+    {"Terminal type",
+     "Variables"}
+},
+{//31
+    2,
+    0, 255, 0,
+    NULL, NULL, NULL,
+    "IRC",
+    {32, 33},
+    {"Word wrap",
+     "Show join/quit msg"}
+},
+{//32
+    2,
+    0, 255, 0,
+    NULL, WINFN_WrapAtScreenEdge, NULL,
+    "Word wrap",
+    {254, 254},
+    {"Off",
+     "On"}
+},
+{//33
+    2,
+    0, 255, 0,
+    NULL, WINFN_ShowJQMsg, NULL,
+    "Show join/quit msg",
+    {254, 254},
+    {"No",
+     "Yes"}
 }};
 
 static const u8 QFrame[5][24] = 
@@ -432,6 +473,8 @@ void SetupQItemTags()
     MainMenu[25].tagged_entry = sv_bScreensaver;
     MainMenu[28].tagged_entry = sv_ThemeUI;
     MainMenu[29].tagged_entry = vBackspace;
+    MainMenu[32].tagged_entry = sv_WrapAtScreenEdge;
+    MainMenu[33].tagged_entry = sv_ShowJoinQuitMsg;
 
     switch (sv_TerminalFont)
     {
@@ -862,8 +905,11 @@ void WINFN_FONT_IRC()
         default:
         break;
     }
-    
-    if (getState() == PS_IRC) TTY_SetFontSize(sv_IRCFont);
+
+    if (getState() == PS_IRC)
+    {
+        // TODO: Clear TMB buffers here!
+    }
 }
 
 void WINFN_KBLayoutSel()
@@ -898,9 +944,9 @@ void WINFN_RXBUFSTATS()
     char buf2[32];
     char buf3[32];
     
-    sprintf(buf1, "Head: %u", RxBuffer.head);
-    sprintf(buf2, "Tail: %u", RxBuffer.tail);
-    sprintf(buf3, "Free: %u / %u", BUFFER_LEN - (RxBuffer.tail>RxBuffer.head?(BUFFER_LEN+(s16)(RxBuffer.head-RxBuffer.tail)):(RxBuffer.head-RxBuffer.tail)), BUFFER_LEN);
+    sprintf(buf1, "Head: %4u", RxBuffer.head);
+    sprintf(buf2, "Tail: %4u", RxBuffer.tail);
+    sprintf(buf3, "Free: %4u / %4u", BUFFER_LEN - (RxBuffer.tail>RxBuffer.head?(BUFFER_LEN+(s16)(RxBuffer.head-RxBuffer.tail)):(RxBuffer.head-RxBuffer.tail)), BUFFER_LEN);
 
     strncpy(MainMenu[23].text[0], buf1, 20);
     strncpy(MainMenu[23].text[1], buf2, 20);
@@ -1102,6 +1148,34 @@ void WINFN_StartMenu()
         break;
     
         default:
+        break;
+    }
+}
+
+void WINFN_WrapAtScreenEdge()
+{
+    switch (SelectedIdx)
+    {
+        case 0:
+            sv_WrapAtScreenEdge = 0;
+        break;
+    
+        default:
+            sv_WrapAtScreenEdge = 1;
+        break;
+    }
+}
+
+void WINFN_ShowJQMsg()
+{
+    switch (SelectedIdx)
+    {
+        case 0:
+            sv_ShowJoinQuitMsg = 0;
+        break;
+    
+        default:
+            sv_ShowJoinQuitMsg = 1;
         break;
     }
 }

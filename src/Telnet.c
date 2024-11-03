@@ -136,7 +136,7 @@ static u8 IAC_SubNegotiationBytes[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};   // 
 static s32 Saved_sx[2] = {0, 0}, Saved_sy[2] = {C_YSTART, C_YSTART};   // Saved cursor position
 static u8 CharMapSelection = 0;                 // Character map selection (0 = Default extended ASCII, 1 = DEC Line drawing set)
 
-#ifdef EMU_BUILD
+#if (EMU_BUILD || ESC_LOGGING)
 extern u32 StreamPos;   // Stream replay position
 #endif
 
@@ -229,7 +229,7 @@ void TELNET_Init()
 
 inline void TELNET_ParseRX(u8 byte)
 {
-    //RXBytes++;
+    RXBytes++;
 
     if (bESCAPE)
     {

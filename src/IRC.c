@@ -63,6 +63,8 @@ static const u16 pColors[16] =
 char sv_Username[32] = "smd_user";                   // Saved preferred IRC nickname
 char v_UsernameReset[32] = "ERROR_NOTSET";           // Your IRC nickname modified to suit the server (nicklen etc)
 char sv_QuitStr[32] = "MegaDrive IRC client quit";   // IRC quit message
+u8 sv_ShowJoinQuitMsg = 1;
+u8 sv_WrapAtScreenEdge = 1;
 
 u8 PG_CurrentIdx = 0;                                // Current active page/channel number
 u8 PG_OpenPages = 1;                                 // Number of pages/channels in use
@@ -83,7 +85,11 @@ void IRC_Init()
 
 void IRC_Reset()
 {
-    if (!sv_Font) 
+    if (sv_Font) 
+    {
+        PAL_setColor(15, 0x0AE);    // The one colour you get with 1 bit 4x8 fonts :)
+    }
+    else
     {
         PAL_setPalette(PAL2, pColors, DMA);
         DMA_waitCompletion();
@@ -366,61 +372,33 @@ void IRC_PrintChar(u8 c)
 
     switch (c)
     {
-        case 0x00:  //null
-        case 0x01:  //start of heading
-        case 0x02:  //start of text
-        case 0x04:  //end of transmission
-        case 0x05:  //enquiry
-        case 0x06:  //acknowledge
-        case 0x07:  //bell
+        case 0x01:  // Custom - Set default colour
+            TMB_SetColorFG(15);
+            return;
         break;
-        
-        case 0x03:  //^C
+
+        case 0x02:  // Custom - Set name colour
+            TMB_SetColorFG(6);
+            return;
+        break;
+
+        case 0x03:  // ^C
             bLookingForCL++;
             return;
         break;
 
-        case 0x08:  //backspace
-            TMB_MoveCursor(TTY_CURSOR_LEFT, 1);
-        break;
-        case 0x09:  //horizontal tab
-            TMB_MoveCursor(TTY_CURSOR_RIGHT, C_HTAB);
-        break;
-        case 0x0A:  //line feed, new line
+        case 0x0A:  // Line feed, new line
             TMB_SetSX(0);
             TMB_MoveCursor(TTY_CURSOR_DOWN, 1);
         break;
-        case 0x0B:  //vertical tab
-            TMB_MoveCursor(TTY_CURSOR_DOWN, C_VTAB);
-        break;
-        case 0x0C:  //form feed, new page
-            TMB_SetSX(0);
-            TMB_SetSY(C_YSTART);
-
-            TMB_SetVScroll(D_VSCROLL);
-            TMB_ClearBuffer();
-
-            TMB_MoveCursor(TTY_CURSOR_DUMMY);   // Dummy
-        break;
-        case 0x0D:  //carriage return
-            TMB_SetSX(0);
-            TMB_MoveCursor(TTY_CURSOR_DUMMY);   // Dummy
-        break;
-        case 0xE2:  // Dumb handling of UTF8
-        case 0xEF:
-            //bUTF8 = TRUE;
-            return;
-        break;
 
         default:
+            if (c >= 0x20)
+            {
+                TMB_PrintChar(c);        
+                return;
+            }
         break;
-    }
-
-    if ((c >= 0x20) && (c <= 0x7E))
-    {
-        TMB_PrintChar(c);
-        
-        return;
     }
 }
 
@@ -430,8 +408,7 @@ void IRC_DoCommand()
     char PrintBuf[B_PRINTSTR_LEN] = {0};    // Do not overflow this please
     char subprefix[B_SUBPREFIX_LEN] = {0};
     char subparam[B_SUBPREFIX_LEN] = {0};
-    char ChanBuf[40];   // Channel name
-    
+    char ChanBuf[40];   // Channel name    
 
     strncpy(ChanBuf, PG_Buffer[0]->Title, 40);
 
@@ -499,7 +476,7 @@ void IRC_DoCommand()
         while ((LineBuf->prefix[end++] != '!') && (end < B_SUBPREFIX_LEN));
         strncpy(subprefix, LineBuf->prefix, end-1);
 
-        snprintf(PrintBuf, B_PRINTSTR_LEN, "%s: %s\n", subprefix, LineBuf->param[1]);
+        snprintf(PrintBuf, B_PRINTSTR_LEN, "\2%s: \1%s\n", subprefix, LineBuf->param[1]);
 
         if (strcmp(LineBuf->param[0], v_UsernameReset) == 0)
         {
@@ -512,6 +489,8 @@ void IRC_DoCommand()
     }
     else if (strcmp(LineBuf->command, "JOIN") == 0)
     {
+        if (sv_ShowJoinQuitMsg == 0) return;
+
         // Extract nickname from <nick>!<<hostname>
         u16 end = 1;
         while ((LineBuf->prefix[end++] != '!') && (end < B_SUBPREFIX_LEN));
@@ -525,6 +504,8 @@ void IRC_DoCommand()
     }
     else if (strcmp(LineBuf->command, "QUIT") == 0)  // Todo: figure out which channel this user is in
     {
+        if (sv_ShowJoinQuitMsg == 0) return;
+
         // Extract nickname from <nick>!<<hostname>
         u16 end = 1;
         while ((LineBuf->prefix[end++] != '!') && (end < B_SUBPREFIX_LEN));
@@ -778,12 +759,12 @@ void IRC_DoCommand()
             }
         
             default:
-                #ifdef IRC_LOGGING
+                #if IRC_LOGGING == 1
                 kprintf("Error: Unhandled IRC CMD: %u", cmd);
                 #endif
                 return;
             break;
-        }     
+        }
     }
 
     // Print text to the correct channel page/tab
@@ -808,7 +789,7 @@ void IRC_DoCommand()
             strncpy(PG_Buffer[ch]->Title, ChanBuf, 32);
             TMB_SetActiveBuffer(PG_Buffer[ch]);
 
-            snprintf(TitleBuf, 29, "%s %-21s", STATUS_TEXT_SHORT, PG_Buffer[PG_CurrentIdx]->Title);
+            snprintf(TitleBuf, 29, "%s %-*s", STATUS_TEXT_SHORT, 27-IRC_MAX_CHANNELS, PG_Buffer[PG_CurrentIdx]->Title);
             TRM_SetStatusText(TitleBuf);
 
             if (PG_CurrentIdx != ch) 
@@ -825,8 +806,7 @@ void IRC_DoCommand()
         }
     }
 
-    u16 len = strlen(PrintBuf);
-    for (u16 i = 0; i < len; i++) IRC_PrintChar(PrintBuf[i]);
+    IRC_PrintString(PrintBuf);
 
     TMB_SetColorFG(15);
 }
@@ -907,7 +887,7 @@ void IRC_ParseString()
         it++;
     }
 
-    #ifdef IRC_LOGGING
+    #if IRC_LOGGING == 2
     kprintf("Prefix: \"%s\"", LineBuf->prefix);
     kprintf("Command: \"%s\"", LineBuf->command);
     for (u8 i = 0; i < 16; i++) if (strlen(LineBuf->param[i]) > 0) kprintf("Param[%u]: \"%s\"", i, LineBuf->param[i]);
@@ -961,5 +941,72 @@ void IRC_RegisterNick()
         NET_SendString(buf);
 
         bFirstRun = FALSE;
+    }
+}
+
+// Print string to screen, word wrap at screen edge if settings allow for it
+void IRC_PrintString(char *string)
+{
+    u16 len = strlen(string);
+    u16 screen_width = ((sv_Font == 0) ? 40 : 80) - (sv_HSOffset >> 3); // Effective screen width
+    u16 current_column = 0;
+    u16 i = 0;
+
+    while (i < len) 
+    {
+        if (sv_WrapAtScreenEdge)
+        {
+            // Look ahead to determine the length of the next word
+            u16 word_end = i;
+            while (word_end < len && 
+                   string[word_end] != ' '  && 
+                   string[word_end] != 0x1 && 
+                   string[word_end] != 0x2 && 
+                   string[word_end] != 0x3 && 
+                   string[word_end] != '\n') 
+            {
+                word_end++;
+            }
+
+            u16 word_length = word_end - i;
+
+            // Check if the word fits in the current line
+            if (current_column + word_length > screen_width) 
+            {
+                // If the word itself is too long for the screen width, print as much as fits
+                if (word_length > screen_width) 
+                {
+                    u16 chars_to_print = screen_width - current_column;
+                    
+                    // Print characters up to the screen boundary, then wrap
+                    for (u16 j = 0; j < chars_to_print; j++) 
+                    {
+                        IRC_PrintChar(string[i]);
+                        i++;
+                        current_column++;
+                    }
+
+                    IRC_PrintChar('\n');      // Insert newline after reaching screen width
+                    current_column = 0;       // Reset column for new line
+                }
+                else 
+                {
+                    // If the word can fit on the next line, wrap before printing it
+                    IRC_PrintChar('\n');
+                    current_column = 0;
+                }
+            }
+        }
+
+        // Print the current character and move to the next
+        IRC_PrintChar(string[i]);
+        current_column++;
+        i++;
+
+        // Reset column counter if a newline character is encountered in the input
+        if (string[i - 1] == '\n') 
+        {
+            current_column = 0;
+        }
     }
 }

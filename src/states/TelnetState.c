@@ -12,12 +12,15 @@
 #ifndef EMU_BUILD
 static u8 rxdata;
 #endif
-//static u8 bOnce = FALSE;
+static u8 bOnce = FALSE;
 
 #ifdef EMU_BUILD
 #include "kdebug.h"
 asm(".global telnetdump\ntelnetdump:\n.incbin \"tmp/streams/telnetdump.log\"");
 extern const unsigned char telnetdump[];
+#endif
+
+#if (EMU_BUILD || ESC_LOGGING)
 u32 StreamPos = 0;
 #endif
 
@@ -130,12 +133,22 @@ void Reset_Telnet()
 
 void Run_Telnet()
 {
-    #ifndef EMU_BUILD
     while (Buffer_Pop(&RxBuffer, &rxdata) != 0xFF)
     {
+        if (bOnce)
+        {
+            TRM_SetStatusIcon(ICO_NET_RECV, ICO_POS_1);
+            bOnce = !bOnce;
+        }
+
         TELNET_ParseRX(rxdata);
     }
-    #endif
+    
+    if (!bOnce)
+    {
+        TRM_SetStatusIcon(ICO_NET_IDLE_RECV, ICO_POS_1);
+        bOnce = !bOnce;
+    }
 }
 
 void Input_Telnet()

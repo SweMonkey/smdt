@@ -4,8 +4,8 @@
 
 static TMBuffer *TMB_Ptr = NULL;   // Work buffer
 
-#define TMBATTR_BGA (sv_Font?(0x4100 + AVR_FONT0):(0x2100 + AVR_FONT0))
-#define TMBATTR_BGB (sv_Font?(0x4100 + AVR_FONT0):(0x4000            ))
+#define TMBATTR_BGA(addr) (sv_Font?(((tptr->BufferA[addr] & 0x80) ? 0 : 0x4000) + 0x100 + AVR_FONT0):(0x2100 + AVR_FONT0))
+#define TMBATTR_BGB(addr) (sv_Font?(((tptr->BufferA[addr] & 0x80) ? 0 : 0x4000) + 0x100 + AVR_FONT0):(0x4000            ))
 
 
 void TMB_UploadBuffer(TMBuffer *tptr)
@@ -21,7 +21,8 @@ void TMB_UploadBuffer(TMBuffer *tptr)
     *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(AVR_PLANE_A + (Addr<<1));
     while (Updates--)
     {
-        *((vu16*) VDP_DATA_PORT) = TMBATTR_BGA + tptr->BufferA[Addr++];
+        *((vu16*) VDP_DATA_PORT) = TMBATTR_BGA(Addr) + (tptr->BufferA[Addr] & 0x7F);
+        Addr++;
 
         if (Addr > TMB_TM_S)
         {
@@ -37,7 +38,8 @@ void TMB_UploadBuffer(TMBuffer *tptr)
     *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(AVR_PLANE_B + (Addr<<1));
     while (Updates--)
     {
-        *((vu16*) VDP_DATA_PORT) = TMBATTR_BGB + tptr->BufferB[Addr++];
+        *((vu16*) VDP_DATA_PORT) = TMBATTR_BGB(Addr) + (tptr->BufferB[Addr] & 0x7F);
+        Addr++;
 
         if (Addr > TMB_TM_S)
         {
@@ -68,7 +70,8 @@ void TMB_UploadBufferFull(TMBuffer *tptr)
     *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(AVR_PLANE_A + (Addr<<1));
     while (Updates--)
     {
-        *((vu16*) VDP_DATA_PORT) = TMBATTR_BGA + tptr->BufferA[Addr++];
+        *((vu16*) VDP_DATA_PORT) = TMBATTR_BGA(Addr) + (tptr->BufferA[Addr] & 0x7F);
+        Addr++;
     }
 
     // Upload/update full BGB tilemap in VRAM
@@ -78,7 +81,8 @@ void TMB_UploadBufferFull(TMBuffer *tptr)
     *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(AVR_PLANE_B + (Addr<<1));
     while (Updates--)
     {
-        *((vu16*) VDP_DATA_PORT) = TMBATTR_BGB + tptr->BufferB[Addr++];
+        *((vu16*) VDP_DATA_PORT) = TMBATTR_BGB(Addr) + (tptr->BufferB[Addr] & 0x7F);
+        Addr++;
     }
 
     tptr->Updates = 0;
@@ -129,13 +133,13 @@ void TMB_PrintChar(u8 c)
         {
             case 0: // Plane B
             {
-                TMB_Ptr->BufferB[addr] = c;
+                TMB_Ptr->BufferB[addr] = (c & 0x7F) | (TMB_Ptr->ColorFG != 15 ? 0x80 : 0);
                 break;
             }
 
             case 1: // Plane A
             {
-                TMB_Ptr->BufferA[addr] = c;
+                TMB_Ptr->BufferA[addr] = (c & 0x7F) | (TMB_Ptr->ColorFG != 15 ? 0x80 : 0);
                 break;
             }
             
@@ -146,7 +150,7 @@ void TMB_PrintChar(u8 c)
     else    // 8x8 font
     {
         addr = ((TMB_Ptr->sy & 31) << TMB_SIZE_SELECTOR) + TMB_Ptr->sx;
-        TMB_Ptr->BufferA[addr] = c;
+        TMB_Ptr->BufferA[addr] = (c & 0x7F);
         TMB_Ptr->BufferB[addr] = TMB_Ptr->ColorFG;
     }
 

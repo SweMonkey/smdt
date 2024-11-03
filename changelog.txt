@@ -1,3 +1,13 @@
+v0.31.1 Bugfixes & IRC QoL additions
+Hexview no longer fails to start when trying to open an empty file.
+Rx statistics enabled again in terminal/telnet client, it would previously not record received bytes.
+Automatic more/less enabled again. What does this do? well it makes sure that only a screens worth of text can be printed at once, after which is will stop printing text until you press a key.
+Setting IRC font while running the IRC client accidently initialized the terminal/tty backend and screwed everything up, whoops.
+Actually register nick change with server when doing /nick newnickname.
+IRC: Added option for word wrap on screen edge.
+IRC: Added option to ignore and not print join/leave messages as they can get somewhat spammy and make some channels hard to read.
+IRC: Added 1 bit colouring to 80 column mode; Names are now coloured in both 40 and 80 column mode.
+
 v0.31:
 Terminal: Added a few IAC's; Go-Ahead, NOP and End-Of-Record, these will be treated as NOP most of the time. SMDTC does not respond with GA / To GA. Fixes a few bytes that previously got swallowed up by the IAC parser.
 Terminal: Added the alternate buffer (mode ?1049 and ?47). Max 80 columns is now enforced when using 4x8 fonts, likewise for the 8x8 fonts a max of 40 columns is enforced. In the future this could be increased to a max of 128 and 64 columns respectively.

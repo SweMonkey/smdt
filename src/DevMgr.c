@@ -208,10 +208,10 @@ void DetectDevices()
 
     // -- UART setup -----------------------------------
     DRV_UART.Id.sName = "UART";
-    DRV_UART.Id.Bitmask = 0x40; // Pin 7
+    DRV_UART.Id.Bitmask = 0x40; // 0x40 - Pin 7
     DRV_UART.Id.Bitshift = 0;
     DRV_UART.Id.Mode = DEVMODE_SERIAL | DEVMODE_PARALLEL;
-    
+
     DevList[DevSeq++] = &DRV_UART;
     SetDevicePort(&DRV_UART, sv_ListenPort);
     *((vu8*) DRV_UART.SCtrl) = 0x38;

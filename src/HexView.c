@@ -177,7 +177,7 @@ void HexView_Open(const char *filename)
         F_Seek(f, 0, SEEK_END);
         bufsize = F_Tell(f);
 
-        bufptr = (char*)malloc(bufsize);    
+        bufptr = (char*)malloc(bufsize+1);    
         if (bufptr == NULL)
         {
             stdout_printf("Failed to allocate buffer\n");

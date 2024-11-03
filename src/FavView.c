@@ -33,7 +33,7 @@ static char *list_telnet[] =
 
 static char *list_irc[] =
 {
-    "chat.freenode:6667", "efnet.portlane.se:6667", "irc.rizon.net:6667", "irc.dal.net:6667", "irc.libera.chat:6667"
+    "chat.freenode.net:6667", "efnet.portlane.se:6667", "irc.rizon.net:6667", "irc.dal.net:6667", "irc.libera.chat:6667", "irc.slashnet.org:6667"
 };
 
 static char *list_gopher[] =

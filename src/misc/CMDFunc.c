@@ -139,7 +139,6 @@ void CMD_Echo(u8 argc, char *argv[])
     if (argc >= 3 && strcmp(argv[argc - 2], ">") == 0)
     {
         // Open the file specified as the last argument for writing.
-
         char *fn_buf = malloc(FILE_MAX_FNBUF);
         FS_ResolvePath(argv[argc - 1], fn_buf);
         file = F_Open(fn_buf, FM_CREATE | FM_WRONLY);
@@ -422,6 +421,8 @@ void CMD_SetVar(u8 argc, char *argv[])
             i++;
         }
 
+        Stdout_Push("\n[96mNote: Changes to variables may not take effect until you reboot.[0m\n");
+
         return;
     }
 
@@ -473,6 +474,7 @@ void CMD_SetVar(u8 argc, char *argv[])
             i++;
         }
 
+        if (i == 65534) CFG_SaveData();
         return;
     }
 }

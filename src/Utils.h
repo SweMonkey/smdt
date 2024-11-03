@@ -64,7 +64,7 @@
 // Debugging
 //#define EMU_BUILD     // Enable to build specialized debug version meant to run on emulators
 //#define ATT_LOGGING   // Log attribute changes
-//#define IRC_LOGGING   // Log IRC debug messages
+//#define IRC_LOGGING 1 // Log IRC debug messages (1 = Unhandled CMD only, 2 = LOG EVERYTHING)
 //#define TRM_LOGGING   // Log terminal debug messages
 //#define IAC_LOGGING   // Log IAC data
 //#define ESC_LOGGING 1 // Log ESC data (1 = Log necessary info, 2 = LOG EVERYTHING)

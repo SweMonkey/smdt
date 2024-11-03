@@ -7,13 +7,18 @@
 #include "Keyboard.h"
 
 Buffer stdout;
+extern Buffer TxBuffer;
 bool bAutoFlushStdout = FALSE;
+
+void TickClock();
+void ScreensaverTick();
+void CR_Blink();
 
 
 // Hacky function to pause printing when screen has been filled
 void MoreFunc(s32 *start)
 {
-    u8 kbdata;
+    u8 kbdata = 0;
     
     if (((TTY_GetSY()) - *start) >= (bPALSystem?27:25))
     {
@@ -22,10 +27,13 @@ void MoreFunc(s32 *start)
         TELNET_ParseRX('[');
         TELNET_ParseRX('7');
         TELNET_ParseRX('m');
+        TELNET_ParseRX('<');
         TELNET_ParseRX('M');
         TELNET_ParseRX('o');
         TELNET_ParseRX('r');
         TELNET_ParseRX('e');
+        TELNET_ParseRX('>');
+        TELNET_ParseRX(' ');
         TELNET_ParseRX('');
         TELNET_ParseRX('[');
         TELNET_ParseRX('0');
@@ -42,10 +50,16 @@ void MoreFunc(s32 *start)
             {
                 TTY_SetSX(0);
                 TTY_MoveCursor(TTY_CURSOR_UP, 1); // Only move up in case the initial \n is printed above
+                Buffer_Flush(&TxBuffer);
                 break;
             }
 
-            SYS_doVBlankProcess();
+            #ifdef ENABLE_CLOCK
+            TickClock();        // Clock will drift when interrupts are disabled!
+            #endif
+            ScreensaverTick();  // Screensaver counter/animation
+            CR_Blink();         // Cursor blink
+            VDP_waitVSync();
         }
 
         *start = TTY_GetSY();
@@ -78,11 +92,11 @@ void Stdout_PushByte(u8 byte)
 void Stdout_Flush()
 {
     u8 data = 0;
-    //s32 start = TTY_GetSY();
+    s32 start = TTY_GetSY();
 
     while (Buffer_Pop(&stdout, &data) != 0xFF)
     {
         TELNET_ParseRX(data);
-        //MoreFunc(&start);
+        MoreFunc(&start);
     }
 }

@@ -147,9 +147,9 @@ void Exit_IRC()
     NET_Disconnect();
 
     VDP_setPlaneSize(128, 32, FALSE);   // Reset VDP tilemap size back to default (128x32)
+    TRM_ClearArea(26, 1, 14, 25, PAL1, TRM_CLEAR_BG); // Clear area where the user list window may have been drawn
     TRM_SetWinParam(FALSE, FALSE, 0, 1);// Restore default window parameters
     PAL_setColor( 1, 0x00e);            // Restore icon red colour
-    TRM_ClearArea(26, 1, 14, 25, PAL1, TRM_CLEAR_BG); // Clear area where the user list window may have been drawn
 
     if (UserWin != NULL)
     {
@@ -257,7 +257,7 @@ void ChangePage(u8 num)
     }
     else
     {
-        snprintf(TitleBuf, 29, "%s %-21s", STATUS_TEXT_SHORT, PG_Buffer[PG_CurrentIdx]->Title);
+        snprintf(TitleBuf, 29, "%s %-*s", STATUS_TEXT_SHORT, 27-IRC_MAX_CHANNELS, PG_Buffer[PG_CurrentIdx]->Title);
     }
 
     bPG_HasNewMessages[num] = FALSE;
@@ -311,7 +311,7 @@ u8 ParseTx()
             strncpy(command, (char*)inbuf+end_p, end_c-end_p-1);
 
             sprintf((char*)outbuf, "PRIVMSG %s :%s\n", command, (char*)inbuf+end_c);
-            sprintf((char*)tmbbuf, "%s: %s\n", v_UsernameReset, (char*)inbuf+end_c);
+            sprintf((char*)tmbbuf, "\2%s: \1%s\n", v_UsernameReset, (char*)inbuf+end_c);
 
             // Try to find an unused page or an existing one
             for (u8 ch = 0; ch < IRC_MAX_CHANNELS; ch++)
@@ -327,7 +327,7 @@ u8 ParseTx()
                     strncpy(PG_Buffer[ch]->Title, command, 32);
                     TMB_SetActiveBuffer(PG_Buffer[ch]);
 
-                    snprintf(TitleBuf, 40, "%s %-21s", STATUS_TEXT_SHORT, PG_Buffer[PG_CurrentIdx]->Title);
+                    snprintf(TitleBuf, 40, "%s %-*s", STATUS_TEXT_SHORT, 27-IRC_MAX_CHANNELS, PG_Buffer[PG_CurrentIdx]->Title);
                     TRM_SetStatusText(TitleBuf);
                     bPG_UpdateMessage = TRUE;
                     break;
@@ -338,10 +338,7 @@ u8 ParseTx()
                 }
             }
 
-            for (u16 c = 0; c < strlen((char*)tmbbuf); c++)
-            {
-                IRC_PrintChar(tmbbuf[c]);
-            }
+            IRC_PrintString((char*)tmbbuf);
 
             TMB_SetActiveBuffer(PG_Buffer[last_pg]);
         }
@@ -412,6 +409,13 @@ u8 ParseTx()
             sprintf((char*)outbuf, "NICK %s\n", param);
             strncpy(sv_Username, param, 31);
 
+            memset(v_UsernameReset, 0, 32);
+            strcpy(v_UsernameReset, sv_Username);
+
+            char buf[64];
+            sprintf(buf, "NICK %s\n", v_UsernameReset);
+            NET_SendString(buf);
+
             // TODO: CHECK RESPONSE, NICK MAY NOT BE VALID!
 
             CFG_SaveData();
@@ -432,12 +436,9 @@ u8 ParseTx()
         TMB_SetActiveBuffer(PG_Buffer[PG_CurrentIdx]);
 
         sprintf((char*)outbuf, "PRIVMSG %s :%s\n", PG_Buffer[PG_CurrentIdx]->Title, (char*)inbuf);
-        sprintf((char*)tmbbuf, "%s: %s\n", v_UsernameReset, (char*)inbuf);
+        sprintf((char*)tmbbuf, "\2%s: \1%s\n", v_UsernameReset, (char*)inbuf);
 
-        for (u16 c = 0; c < strlen((char*)tmbbuf); c++)
-        {
-            IRC_PrintChar(tmbbuf[c]);
-        }        
+        IRC_PrintString((char*)tmbbuf);
     }
 
     #ifndef EMU_BUILD

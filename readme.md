@@ -1,18 +1,19 @@
 
 # SMD Terminal emulator, Telnet and IRC client v0.31+
 A terminal emulator, telnet and IRC client for the Sega Mega Drive/Genesis with support for keyboards and RS-232 communication.<br>
-![Screenshot of the telnet client](https://deceptsoft.com/smdtc_extra_git/v30/telnet_small.png)
-![Screenshot of the IRC client](https://deceptsoft.com/smdtc_extra_git/v30/irc_small.png)
+![Screenshot of the telnet client in 80 column + 16 colour mode](https://deceptsoft.com/smdtc_extra_git/v31/telnet.png)
+![Screenshot of the IRC client](https://deceptsoft.com/smdtc_extra_git/v31/irc.png)
 ![Screenshot of the terminal emulator showing nano](https://deceptsoft.com/smdtc_extra_git/v30/blastem_20240401_104314.png)
 ![Screenshot of a debugging utility to inspect streams](https://deceptsoft.com/smdtc_extra_git/v30/hexview_small.png)
 ![Screenshot of the telnet client in 80 column + 8 colour mode](https://deceptsoft.com/smdtc_extra_git/v30/blastem_20240401_203819.png)
-![Screenshot of the terminal emulator](https://deceptsoft.com/smdtc_extra_git/v30/blastem_20240505_222454.png)
+![Screenshot of the terminal emulator](https://deceptsoft.com/smdtc_extra_git/v31/terminal.png)
 
 ##### Table of Contents
 * [Disclaimer](#disclaimer)
 * [Thanks](#thanks-to)
 * [Building from source](#building-smdtc-from-source)
 * [Running SMDTC](#running-smdtc)
+  * [Running SMDTC in blastEm](#running-smdtc-in-blastem)
 * [Required hardware](#required-hardware)
 * [Devices](#devices)
   * [Autodetected devices](#list-of-autodetected-devices)
@@ -27,6 +28,7 @@ A terminal emulator, telnet and IRC client for the Sega Mega Drive/Genesis with 
   * [Telnet client](#telnet-client)
   * [Gopher client](#gopher-client)
   * [Terminal emulator](#terminal-emulator)
+* [FAQ](#faq)
 
 ## Disclaimer
 > [!WARNING]
@@ -54,14 +56,58 @@ The SGDK library must be rebuilt with the flags `HALT_Z80_ON_IO` and `HALT_Z80_O
 SMDTC is made to run on the original Mega Drive / Genesis hardware;<br>
 Easiest way to run SMDTC on your system is by transferring the binary file `smdt_vX.YY.Z.bin` to a flashcart.<br>
 <br>
-You can also run SMDTC in a Mega Drive / Genesis emulator and easily check it out; Do mind that most emulators do not provide any way to actually connect any external serial devices, so no network support is possible while running in an emulator.<br><br>
-I highly recommend the emulator [BlastEm](https://www.retrodev.com/blastem/nightlies/) since it supports the Sega Saturn keyboard.<br>
-Other emulators may have issues running SMDTC and it is unlikely they will have any keyboard support.
+You can also run SMDTC in a Mega Drive / Genesis emulator and easily check it out; Do mind that most emulators do not provide any way to actually connect any external serial devices or keyboards.<br><br>
+I highly recommend the emulator [BlastEm 0.6.3+](https://www.retrodev.com/blastem/nightlies/) since it supports the Sega Saturn keyboard as well as providing the functionality to connect the serial port to a UNIX socket, allowing SMDTC to connect to remote servers.<br>
 <br>
+
+## Running SMDTC in blastEm
+To run SMDTC on blastEm you need setup IO devices in blastEm, this is partially done by going into the system settings in blastEm (Settings -> System)<br><br>
+For IO Port 1 Device, select "Saturn keyboard"<br><br>
+To setup IO Port 2 Device you need to navigate to your `blastem.cfg` file, on linux this file is by default located in `~/.config/blastem/`<br>
+Open `blastem.cfg` and scroll down to the `io` section, in the `device` block change `2 <some device>` to `2 serial`<br>
+After the `device block`, add this line `socket smdtsock.sock`<br>
+
+Your `io` section should now look something like this:<br>
+```
+io {
+	devices {
+		1 saturn keyboard
+		2 serial
+		ext none
+	}
+	socket smdtsock.sock
+	ea_multitap {
+		1 gamepad6.1
+		2 gamepad6.2
+		3 gamepad6.3
+		4 gamepad6.4
+	}
+	sega_multitap.1 {
+		1 gamepad6.2
+		2 gamepad6.3
+		3 gamepad6.4
+		4 gamepad6.5
+	}
+}
+```
+<br>
+
+If the serial port is setup correctly in blastEm, then you can now connect to the above socket by using the tool [SMDT-PC](https://github.com/SweMonkey/smdt-pc) like this:<br>
+1. Open `smdt_vX.YY.Z.bin` in blastEm.<br>
+2. Launch SMDT-PC with this command in a terminal: `./smdtpc -xportsock /path/to/blastEm/smdtsock.sock`.<br>
+
+<br>
+In step 1, blastEm and SMDT will initially halt and wait for a connection being made (step 2)<br>
+If all is well SMDT should print out "XPN: xPort module OK" to the boot messages and you're good to go.<br>
+<br>
+
+> [!NOTE]
+> Do note that the SMDT-PC tool is "emulating" an xport device for the purpose of reusing the XPN driver in SMDT, it may lack certain features or contain bugs.<br>
+
 
 ## Required hardware
 1. A PS/2 keyboard or a Sega Saturn keyboard (not strictly required but preferred).
-2. A **5 volt** RS-232 serial connection or an xPort/xPort module.
+2. A **5 volt** RS-232 serial connection or an xPort module.
 3. A Mega Drive or Genesis and a way to run roms on it.
 <br>
 
@@ -82,7 +128,7 @@ All detected devices can be viewed in the "Connected devices" list (Quick menu -
 > SMDTC is limited when it comes to detecting the presence of a serial connection on the built in UART.<br>
 > By default SMDTC will listen for incoming connections and attempt to find serial devices on PORT 2 UART.<br>
 > This setting can be changed in the "Select serial port" menu (Quick menu -> Mega Drive settings -> Select serial port)<br>
-> Do not forget to save your changes! (Quick menu -> Reset -> Save config to sram)<br>
+> Do not forget to save your changes! (Quick menu -> System -> Save config)<br>
 <br>
 
 ### List of autodetected devices
@@ -195,3 +241,16 @@ Type `help` for a list of all available built in commands.<br>
 <br>History queue:<br>
 Up arrow   = Go back in history of entered command strings.<br>
 Down arrow = Go forward in history or clear command string if at the last entered command string.<br>
+
+## FAQ
+Q: How do I change the terminal or IRC font?<br>
+A: Open the Quick Menu (F8) and go to "Settings -> Default fonts -> Terminal/IRC font" and select prefered font by using the cursor keys and finally confirming your choice by pressing Enter.<br>
+<br>
+Q: Changing IRC font does not change anything?<br>
+A: Due to current design limitations of the IRC client the changes made won't take effect until next time the IRC client is started.<br>
+<br>
+Q: My settings got reset after rebooting!<br>
+A: Make sure to save your settings by either using the Quick menu (System -> Save config) or by typing `savecfg` and pressing Enter in the terminal. If settings still fail to save it may be due to your system or emulator lacking SRAM, thus being unable to access the filesystem in SMDT.<br>
+<br>
+Q: How do I change my IRC nick?<br>
+A: In the terminal, run the command `setvar username yournick` OR in the IRC client, type `/nick yournick` and press Enter.<br>
