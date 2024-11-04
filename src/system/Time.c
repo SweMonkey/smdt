@@ -98,6 +98,7 @@ u8 DoTimeSync(char *server)
     u8 data;
     s32 recv = 0;
     u8 i = 0;
+    u32 timeout = 0;
     char *sync_server;
 
     if (GetTimeSinceLastSync() < 10)
@@ -112,20 +113,34 @@ u8 DoTimeSync(char *server)
 
     if (NET_Connect(sync_server))
     {
-        while (Buffer_GetNum(&RxBuffer) < 4);        
+        while (Buffer_GetNum(&RxBuffer) < 4)
+        {
+            if (timeout++ >= 100000)
+            {
+                NET_Disconnect(); 
+                return 1;
+            }
+        }
+
+        timeout = 0;
 
         while (Buffer_Pop(&RxBuffer, &data) != 0xFF)
         {
             recv = (recv << 8) + data;
 
             if (i++ >= 3) break;
+            
+            if (timeout++ >= 100000)
+            {
+                NET_Disconnect(); 
+                return 1;
+            }
         }
-        
-        Buffer_Pop(&RxBuffer, &data);
-        if (data != 'D') NET_Disconnect();      // Fixme: Don't check for 'D', it is only applicable to XPN/RLN network code!
 
         // SMDTC assumes unix time (start year 1970), the received time however may use 1900 as starting year... fixme?
         SetSystemDateTime(recv);
+
+        NET_Disconnect(); 
 
         return 0;
     }

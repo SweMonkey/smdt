@@ -12,7 +12,6 @@ u32 sv_ConnTimeout = CTIME;    // Connection timeout (waiting for connection to 
 u32 sv_ReadTimeout = RTIME;    // Readback timeout (waiting for response from xport)
 u32 sv_DelayTime   = DTIME;    // Milliseconds of delay between sending a command and reading the response
 static u8 bIsInMonitorMode = FALSE;
-static u8 rxdata = 0;
 
 
 u8 XPN_Initialize()
@@ -44,21 +43,19 @@ u8 XPN_Initialize()
     return 0;
 }
 
-bool XPN_RXReady() 
-{
-    return !Buffer_IsEmpty(&RxBuffer);
-}
-
 void XPN_SendByte(u8 data) 
 {
     NET_SendChar(data, TXF_NOBUFFER);
 }
 
-u8 XPN_ReadByte()
+bool XPN_ReadByte(u8 *data)
 {
-    if (Buffer_Pop(&RxBuffer, &rxdata) == 0) return rxdata;
+    if (Buffer_Pop(&RxBuffer, data) == 0)
+    {
+        return TRUE;  // Data was successfully read
+    }
 
-    return 0;
+    return FALSE;  // No data available
 }
 
 void XPN_SendMessage(char *str) 
@@ -77,17 +74,23 @@ void XPN_FlushBuffers()
 bool XPN_EnterMonitorMode()
 {
     u32 timeout = 0;
+    u8 data;
 
-    if (bIsInMonitorMode) return TRUE;
+    //if (bIsInMonitorMode) return TRUE;
 
     XPN_FlushBuffers();    
     XPN_SendMessage("C0.0.0.0/0\n");
 
     waitMs(sv_DelayTime);
     
-    while (!XPN_RXReady() || XPN_ReadByte() != '>')
+    while (1)
     {
-        if (timeout++ >= sv_ReadTimeout) 
+        if (XPN_ReadByte(&data))
+        {
+            if (data == '>') break;
+        }
+
+        if (timeout++ >= sv_ReadTimeout)
         {
             return FALSE;
         }
@@ -102,6 +105,7 @@ bool XPN_EnterMonitorMode()
 bool XPN_ExitMonitorMode()
 {
     u32 timeout = 0;
+    u8 data;
 
     //if (!bIsInMonitorMode) return TRUE;
 
@@ -110,9 +114,21 @@ bool XPN_ExitMonitorMode()
 
     waitMs(sv_DelayTime);
     
-    while (!XPN_RXReady() || XPN_ReadByte() != '>')
+    while (1)
     {
-        if ((RxBuffer.data[0] == 'Q') && (RxBuffer.data[1] == 'U') && (RxBuffer.data[2] == 0xD) && (RxBuffer.data[3] == 0xA)) break;
+        if (XPN_ReadByte(&data))
+        {
+            if (data == '>') break;
+        }
+
+        // Check for a specific sequence in RxBuffer
+        if ((RxBuffer.data[0] == 'Q') &&
+            (RxBuffer.data[1] == 'U') &&
+            (RxBuffer.data[2] == 0xD) &&
+            (RxBuffer.data[3] == 0xA))
+        {
+            break;  // Exit loop if the specific sequence is detected
+        }
 
         if (timeout++ >= sv_ReadTimeout)
         {
@@ -157,11 +173,6 @@ void XPN_Disconnect()
     u32 timeout = 0;
     u8 byte = 0;
 
-    // This is not needed on a real xport. Its only here to tell a fake xport emulator to disconnect, since it can't read the CP3 pin for obvious reasons
-    XPN_EnterMonitorMode();
-    XPN_ExitMonitorMode();
-    // -----------------------------
-
     XPN_FlushBuffers();
 
     // Set CP3 pin to tell the xPort to disconnect from the remote server
@@ -180,6 +191,12 @@ void XPN_Disconnect()
     if (RxBuffer.data[0] == 'D') Buffer_Pop(&RxBuffer, &byte);
 
     Exit:
+
+    // This is not needed on a real xport. Its only here to tell a fake xport emulator to disconnect, since it can't read the CP3 pin for obvious reasons
+    XPN_EnterMonitorMode();
+    XPN_ExitMonitorMode();
+    // -----------------------------
+
     return;
 }
 
@@ -197,14 +214,16 @@ u8 XPN_GetIP(char *ret)
     XPN_FlushBuffers();
     XPN_SendMessage("NC\n"); // Send command to get network information
 
-    //waitMs(sv_DelayTime);
+    waitMs(sv_DelayTime);
 
-    while (byte != 'G')
+    while (1)
     {
-        if (XPN_RXReady())
+        if (XPN_ReadByte(&byte))
         {
-            byte = XPN_ReadByte();
+            // Exit the loop if byte is 'G'
+            if (byte == 'G') break;
 
+            // Store the byte if its valid
             if ((byte >= '0' && byte <= '9') || byte == '.' || byte == '1')
             {
                 ret[i++] = byte;
@@ -213,7 +232,7 @@ u8 XPN_GetIP(char *ret)
             timeout = 0;
         }
 
-        if (timeout++ >= sv_ReadTimeout) 
+        if (timeout++ >= sv_ReadTimeout)
         {
             r = 2;
             break;
@@ -242,22 +261,25 @@ void XPN_PingIP(char *ip)
 
     while (ping_counter < 5)
     {
-        byte = XPN_ReadByte();
-
-        if (byte == 0) continue;
-
-        byte_count++;
-
-        if (byte_count > 2)
+        if (XPN_ReadByte(&byte))
         {
-            Stdout_PushByte(byte);
+            if (byte == 0) continue;
 
-            if (byte == '\n')
+            byte_count++;
+
+            // Skip the first 2 bytes
+            if (byte_count > 2)
             {
-                ping_counter++;
+                Stdout_PushByte(byte);
+
+                if (byte == '\n')
+                {
+                    ping_counter++;
+                }
+
+                // Flush stdout after pushing byte
+                Stdout_Flush();
             }
-            
-            Stdout_Flush();
         }
     }
 

@@ -88,6 +88,7 @@ void IRC_Reset()
     if (sv_Font) 
     {
         PAL_setColor(15, 0x0AE);    // The one colour you get with 1 bit 4x8 fonts :)
+        PAL_setColor(14, 0x046);    // AA Colour
     }
     else
     {

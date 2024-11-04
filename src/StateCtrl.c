@@ -61,9 +61,9 @@ void ChangeState(State new_state, u8 argc, char *argv[])
     PrevState = CurrentState;
     PrevStateEnum = CurrentStateEnum;
 
-    SYS_disableInts();
-
     CurrentState->Exit();
+
+    SYS_disableInts();
 
     InputTick();    // Flush input queue to prevent inputs "leaking" into new state
 
@@ -116,6 +116,8 @@ void ChangeState(State new_state, u8 argc, char *argv[])
 
     TRM_SetStatusText(STATUS_TEXT);
     TRM_ResetStatusText();
+    
+    SYS_enableInts();
 
     CurrentState->Enter(argc, argv);
 
@@ -124,7 +126,6 @@ void ChangeState(State new_state, u8 argc, char *argv[])
     PAL_setColor(4, sv_CursorCL);
 
     SYS_setHIntCallback(CurrentState->HBlank);
-    SYS_enableInts();
 }
 
 // Return to previous state
@@ -133,9 +134,9 @@ void RevertState()
     PRG_State *ShadowState = CurrentState;
     State ShadowStateEnum = CurrentStateEnum;
 
-    SYS_disableInts();
-
     CurrentState->Exit();
+
+    SYS_disableInts();
 
     InputTick();    // Flush input queue to prevent inputs "leaking" into new state
 

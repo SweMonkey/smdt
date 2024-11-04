@@ -62,7 +62,7 @@
 #define TRM_CLEAR_INVISIBLE (0)     // For clearing area to invisible (Tile 0)
 
 // Debugging
-//#define EMU_BUILD     // Enable to build specialized debug version meant to run on emulators
+//#define EMU_BUILD 1   // Enable to build specialized debug version meant to run on emulators
 //#define ATT_LOGGING   // Log attribute changes
 //#define IRC_LOGGING 1 // Log IRC debug messages (1 = Unhandled CMD only, 2 = LOG EVERYTHING)
 //#define TRM_LOGGING   // Log terminal debug messages

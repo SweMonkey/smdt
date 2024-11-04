@@ -9,9 +9,7 @@
 #include "devices/RL_Network.h"
 #include "system/Stdout.h"
 
-#ifndef EMU_BUILD
 static u8 rxdata;
-#endif
 static u8 bOnce = FALSE;
 
 #ifdef EMU_BUILD

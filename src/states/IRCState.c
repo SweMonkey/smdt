@@ -140,9 +140,14 @@ void ReEnter_IRC()
 
 void Exit_IRC()
 {
+    char TitleBuf[40];
+
     IRC_Exit();
 
     Buffer_Flush(&TxBuffer);
+    
+    sprintf(TitleBuf, "%s - Disconnecting...", STATUS_TEXT_SHORT);
+    TRM_SetStatusText(TitleBuf);
 
     NET_Disconnect();
 

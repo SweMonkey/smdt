@@ -1,3 +1,9 @@
+v0.31.3 Minor bugfix
+IRC mono colour antialiasing colour is now updated to reflect the new amber text colour.
+Interrupts were disabled to early on StateExit() which made the XPN drivers unable to actually communicate during Disconnect(). This caused excessive delays when trying to disconnect from servers.
+Added timeouts when doing date synchronization, in case the time server is not responding.
+Changed Backspace default from DEL to ^H . As before, this can be changed manually in the quick menu.
+
 v0.31.2 Minor bugfix
 IRC TM buffers were not setup correctly on creation, leading to the first line getting coloured.
 

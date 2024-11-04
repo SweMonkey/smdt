@@ -21,7 +21,7 @@ u8 vNewlineConv = 0;     // 0 = none (\n = \n) -- 1 = \n becomes \n\r
 u8 sv_TermType = 0;      // Terminal type. See TermType table further down
 u8 vDoEcho = 0;          // 0 = Do echo typed characters back to screen -- 1 = Rely on remote server to echo back typed characters
 u8 vLineMode = 0;        // Line edit mode - 1 = LMSM_EDIT
-u8 vBackspace = 0;       // 0 = DEL (0x7F) - 1 = ^H (0x8)
+u8 vBackspace = 1;       // 0 = DEL (0x7F) - 1 = ^H (0x8)
 char sv_Baud[5] = "4800";// Report this baud speed to remote servers if they ask
 
 // Font

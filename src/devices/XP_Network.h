@@ -10,9 +10,8 @@ extern u32 sv_DelayTime;
 
 u8 XPN_Initialize();
 
-bool XPN_RXReady();
 void XPN_SendByte(u8 data);
-u8 XPN_ReadByte();
+bool XPN_ReadByte(u8 *data);
 void XPN_SendMessage(char *str);
 
 void XPN_FlushBuffers();

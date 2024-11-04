@@ -213,7 +213,7 @@ void TELNET_Init()
     // Variable overrides
     vDoEcho = 0;
     vLineMode = 0;
-    vBackspace = 0;
+    vBackspace = 1;
     vNewlineConv = 0;
     sv_bWrapAround = TRUE;
     bDoCursorBlink = TRUE;

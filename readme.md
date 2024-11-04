@@ -103,12 +103,11 @@ If all is well SMDT should print out "XPN: xPort module OK" to the boot messages
 <br>
 
 > [!NOTE]
-> Do note that the SMDT-PC tool is "emulating" an xport device for the purpose of reusing the XPN driver in SMDT. It may lack certain features or contain bugs.<br>
-
-> [!NOTE]
-> It is not strictly required to use Port 1 and Port 2;<br>
-> SMDT will autodetect which port the keyboard is plugged into.<br>
-> If you want to have the serial port on a different controller port then you will need to change where SMDT looks for it using the Quick Menu (F8): Mega Drive Settings -> Select serial port.<br>
+> 1. Requires a very recent nightly build of blastEm as blastEm's serial mode was bugged in versions prior to revision 25e40370e0e4 (2024-10-27).<br>
+> 2. SMDT-PC (xPort emulator) is in early stages, it may lack certain features or contain bugs.<br>
+> 3. It is not strictly required to use Port 1 and Port 2;<br>
+>    SMDT will autodetect which port the keyboard is plugged into.<br>
+>    If you want to have the serial port on a different controller port then you will need to change where SMDT looks for it using the Quick Menu (F8): Mega Drive Settings -> Select serial port.<br>
 
 <br>
 
