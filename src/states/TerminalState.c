@@ -18,6 +18,7 @@
 u8 sv_TerminalFont = FONT_8x8_16;//FONT_4x8_8;//
 static char TimeString[9];
 static s32 LastTime = 666;
+static bool bRunCMD = FALSE;
 
 static char LastCommand[2][INPUT_SIZE] = {'\0'};
 static u8 LCPos = 0;   // Last command position
@@ -36,7 +37,7 @@ u8 ParseInputString()
     memset(inbuf, 0, INPUT_SIZE);
 
     // Pop the TxBuffer back into inbuf
-    while ((Buffer_Pop(&TxBuffer, &data) != 0xFF) && (i < INPUT_SIZE-1))
+    while (Buffer_Pop(&TxBuffer, &data) && (i < INPUT_SIZE-1))
     {
         inbuf[i] = data;
         i++;
@@ -80,6 +81,7 @@ u8 ParseInputString()
         if (strcmp(argv[0], CMDList[l].id) == 0)
         {
             Stdout_Flush();
+            bRunCMD = TRUE;
 
             CMDList[l].fptr(argc, argv);
 
@@ -93,7 +95,7 @@ u8 ParseInputString()
     // Or let the user know that the command was not found
     if (strlen(argv[0]) > 0)
     {
-        stdout_printf("Command \"[36m%s[0m\" not found...\n", argv[0]);
+        printf("Command \"[36m%s[0m\" not found...\n", argv[0]);
         ret = 1;
         goto Exit;
     }
@@ -105,6 +107,7 @@ u8 ParseInputString()
         argv[a] = NULL;
     }
     MEM_pack();
+    bRunCMD = FALSE;
     return ret;
 }
 
@@ -150,11 +153,11 @@ void SetupTerminal()
 void Enter_Terminal(u8 argc, char *argv[])
 {
     SetupTerminal();
-    Stdout_Push("SMDTC Command Interpreter v0.2\n");
-    stdout_printf("Type \"[32mhelp[0m\" for available commands%s", sv_Font?" - ":"\n");
+    Stdout_Push("SMDT Command Interpreter v0.2\n");
+    printf("Type \"[32mhelp[0m\" for available commands%s", sv_Font?" - ":"\n");
     Stdout_Push("Press [32mF8[0m for quick menu\n\n");
 
-    stdout_printf("%s> ", FS_GetCWD());
+    printf("%s> ", FS_GetCWD());
 }
 
 void ReEnter_Terminal()
@@ -164,9 +167,9 @@ void ReEnter_Terminal()
 
     // Fixme: Upon returning from an error in the IRC client neither the IRC or terminal can reset tilemap size back to 128x32 ??
 
-    if (Buffer_IsEmpty(&stdout))
+    if (Buffer_IsEmpty(&StdoutBuffer))
     {
-        stdout_printf("%s> ", FS_GetCWD());
+        printf("%s> ", FS_GetCWD());
     }
 }
 
@@ -181,7 +184,7 @@ void Reset_Terminal()
 
 void Run_Terminal()
 {
-    Stdout_Flush();
+    if (bRunCMD == FALSE) Stdout_Flush();
 
     #ifdef ENABLE_CLOCK
     if (LastTime != SystemUptime)
@@ -225,42 +228,6 @@ void Input_Terminal()
             }
         }
 
-        /*if (is_KeyDown(KEY_KP4_LEFT))
-        {
-            if (!sv_Font)
-            {
-                HScroll += 8;
-                VDP_setHorizontalScroll(BG_A, HScroll);
-                VDP_setHorizontalScroll(BG_B, HScroll);
-            }
-            else
-            {
-                HScroll += 4;
-                VDP_setHorizontalScroll(BG_A, (HScroll+4));  // -4
-                VDP_setHorizontalScroll(BG_B, (HScroll  ));  // -8
-            }
-
-            TTY_MoveCursor(TTY_CURSOR_DUMMY);
-        }
-
-        if (is_KeyDown(KEY_KP6_RIGHT))
-        {
-            if (!sv_Font)
-            {
-                HScroll -= 8;
-                VDP_setHorizontalScroll(BG_A, HScroll);
-                VDP_setHorizontalScroll(BG_B, HScroll);
-            }
-            else
-            {
-                HScroll -= 4;
-                VDP_setHorizontalScroll(BG_A, (HScroll+4));  // -4
-                VDP_setHorizontalScroll(BG_B, (HScroll  ));  // -8
-            }
-            
-            TTY_MoveCursor(TTY_CURSOR_DUMMY);
-        }*/
-
         if (is_KeyDown(KEY_DELETE))
         {
         }
@@ -285,7 +252,7 @@ void Input_Terminal()
 
             if (isCurrentState(PS_Terminal))
             {
-                stdout_printf("%s> ", FS_GetCWD());
+                printf("%s> ", FS_GetCWD());
             }
         }
 
@@ -298,7 +265,7 @@ void Input_Terminal()
         if (is_KeyDown(KEY_C) && bKB_Ctrl)
         {
             Stdout_Flush();
-            stdout_printf("\n%s> ", FS_GetCWD());
+            printf("\n%s> ", FS_GetCWD());
             Buffer_Flush0(&TxBuffer);
         }
     }

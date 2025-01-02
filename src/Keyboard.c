@@ -115,9 +115,9 @@ void KB_SetKeyboard(KB_Poll_CB *cb)
     PollCB = cb;
 }
 
-u8 KB_Poll(u8 *data)
+bool KB_Poll(u8 *data)
 {
-    if (PollCB == NULL) return 0;
+    if (PollCB == NULL) return FALSE;
 
     return PollCB(data);
 }
@@ -191,7 +191,7 @@ void KB_Interpret_Scancode(u8 scancode)
 
         if (isPrintable(key))
         {
-            NET_SendChar(key & 0x1F, 0);        // Add control byte to TxBuffer
+            NET_SendChar(key & 0x1F, 0);    // Add control byte to TxBuffer
 
             if (!vDoEcho) 
             {

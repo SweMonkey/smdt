@@ -3,24 +3,18 @@
 
 /// @brief Check if buffer is full
 /// @param b Pointer to buffer
-/// @return 0xFF if full, otherwise 0
-u8 Buffer_IsFull(Buffer *b)
+/// @return TRUE if full, otherwise FALSE
+bool Buffer_IsFull(Buffer *b)
 {
-    if ((b->head + 1) == b->tail) // if the head + 1 == tail, circular buffer is full
-        return 0xFF;
-
-    return 0;  // return false
+    return ((b->head + 1 == BUFFER_LEN ? 0 : b->head + 1) == b->tail);
 }
 
 /// @brief Check if buffer is empty
 /// @param b Pointer to buffer
-/// @return 0xFF if empty, otherwise 0
-u8 Buffer_IsEmpty(Buffer *b)
+/// @return TRUE if empty, otherwise FALSE
+bool Buffer_IsEmpty(Buffer *b)
 {
-    if (b->head == b->tail) // if the head == tail, circular buffer is empty
-        return 0xFF;
-
-    return 0;  // return false
+    return b->head == b->tail;
 }
 
 /// @brief Get the number of bytes in buffer
@@ -45,86 +39,56 @@ u16 Buffer_GetNum(Buffer *b)
 /// @brief Push byte into buffer at head
 /// @param b Pointer to buffer
 /// @param data Byte data to push into buffer
-/// @return 0xFF is returned if the buffer is full (data is dropped). 0 on successful push
-u8 Buffer_Push(Buffer *b, u8 data)
+/// @return FALSE is returned if the buffer is full (data is dropped). TRUE on successful push
+bool Buffer_Push(Buffer *b, u8 data)
 {
     u16 next;
 
     next = b->head + 1;  // next is where head will point to after this write.
-    if (next >= BUFFER_LEN)
+    if (next == BUFFER_LEN)
         next = 0;
 
     if (next == b->tail) // if the head + 1 == tail, circular buffer is full
-        return 0xFF;
+        return FALSE;
 
     b->data[b->head] = data;  // Load data and then move
     b->head = next;           // head to next data offset.
 
-    return 0;  // return success to indicate successful push.
+    return TRUE;  // return success to indicate successful push.
 }
 
 /// @brief Pop buffer data at tail into return byte
 /// @param b Pointer to buffer
 /// @param data Return byte to pop data into
-/// @return 0xFF is returned if the buffer is empty. 0 on successful pop.
-u8 Buffer_Pop(Buffer *b, u8 *data)
+/// @return FALSE is returned if the buffer is empty. TRUE on successful pop.
+bool Buffer_Pop(Buffer *b, u8 *data)
 {
     u16 next;
 
     if (b->head == b->tail)  // if the head == tail, we don't have any data
-        return 0xFF;
+        return FALSE;
 
     next = b->tail + 1;   // next is where tail will point to after this read.
-    if (next >= BUFFER_LEN) next = 0;
+    if (next == BUFFER_LEN) next = 0;
 
     *data = b->data[b->tail];  // Read data and then move
     b->tail = next;            // tail to next offset.
 
-    return 0;  // return success to indicate successful pop.
-}
-
-/// @brief Push byte into buffer at specific position - Do not use! Not implemented!
-/// @param b Pointer to buffer
-/// @param pos Position where the byte should be pushed into
-/// @param data Byte data to push into buffer
-/// @return FALSE is returned if the buffer is full (data is dropped). TRUE on successful push
-bool Buffer_PushAt(Buffer *b, u16 pos, u8 data)
-{
-    //u16 next;
-
-    if (Buffer_IsFull(b)) return FALSE;
-
-    // Quick path
-    if (Buffer_IsEmpty(b))
-    {
-        b->data[pos] = data;
-        return TRUE;
-    }
-
-    if (b->tail < b->head)
-    {
-        // ...
-    }
-    else if (b->tail > b->head)
-    {
-        // ...
-    }
-
-    return TRUE;  // return success to indicate successful push.
+    return TRUE;  // return success to indicate successful pop.
 }
 
 /// @brief Pop the byte at the head of buffer
 /// @param b Pointer to buffer
-/// @return 0xFF if the buffer is empty. 0 on successful pop.
-u8 Buffer_ReversePop(Buffer *b)
+/// @return FALSE if the buffer is empty. TRUE on successful pop.
+bool Buffer_ReversePop(Buffer *b)
 {
     if (b->head == b->tail)  // if the head == tail, we don't have any data
-        return 0xFF;
+        return FALSE;
 
     if (b->head == 0) b->head = BUFFER_LEN-1;
     else b->head--;
 
-    return 0;
+    return TRUE;
 }
 
 /// @brief Clear the buffer
@@ -145,60 +109,39 @@ void Buffer_Flush0(Buffer *b)
     for (u8 i = 0; i < 32; i++) b->data[i] = 0;
 }
 
-/// @brief Get the last <num> of bytes up to head
-/// @param b Pointer to buffer
-/// @param num Number of bytes to return
-/// @param r Array of bytes to return the popped data in
-void Buffer_PeekLast(Buffer *b, u16 num, u8 r[])
+/// @brief Get the last <num> bytes from the buffer.
+/// @param b Pointer to the buffer.
+/// @param num Number of bytes to return.
+/// @param r Array to store the extracted bytes.
+void Buffer_PeekLast(Buffer *b, u16 num, u8 r[]) 
 {
-    u16 tmpTail = b->tail;
-    u16 c = 0;
-    u16 next;
+    // Calculate the size of valid data in the buffer
+    u16 size = (b->head >= b->tail)
+               ? (b->head - b->tail)
+               : (BUFFER_LEN - b->tail + b->head);
 
-    // Get the size difference between the head and tail to determine amount of bytes we can pull from it
-    if (b->tail < b->head)
+    // Determine the actual number of bytes to copy
+    u16 bytesToCopy = (num > size) ? size : num;
+
+    // Ensure the result array is fully zero-filled if no valid data is available
+    if (bytesToCopy == 0) 
     {
-        tmpTail = (b->head - num) > 0 ? b->head - num : 0;  // Tail smaller than head. We must check if we actually have 'num' bytes available
-    }
-    else if (b->tail > b->head)
-    {
-        tmpTail = ((b->head-1-((num-1)-c))+BUFFER_LEN) % BUFFER_LEN;    // Tail larger than head. Wrap around and get 'num' bytes available
-    }
-    
-    tmpTail = (tmpTail < b->tail ? b->tail : tmpTail);  // Make sure the temporary tail is not behind the real tail
-    
-    if (tmpTail == b->head)
-    {
-        // Tail == head. No bytes available, clear 'r' and return
-        while (c < num)
-        {
-            r[c] = 0;
-            c++;
-        }
+        for (u16 i = 0; i < num; i++) r[i] = 0;
         return;
     }
 
-    // Fill the array 'r' with all the bytes from head back to the tail in reverse order
-    while (c < num)
+    // Calculate the starting index for reading
+    u16 start = (b->head >= bytesToCopy)
+                ? (b->head - bytesToCopy)
+                : (BUFFER_LEN + b->head - bytesToCopy);
+
+    // Copy the valid bytes into the result array
+    for (u16 i = 0; i < bytesToCopy; i++) 
     {
-        if (b->head == tmpTail)  // if the head == tail, we don't have any data
-            break;
-
-        next = tmpTail + 1;   // next is where tail will point to after this read.
-        if(next >= BUFFER_LEN)
-            next = 0;
-
-        r[c] = b->data[tmpTail];  // Read data and then move
-        tmpTail = next;           // tail to next offset.
-        c++;
+        u16 index = (start + i) % BUFFER_LEN;
+        r[i] = b->data[index];
     }
 
-    // If the array 'r' is not full then fill the rest of the array with NULL
-    while (c < num)
-    {
-        r[c] = 0;
-        c++;
-    }
-
-    return;
+    // Null-terminate/zero-fill the remainder of the array
+    for (u16 i = bytesToCopy; i < num; i++) r[i] = 0;
 }

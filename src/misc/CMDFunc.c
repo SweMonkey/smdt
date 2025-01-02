@@ -56,7 +56,7 @@ SM_CMDList CMDList[] =
     {"hexview", CMD_HexView,        "<filename>"},
     {"uptime",  CMD_Uptime,         "- Show system uptime"},
     {"date",    CMD_Date,           "- Show/Set date and time"},
-    {"about",   CMD_About,          "- About SMDTC/Licenses"},
+    {"about",   CMD_About,          "- About SMDT/Licenses"},
     {"help",    CMD_Help,           "- This command"},
     {0, 0, 0}  // List terminator
 };
@@ -77,6 +77,7 @@ void CMD_LaunchLinuxTTY(u8 argc, char *argv[])
     char *arg[] = {argv[0], "-tty"};
     ChangeState(PS_Telnet, 2, arg);
 }
+
 void CMD_LaunchGopher(u8 argc, char *argv[]) 
 {
     #ifndef EMU_BUILD
@@ -232,7 +233,7 @@ void CMD_Help(u8 argc, char *argv[])
 
     while (CMDList[i].id != 0)
     {
-        stdout_printf("%10s %-28s\n", CMDList[i].id, CMDList[i].desc);
+        printf("%10s %-28s\n", CMDList[i].id, CMDList[i].desc);
 
         i++;
     }
@@ -253,38 +254,38 @@ xport disconnect  - Close connection\n");
 
     if ((argc > 1) && (strcmp(argv[1], "enter") == 0))
     {
-        stdout_printf("Entering monitor mode...\n");
+        printf("Entering monitor mode...\n");
         Stdout_Flush();
 
         bool r = XPN_EnterMonitorMode();
 
-        if (r) stdout_printf("OK!\n");
-        else stdout_printf("Timeout!\n");
+        if (r) printf("OK!\n");
+        else printf("Timeout!\n");
         
     }
     else if ((argc > 1) && (strcmp(argv[1], "exit") == 0))
     {
-        stdout_printf("Exiting monitor mode...\n");
+        printf("Exiting monitor mode...\n");
         Stdout_Flush();
         
         bool r = XPN_ExitMonitorMode();
 
-        if (r) stdout_printf("OK!\n");
-        else stdout_printf("Timeout!\n");
+        if (r) printf("OK!\n");
+        else printf("Timeout!\n");
     }
     else if ((argc > 2) && (strcmp(argv[1], "connect") == 0))
     {
-        stdout_printf("Connecting to %s ...\n", argv[2]);
+        printf("Connecting to %s ...\n", argv[2]);
         Stdout_Flush();
 
         bool r = XPN_Connect(argv[2]);
 
-        if (r) stdout_printf("Connected!\n");
-        else stdout_printf("Error!\n");
+        if (r) printf("Connected!\n");
+        else printf("Error!\n");
     }
     else if ((argc > 1) && (strcmp(argv[1], "disconnect") == 0))
     {
-        stdout_printf("Disconnecting... \n");
+        printf("Disconnecting... \n");
         Stdout_Flush();
 
         XPN_Disconnect();
@@ -301,7 +302,7 @@ xport disconnect  - Close connection\n");
             if (i != argc-1) strcat(buf, " ");
         }
 
-        stdout_printf("Sending string:\n\"%s\"\n", buf);
+        printf("Sending string:\n\"%s\"\n", buf);
         Stdout_Flush();
 
         XPN_SendMessage(buf);
@@ -310,53 +311,111 @@ xport disconnect  - Close connection\n");
 
 void CMD_UName(u8 argc, char *argv[])
 {
-    char tmp[256] = {'\0'};
-    const char *Krnl_Str = "NO-KERNEL ";
-    const char *OS_Str = "SMDTC ";
-    const char *Mach_Str = "m68k ";
+    const char *Krnl_Str = "SMDT";
+    const char *OS_Str = "SMDT";
+    const char *Mach_Str = "m68k";
+    //const char *Node_Str = "Local";
+    const char *Mach_Name = "None";
 
     if (argc == 1)
     {
-        Stdout_Push(OS_Str);
-        Stdout_Push("\n");
+        printf("%s\n", OS_Str);
         return;
     }
 
-    for (u8 i = 1; i < argc; i++)
-    {
-        switch (argv[i][1])
-        {
-            case 's':
-                strcat(tmp, Krnl_Str);
-            break;
-            case 'n':
-                strcat(tmp, sv_Username);
-                strcat(tmp, " ");
-            break;
-            case 'r':
-            case 'v':
-                strcat(tmp, STATUS_TEXT);
-                strcat(tmp, " ");
-            break;
-            case 'm':
-            case 'p':
-                strcat(tmp, Mach_Str);
-            break;
-            case 'o':
-                strcat(tmp, OS_Str);
-            break;
+    bool show_kernel_name = 0;
+    bool show_node_name = 0;
+    bool show_kernel_release = 0;
+    bool show_kernel_version = 0;
+    bool show_machine = 0;
+    bool show_processor = 0;
+    bool show_os = 0;
+    bool show_all = 0;
 
-            case 'a':
-                sprintf(tmp, "%s%s%s %s", OS_Str, Mach_Str, STATUS_TEXT, sv_Username);
-            break;
-        
-            default:
-            break;
+    // Parse command-line arguments
+    for (u8 i = 1; i < argc; i++) 
+    {
+        if (strcmp(argv[i], "-s") == 0) 
+        {
+            show_kernel_name = 1;
+        } 
+        else if (strcmp(argv[i], "-n") == 0) 
+        {
+            show_node_name = 1;
+        } 
+        else if (strcmp(argv[i], "-r") == 0) 
+        {
+            show_kernel_release = 1;
+        } 
+        else if (strcmp(argv[i], "-v") == 0) 
+        {
+            show_kernel_version = 1;
+        } 
+        else if (strcmp(argv[i], "-m") == 0) 
+        {
+            show_machine = 1;
+        } 
+        else if (strcmp(argv[i], "-p") == 0) 
+        {
+            show_processor = 1;
+        } 
+        else if (strcmp(argv[i], "-o") == 0) 
+        {
+            show_os = 1;
+        } 
+        else if (strcmp(argv[i], "-a") == 0) 
+        {
+            show_all = 1;
+        } 
+        else 
+        {
+            printf("%s\n", OS_Str);
+            return;
         }
     }
 
-    strcat(tmp, "\n");
-    Stdout_Push(tmp);
+    // Handle the case where "-a" is specified (implies all options)
+    if (show_all) 
+    {
+        show_kernel_name = 1;
+        show_node_name = 1;
+        show_kernel_release = 1;
+        show_kernel_version = 1;
+        show_machine = 1;
+        show_processor = 1;
+        show_os = 1;
+    }
+
+    if (show_kernel_name) 
+    {
+        printf("%s ", Krnl_Str);
+    }
+    if (show_node_name) 
+    {
+        printf("%s ", sv_Username); // Node_Str
+    }
+    if (show_kernel_release) 
+    {
+        printf("%s ", STATUS_VER_STR);
+    }
+    if (show_kernel_version) 
+    {
+        printf("%s %s ", __DATE__, __TIME__);
+    }
+    if (show_machine)
+    {
+        printf("%s ", Mach_Name);
+    }
+    if (show_processor) 
+    {
+        printf("%s ", Mach_Str);
+    }
+    if (show_os) 
+    {
+        printf("%s ", OS_Str);
+    }
+
+    printf("\n");
 }
 
 void CMD_SetConn(u8 argc, char *argv[])
@@ -393,26 +452,26 @@ void CMD_SetVar(u8 argc, char *argv[])
     if (argc == 2)
     {
         u16 i = 0;
-        stdout_printf("%-12s %s   %s\n\n", "Name", "Type", "Value");
+        printf("%-12s %s   %s\n\n", "Name", "Type", "Value");
 
         while (VarList[i].size)
         {
             switch (VarList[i].size)
             {
                 case ST_BYTE:
-                    stdout_printf("%-12s u8     %u\n", VarList[i].name, *((u8*)VarList[i].ptr));
+                    printf("%-12s u8     %u\n", VarList[i].name, *((u8*)VarList[i].ptr));
                 break;
                 case ST_WORD:
-                    stdout_printf("%-12s u16    %u\n", VarList[i].name, *((u16*)VarList[i].ptr));
+                    printf("%-12s u16    %u\n", VarList[i].name, *((u16*)VarList[i].ptr));
                 break;
                 case ST_LONG:
-                    stdout_printf("%-12s u32    %lu\n", VarList[i].name, *((u32*)VarList[i].ptr));
+                    printf("%-12s u32    %lu\n", VarList[i].name, *((u32*)VarList[i].ptr));
                 break;        
                 case ST_SPTR:
-                    stdout_printf("%-12s StrPtr \"%s\"\n", VarList[i].name, (char*)VarList[i].ptr);
+                    printf("%-12s StrPtr \"%s\"\n", VarList[i].name, (char*)VarList[i].ptr);
                 break;
                 case ST_SARR:
-                    stdout_printf("%-12s StrArr \"%s\"\n", VarList[i].name, (char*)VarList[i].ptr);
+                    printf("%-12s StrArr \"%s\"\n", VarList[i].name, (char*)VarList[i].ptr);
                 break;
                 default:
                 break;
@@ -421,7 +480,7 @@ void CMD_SetVar(u8 argc, char *argv[])
             i++;
         }
 
-        Stdout_Push("\n[96mNote: Changes to variables may not take effect until you reboot.[0m\n");
+        Stdout_Push("\n[96mNote: Changes to variables may not take effect until you save and reboot.[0m\n");
 
         return;
     }
@@ -529,10 +588,10 @@ void CMD_Free(u8 argc, char *argv[])
 
     // May need an "else print \n" here?
 
-    stdout_printf("%20s %5u bytes\n", "Free:", MEM_getFree());
-    stdout_printf("%20s %5u bytes\n", "Largest free block:", MEM_getLargestFreeBlock());
-    stdout_printf("%20s %5u bytes\n", "Used:", MEM_getAllocated());
-    stdout_printf("%20s %5u bytes\n", "System reserved:", 65536-(MEM_getFree()+MEM_getAllocated()));
+    printf("%20s %5u bytes\n", "Free:", MEM_getFree());
+    printf("%20s %5u bytes\n", "Largest free block:", MEM_getLargestFreeBlock());
+    printf("%20s %5u bytes\n", "Used:", MEM_getAllocated());
+    printf("%20s %5u bytes\n", "System reserved:", 65536-(MEM_getFree()+MEM_getAllocated()));
 
     u16 a = MEM_getFree()/1650;
     u16 b = MEM_getAllocated()/1650;
@@ -549,11 +608,11 @@ void CMD_Free(u8 argc, char *argv[])
 
     if (bMegaCD)
     {
-        stdout_printf("\n─ %s ─────────────────────────────\n", bPALSystem ? "Sega CD" : "Mega CD");
+        printf("\n─ %s ─────────────────────────────\n", bPALSystem ? "Sega CD" : "Mega CD");
 
-        stdout_printf("%20s %6u bytes\n", "Free:", 524288);
-        stdout_printf("%20s %6u bytes\n", "Largest free block:", 524288);
-        stdout_printf("%20s %6u bytes\n", "Used:", 0);
+        printf("%20s %6u bytes\n", "Free:", 524288);
+        printf("%20s %6u bytes\n", "Largest free block:", 524288);
+        printf("%20s %6u bytes\n", "Used:", 0);
 
         a = 524288/13200;
         b = 0;
@@ -568,7 +627,7 @@ void CMD_Free(u8 argc, char *argv[])
     
     Stdout_Push("\n─ Info ────────────────────────────────\n");
 
-    stdout_printf("Run \"%s -defrag\" for memory defrag.\n", argv[0]);
+    printf("Run \"%s -defrag\" for memory defrag.\n", argv[0]);
 }
 
 void CMD_Reboot(u8 argc, char *argv[])
@@ -585,23 +644,14 @@ void CMD_SaveCFG(u8 argc, char *argv[])
 
 void CMD_Test(u8 argc, char *argv[])
 {
-    Stdout_Push("[91mWarning: The test command may cause side effects on SMDTC operation.\nIt may outright crash your system depending on the parameters given![0m\n\n");
-    /*if (argc > 1)
-    {
-        for (u8 i = 0; i < argc; i++) 
-        {
-            Stdout_Push(argv[i]);
-            Stdout_Push("\n");
-        }
-        return;
-    }*/
+    Stdout_Push("[91mWarning: The test command may cause side effects on SMDT operation.\nIt may outright crash your system depending on the parameters given![0m\n\n");
 
     if ((argc > 2) && (strcmp("-f", argv[1]) == 0))
     {
         char buf[162] = "Hello World!\nThis is a long text file that just keeps dragging on and on and on...\nMaybe it will repeat forever? who knows, it shouldn't repeat... but it might";
         SM_File *f = F_Open(argv[2], FM_WRONLY);
 
-        stdout_printf("Writing this:\n\n%s\n\nto file %s\n", buf, argv[2]);
+        printf("Writing this:\n\n%s\n\nto file %s\n", buf, argv[2]);
         F_Write(buf, 162, 1, f);
 
         F_Close(f);
@@ -611,7 +661,7 @@ void CMD_Test(u8 argc, char *argv[])
         memset(buf, 0, 162);
         F_Read(buf, 162, 1, f);
 
-        stdout_printf("Reading back file %s:\n\n%s\n", argv[2], buf);
+        printf("Reading back file %s:\n\n%s\n", argv[2], buf);
 
         F_Close(f);
 
@@ -628,44 +678,41 @@ void CMD_Test(u8 argc, char *argv[])
         return;
     }*/
 
-    if ((argc > 1) && (strcmp("-c64", argv[1]) == 0))
+    if ((argc > 1) && (strcmp("attr_rgb", argv[1]) == 0))
     {
-        /*PAL_setColor(32, 0x000);
-        PAL_setColor(33, RGB24_TO_VDPCOLOR(0x894036));
-        PAL_setColor(34, RGB24_TO_VDPCOLOR(0x68A941));
-        PAL_setColor(35, RGB24_TO_VDPCOLOR(0xD0DC71));
-        PAL_setColor(36, RGB24_TO_VDPCOLOR(0x3E31A2));
-        PAL_setColor(37, RGB24_TO_VDPCOLOR(0x8A46AE));
-        PAL_setColor(38, RGB24_TO_VDPCOLOR(0x7ABFC7));
-        PAL_setColor(39, RGB24_TO_VDPCOLOR(0xABABAB));
-        
-        PAL_setColor(40, RGB24_TO_VDPCOLOR(0x555555));
-        PAL_setColor(41, RGB24_TO_VDPCOLOR(0xBB776D));
-        PAL_setColor(42, RGB24_TO_VDPCOLOR(0xACEA88));
-        //PAL_setColor(43, RGB24_TO_VDPCOLOR(0x0));//LIGHT YELLOW
-        PAL_setColor(44, RGB24_TO_VDPCOLOR(0x7C70DA));
-        //PAL_setColor(45, RGB24_TO_VDPCOLOR(0x0));//LIGHT MAGENTA
-        //PAL_setColor(46, RGB24_TO_VDPCOLOR(0x0));//LIGHT TEAL
-        PAL_setColor(47, RGB24_TO_VDPCOLOR(0xFFFFFF));*/
+        printf("Attempt at fake RGB24...\n");
+        printf("[38;2;255;0;0mR [38;2;0;255;0mG [38;2;0;0;255mB  [38;2;255;255;0mRG [38;2;255;0;255mRB [38;2;0;255;255mGB [38;2;255;255;255mRGB\n[0m");
+        printf("[38;2;125;0;0mR [38;2;0;125;0mG [38;2;0;0;125mB  [38;2;125;125;0mRG [38;2;125;0;125mRB [38;2;0;125;125mGB [38;2;125;125;125mRGB\n[0m");
+        return;
+    }
 
-        PAL_setColor(32, 0x000);
-        PAL_setColor(33, RGB24_TO_VDPCOLOR(0x772D26));  // Red
-        PAL_setColor(34, RGB24_TO_VDPCOLOR(0x559E4A));  // Green
-        PAL_setColor(35, RGB24_TO_VDPCOLOR(0xBDCC71));  // Yellow
-        PAL_setColor(36, RGB24_TO_VDPCOLOR(0x42348B));  // Blue
-        PAL_setColor(37, RGB24_TO_VDPCOLOR(0xA85FB4));  // Magenta
-        PAL_setColor(38, RGB24_TO_VDPCOLOR(0x85D4DC));  // Teal
-        PAL_setColor(39, RGB24_TO_VDPCOLOR(0xABABAB));  // Light gray -
-        
-        PAL_setColor(40, RGB24_TO_VDPCOLOR(0x555555));  // Dark gray -
-        PAL_setColor(41, RGB24_TO_VDPCOLOR(0xB66862));  // Light red
-        PAL_setColor(42, RGB24_TO_VDPCOLOR(0x92DF87));  // Light green
-        PAL_setColor(43, RGB24_TO_VDPCOLOR(0xFFFFB0));  // Light yellow
-        PAL_setColor(44, RGB24_TO_VDPCOLOR(0x7E70CA));  // Light blue
-        PAL_setColor(45, RGB24_TO_VDPCOLOR(0xE99DF5));  // Light magenta
-        PAL_setColor(46, RGB24_TO_VDPCOLOR(0xC5FFFF));  // Light teal
-        PAL_setColor(47, RGB24_TO_VDPCOLOR(0xFFFFFF));  // White
-        
+    if ((argc > 1) && (strcmp("wat", argv[1]) == 0))
+    {
+        printf("What are you???\n");
+        printf("Hello[0;40 D on earth");
+        return;
+    }
+    
+    if ((argc > 1) && (strcmp("illegal", argv[1]) == 0))
+    {
+        asm("illegal");
+        return;
+    }
+   
+    if ((argc > 1) && (strcmp("lbrk", argv[1]) == 0))
+    {
+        printf("Testing linebreak/wraparound...\n");
+
+        printf("This is a long string of text that should wrap around exactly at column 80, somewhere around here... and no letters should be missing in the word \"somewhere\"\n\n");
+
+        printf("This is another long string that should have another line of text under it witho\nut any space inbetween them\n");
+
+        return;
+    }
+
+    if ((argc > 1) && (strcmp("fprintf", argv[1]) == 0))
+    {
+        F_Printf(stdout, "Hello, is this thing on? %s\n", "maybe...");
         return;
     }
 
@@ -813,6 +860,7 @@ void CMD_Test(u8 argc, char *argv[])
 
     if ((argc > 1) && (strcmp("-devinit", argv[1]) == 0))
     {
+        Stdout_Push("[97mReinitializing devmgr...[0m\n");
         DeviceManager_Init();
         return;
     }
@@ -921,10 +969,10 @@ void CMD_FlushBuffer(u8 argc, char *argv[])
     {
         while (i--)
         {
-            Buffer_Push(&stdout, 0);
+            Buffer_Push(&StdoutBuffer, 0);
         }
         
-        Buffer_Flush(&stdout);
+        Buffer_Flush(&StdoutBuffer);
     }
 }
 
@@ -950,7 +998,7 @@ void CMD_PrintBuffer(u8 argc, char *argv[])
     }
     else if (strcmp(argv[1], "stdout") == 0)
     {
-        sprintf(buf, "$%X\n", stdout.data[atoi16(argv[2]) % BUFFER_LEN]);
+        sprintf(buf, "$%X\n", StdoutBuffer.data[atoi16(argv[2]) % BUFFER_LEN]);
         Stdout_Push(buf);
     }
 }
@@ -1044,7 +1092,7 @@ void CMD_MoveFile(u8 argc, char *argv[])
     SM_File *f = F_Open(fn_buf2, FM_RDONLY);
     if (f == NULL)
     {
-        stdout_printf("Failed to move file \"%s\" to \"%s\"\n", argv[1], argv[2]);
+        printf("Failed to move file \"%s\" to \"%s\"\n", argv[1], argv[2]);
         goto OnExit;
     }
 
@@ -1074,7 +1122,7 @@ void CMD_CopyFile(u8 argc, char *argv[])
 
     if (f1 == NULL)
     {
-        stdout_printf("File \"%s\" does not exist\n", fn_buf1);
+        printf("File \"%s\" does not exist\n", fn_buf1);
         goto OnExit;
     }
 
@@ -1082,7 +1130,7 @@ void CMD_CopyFile(u8 argc, char *argv[])
 
     if (f2 == NULL)
     {
-        stdout_printf("Failed to create file \"%s\"\n", fn_buf2);
+        printf("Failed to create file \"%s\"\n", fn_buf2);
         goto OnExit;
     }
 
@@ -1194,7 +1242,7 @@ void CMD_HexView(u8 argc, char *argv[])
 {
     if (argc < 2)
     {
-        stdout_printf("File HexViewer\n\nUsage: %s <filename>\n", argv[0]);
+        printf("File HexViewer\n\nUsage: %s <filename>\n", argv[0]);
         return;
     }
 
@@ -1205,7 +1253,7 @@ void CMD_Attr(u8 argc, char *argv[])
 {
     //if (argc < 4)
     {
-        stdout_printf("Modifiy file attributes\n\nUsage: %s -s <attribute> <filename>\n       %s -g <filename>\n\nNOT IMPLEMENTED\n", argv[0], argv[0]);
+        printf("Modifiy file attributes\n\nUsage: %s -s <attribute> <filename>\n       %s -g <filename>\n\nNOT IMPLEMENTED\n", argv[0], argv[0]);
         return;
     }
 }
@@ -1219,7 +1267,7 @@ void CMD_Uptime(u8 argc, char *argv[])
 {
     SM_Time t = SecondsToDateTime(SystemUptime);
 
-    stdout_printf("%02lu:%02u:%02u up %lu days, %lu:%02u\n", SystemTime.hour, SystemTime.minute, SystemTime.second, t.day-1, t.hour, t.minute);
+    printf("%02lu:%02u:%02u up %lu days, %lu:%02u\n", SystemTime.hour, SystemTime.minute, SystemTime.second, t.day-1, t.hour, t.minute);
 }
 
 void CMD_Date(u8 argc, char *argv[])
@@ -1236,10 +1284,10 @@ void CMD_Date(u8 argc, char *argv[])
         switch (r)
         {
             case 1:
-                stdout_printf("Connection to %s failed\n", sync_server);
+                printf("Connection to %s failed\n", sync_server);
             break;
             case 2:
-                stdout_printf("Time was synchronized too recently.\n");
+                printf("Time was synchronized too recently.\n");
             break;
         
             default:
@@ -1254,16 +1302,16 @@ date -sync  - Synchronize date & time\n\
 date -help  - This screen\n\
 date        - Show date and time\n");
     }
-    else stdout_printf("%lu-%lu-%lu %02lu:%02u:%02u\n", SystemTime.day, SystemTime.month, SystemTime.year, SystemTime.hour, SystemTime.minute, SystemTime.second);
+    else printf("%lu-%lu-%lu %02lu:%02u:%02u\n", SystemTime.day, SystemTime.month, SystemTime.year, SystemTime.hour, SystemTime.minute, SystemTime.second);
 }
 
 void CMD_About(u8 argc, char *argv[])
 {
     if (sv_Font)
     {
-        Stdout_Push("\n SMDTC - a dumb project created by smds\n");
-        Stdout_Push(" Copyright (c) 2024 smds\n");
-        Stdout_Push(" See SMDTC github for more info:\n");
+        Stdout_Push("\n SMDT - a dumb project created by smds\n");
+        Stdout_Push(" Copyright (c) 2025 smds\n");
+        Stdout_Push(" See SMDT github for more info:\n");
         Stdout_Push(" [36mgithub.com/SweMonkey/smdt[0m\n\n");
 
         Stdout_Push(" This project incorporates some code by b1tsh1ft3r\n");
@@ -1279,9 +1327,9 @@ void CMD_About(u8 argc, char *argv[])
     }
     else
     {
-        Stdout_Push("SMDTC - a dumb project created by smds\n");
-        Stdout_Push("Copyright (c) 2024 smds\n");
-        Stdout_Push("See SMDTC github for more info:\n");
+        Stdout_Push("SMDT - a dumb project created by smds\n");
+        Stdout_Push("Copyright (c) 2025 smds\n");
+        Stdout_Push("See SMDT github for more info:\n");
         Stdout_Push("[36mgithub.com/SweMonkey/smdt[0m\n\n");
 
         Stdout_Push("This project incorporates some code -\n - by b1tsh1ft3r\n");

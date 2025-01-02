@@ -1,3 +1,42 @@
+v0.31.4
+IRC: Added NICK and PART to the internal command parser that parses messages received from the server.  (Sending NICK/PART from client to server is already supported)
+IRC: Reverted the upload icon colour back to default, changing it from red to orange serves no purpose anymore.
+Drivers: Added timeout to pinging in xport driver, apparently there wasn't one already...
+Telnet/Term: Added IAC DM (Data Mark).
+Telnet/Term: Prototype scrollable regions (Scroll part of the screen vertically). It can scroll content upwards only! scrolling down requires more work.
+Telnet/Term: Rewrote the OSC parser so it is not hardcoded to just reading title changes.
+Telnet/Term: Fake RGB24 attribute colour support (Truncates RGB888 to RGB111, yes 1 bit per channel).
+Telnet/Term: Rewrote attribute code parser slightly, hopefully I haven't borked colour attribute changes in some way...
+Telnet/Term: Cursor is now using s16 instead of s32 (Haven't dared to change this before in case of hidden edge cases).
+Telnet/Term: Many little changes and fixes here and there.
+Telnet: Added F1-F12, Page Up/Down, End, Home, Insert and Delete function keys.
+Buffer system now uses boolean return values instead of cryptic magic numbers as return values on PUSH/POP.
+Cleaned up Buffer_PeekLast() and various other functions.
+For no real reason: 2 new theme colours: Aqua and hot pink. Don't ask why.
+Removed old debug streaming.
+Changed Backspace default back from ^H to DEL now that I've found out why it bugged out at times (smdt manually moved cursor and inserted blankspace, it shouldn't do that).
+Some UTF-8 code point fixes and additions in U+2500 and a few arrows in U+2190.
+Added 68k exception pages (Inspired by Vladikcompers recent exception handler added to SGDK). Still fairly basic but its better than what SMDT had before: no exception handlers at all.
+Uname command can now show SMDT build date and time.
+
+Bugs?
+Spurious keyboard input when SMDT is overwhelmed by large incoming data transfers? May be emulator/xport emulator error on my end but I have not noticed this problem in previous versions of SMDT...
+
+Bugfixes:
+IRC: Receiving NAMES list should no longer show a channel as having new messages.
+IRC: Nicklist now shows the last nick in the nicklist. Beware that showing >300 nicks may cause issues still.
+IRC: Normal mIRC colours should now work as expected when using 4x8 fonts, albeit in mono (2 colours).
+IRC: Now using \4 and \5 to set/unset custom text colouring in IRC (instead of \1 and \2), in hindsight this change was not actually necessary but it doesn't matter anyway.
+Telnet/Term: Fixed G1 charset bug that caused the terminal to use the wrong character set in certain applications.
+Telnet/Term: Fixed ESC PARAM not resetting all parameters between different escape sequences.
+Telnet/Term: Finally fixed wraparound "bug" that appears when the terminal receives \n at column 80 (causing 2 newlines), as opposed to receiving a printable character at column 80 (which should wrap and print to the next line).
+Drivers: Maybe fixed PS/2 timing issues on model 2 / NTSC genesis systems?
+
+Known bugs: 
+TimeToStr_Full() in IRC client does not take your timezone into account? (Command 333 @ IRC.c).
+4x8 colouring in IRC can only colour even number of characters, uneven number will result in the final character being uncoloured.
+
+
 v0.31.3 Minor bugfix
 IRC mono colour antialiasing colour is now updated to reflect the new amber text colour.
 Interrupts were disabled to early on StateExit() which made the XPN drivers unable to actually communicate during Disconnect(). This caused excessive delays when trying to disconnect from servers.

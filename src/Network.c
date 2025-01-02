@@ -12,6 +12,9 @@ u32 TXBytes = 0;
 Buffer RxBuffer, TxBuffer;
 SM_Device DRV_UART;
 
+SM_File *rxbuf; // Rx buffer as an IO file
+SM_File *txbuf; // Tx buffer as an IO file
+
 NET_Connect_CB *ConnectCB = NULL;
 NET_Disconnect_CB *DisconnectCB = NULL;
 NET_GetIP_CB *GetIPCB = NULL;
@@ -75,7 +78,7 @@ void NET_TransmitBuffer()
     {
         u8 data;
 
-        while (Buffer_Pop(&TxBuffer, &data) != 0xFF)
+        while (Buffer_Pop(&TxBuffer, &data))
         {
             RLN_SendByte(data);
 
@@ -86,7 +89,7 @@ void NET_TransmitBuffer()
     {
         u8 data;
 
-        while (Buffer_Pop(&TxBuffer, &data) != 0xFF)
+        while (Buffer_Pop(&TxBuffer, &data))
         {
             while (*(vu8*)DRV_UART.SCtrl & 1); // while Txd full = 1
 
@@ -101,10 +104,7 @@ void NET_TransmitBuffer()
 
 void NET_SendString(const char *str)
 {
-    for (u16 c = 0; c < strlen(str); c++)
-    {
-        NET_SendChar(str[c], TXF_NOBUFFER);
-    }
+    while (*str) NET_SendChar(*str++, TXF_NOBUFFER);
 }
 
 

@@ -124,7 +124,7 @@ u8 DoTimeSync(char *server)
 
         timeout = 0;
 
-        while (Buffer_Pop(&RxBuffer, &data) != 0xFF)
+        while (Buffer_Pop(&RxBuffer, &data))
         {
             recv = (recv << 8) + data;
 
@@ -137,7 +137,7 @@ u8 DoTimeSync(char *server)
             }
         }
 
-        // SMDTC assumes unix time (start year 1970), the received time however may use 1900 as starting year... fixme?
+        // SMDT assumes unix time (start year 1970), the received time however may use 1900 as starting year... fixme?
         SetSystemDateTime(recv);
 
         NET_Disconnect(); 

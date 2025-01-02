@@ -50,7 +50,7 @@ extern u8 vLineMode;
 extern u8 vBackspace;
 
 // TTY
-extern s32 sy;
+extern s16 sy;
 extern s16 HScroll;
 extern s16 VScroll;
 extern u8 C_XMAX;
@@ -89,14 +89,16 @@ void TTY_ClearLineSingle(u16 y);
 void TTY_ClearPartialLine(u16 y, u16 from_x, u16 to_x);
 void TTY_SetAttribute(u8 v);
 
-void TTY_SetSX(s32 x);
-s32 TTY_GetSX();
+void TTY_SetSX(s16 x);
+s16 TTY_GetSX();
 
-void TTY_SetSY_A(s32 y);    // Set SY without VScroll   (VScroll gets added in function)
-s32 TTY_GetSY_A();          // Get SY without VScroll   (VScroll gets removed in function)
-void TTY_SetSY(s32 y);      // Set SY + VScroll         (VScroll does NOT get added in function)
-s32 TTY_GetSY();            // Get SY + VScroll         (VScroll does NOT get removed in function)
+void TTY_SetSY_A(s16 y);    // Set SY without VScroll   (VScroll gets added in function)
+s16 TTY_GetSY_A();          // Get SY without VScroll   (VScroll gets removed in function)
+void TTY_SetSY(s16 y);      // Set SY + VScroll         (VScroll does NOT get added in function)
+s16 TTY_GetSY();            // Get SY + VScroll         (VScroll does NOT get removed in function)
 
 void TTY_MoveCursor(u8 direction, u8 lines);
+void TTY_DrawScrollback(u8 num);
+void TTY_DrawScrollback_RI(u8 num);
 
 #endif // TERMINAL_H_INCLUDED

@@ -161,7 +161,7 @@ void HexView_Open(const char *filename)
     {
         strcpy(WinTitle, "HexView - Stdout");
         
-        bufptr = (char*)stdout.data;
+        bufptr = (char*)StdoutBuffer.data;
         bufsize = BUFFER_LEN;
         bIOFILE = TRUE;
     }
@@ -170,7 +170,7 @@ void HexView_Open(const char *filename)
         SM_File *f = F_Open(fn_buf, FM_RDONLY);
         if (f == NULL) 
         {
-            stdout_printf("Failed to open file \"%s\"\n", filename);
+            printf("Failed to open file \"%s\"\n", filename);
             return;
         }
 
@@ -180,7 +180,7 @@ void HexView_Open(const char *filename)
         bufptr = (char*)malloc(bufsize+1);    
         if (bufptr == NULL)
         {
-            stdout_printf("Failed to allocate buffer\n");
+            printf("Failed to allocate buffer\n");
             F_Close(f);
             return;
         }

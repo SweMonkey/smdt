@@ -371,12 +371,13 @@ void IRC_PrintChar(u8 c)
 
     switch (c)
     {
-        case 0x01:  // Custom - Set default colour
+        case 0x4:   // Custom - Set default colour
+        case 0xF:   // Colour reset
             TMB_SetColorFG(15);
             return;
         break;
 
-        case 0x02:  // Custom - Set name colour
+        case 0x5:   // Custom - Set name colour
             TMB_SetColorFG(6);
             return;
         break;
@@ -394,10 +395,9 @@ void IRC_PrintChar(u8 c)
         default:
             if (c >= 0x20)
             {
-                TMB_PrintChar(c);        
-                return;
+                TMB_PrintChar(c);
             }
-        break;
+            return;
     }
 }
 
@@ -475,7 +475,7 @@ void IRC_DoCommand()
         while ((LineBuf->prefix[end++] != '!') && (end < B_SUBPREFIX_LEN));
         strncpy(subprefix, LineBuf->prefix, end-1);
 
-        snprintf(PrintBuf, B_PRINTSTR_LEN, "\2%s: \1%s\n", subprefix, LineBuf->param[1]);
+        snprintf(PrintBuf, B_PRINTSTR_LEN, "\5%s: \4%s\n", subprefix, LineBuf->param[1]);
 
         if (strcmp(LineBuf->param[0], v_UsernameReset) == 0)
         {
@@ -497,7 +497,7 @@ void IRC_DoCommand()
 
         if (strcmp(subprefix, v_UsernameReset) != 0)
         {
-            snprintf(PrintBuf, B_PRINTSTR_LEN, "%s has joined the channel\n", LineBuf->prefix);
+            snprintf(PrintBuf, B_PRINTSTR_LEN, "%s has joined this channel\n", LineBuf->prefix);
             strncpy(ChanBuf, LineBuf->param[0], 40);
         }
     }
@@ -561,6 +561,20 @@ void IRC_DoCommand()
             strncpy(ChanBuf, LineBuf->param[0], 40);
         }
         else snprintf(PrintBuf, B_PRINTSTR_LEN, "[Mode] You have set personal modes: %s\n", LineBuf->param[1]);
+    }
+    else if (strcmp(LineBuf->command, "NICK") == 0)
+    {
+        // Extract nickname from <nick>!<<hostname>
+        u16 end = 1;
+        while ((LineBuf->prefix[end++] != '!') && (end < B_SUBPREFIX_LEN));
+        strncpy(subprefix, LineBuf->prefix, end-1);
+
+        snprintf(PrintBuf, B_PRINTSTR_LEN, "*** %s is now known as %s\n", subprefix, LineBuf->param[0]);
+    }
+    else if (strcmp(LineBuf->command, "PART") == 0)
+    {
+        snprintf(PrintBuf, B_PRINTSTR_LEN, "%s left this channel\n", LineBuf->prefix);  // LineBuf->param[1] = ?
+        strncpy(ChanBuf, LineBuf->param[0], 40);
     }
     else
     {
@@ -660,15 +674,13 @@ void IRC_DoCommand()
                         {
                             if (LineBuf->param[3][end] == 0xD)
                             {
-                                if (UserIterator) UserIterator--;
                                 break;
                             }
                         }
 
                         // Detect end of line space (not a valid nick)
-                        if (strcmp(LineBuf->param[3]+start, "") == 0)   // This is obviously wrong, but it works for now and I don't want to mess with it... may cause the missing nick?
+                        if (strcmp(LineBuf->param[3]+start, " ") == 0)
                         {
-                            if (UserIterator) UserIterator--;
                             break;
                         }
                         
@@ -686,8 +698,8 @@ void IRC_DoCommand()
                     }
                 }
 
-                strncpy(ChanBuf, LineBuf->param[2], 40); 
-                break;
+                strncpy(ChanBuf, LineBuf->param[2], 40);
+                return;
             }
             case 366:
             {
@@ -697,7 +709,7 @@ void IRC_DoCommand()
                     PG_UserNum = UserIterator;
                     UserIterator = 0;
                 }
-                break;
+                return;
             }
             case 372:
             case 375:
@@ -759,7 +771,11 @@ void IRC_DoCommand()
         
             default:
                 #if IRC_LOGGING == 1
-                kprintf("Error: Unhandled IRC CMD: %u", cmd);
+                kprintf("Error: Unhandled IRC CMD: %u ---------------------------------------------", cmd);
+                kprintf("Error: Prefix: \"%s\"", LineBuf->prefix);
+                kprintf("Error: Command: \"%s\"", LineBuf->command);
+                for (u8 i = 0; i < 16; i++) if (strlen(LineBuf->param[i]) > 0) kprintf("Error: Param %u: \"%s\"", i, LineBuf->param[i]);
+                kprintf("--------------------------------------------------------------------------");
                 #endif
                 return;
             break;
@@ -908,9 +924,9 @@ void IRC_ParseRX(u8 byte)
     {
         case 0x0A:  // Line feed (new line)
             RXString[RXStringSeq++] = '\0';
-            LineBuf->prefix[0] = '\0';
-            LineBuf->command[0] = '\0';
-            for (u8 i = 0; i < 16; i++){LineBuf->param[i][0] = '\0';}
+            memset(LineBuf->prefix, 0, B_PREFIX_LEN);
+            memset(LineBuf->command, 0, B_COMMAND_LEN);
+            for (u8 i = 0; i < 16; i++){memset(LineBuf->param[i], 0, B_PARAM_LEN);}
 
             IRC_ParseString();
 
@@ -957,13 +973,46 @@ void IRC_PrintString(char *string)
         {
             // Look ahead to determine the length of the next word
             u16 word_end = i;
-            while (word_end < len && 
-                   string[word_end] != ' '  && 
-                   string[word_end] != 0x1 && 
-                   string[word_end] != 0x2 && 
-                   string[word_end] != 0x3 && 
-                   string[word_end] != '\n') 
+            u8 wo = 0;  // Word offset
+            while (word_end+wo < len && 
+                   string[word_end+wo] != ' '  && 
+                   string[word_end+wo] != 0x1  && // ...
+                   string[word_end+wo] != 0x3  && // Control character
+                   string[word_end+wo] != 0x4  && // Custom text colour reset
+                   string[word_end+wo] != 0x5  && // Custom text colour set
+                   string[word_end+wo] != 0xF  && // Colour reset
+                   string[word_end+wo] != '\n') 
             {
+                if ((string[word_end+wo-1] == 0x3 || string[word_end+wo-2] == 0x3) && (string[word_end+wo] >= '0' || string[word_end+wo] <= '9'))
+                {
+                    wo++;
+                    continue;
+                }
+
+                // UTF-8
+                if ((u8)string[word_end+wo] == 0xE2)
+                {
+                    // '
+                    if (((u8)string[word_end+wo+1] == 0x80) && ((u8)string[word_end+wo+2] == 0xA6))
+                    {
+                        string[word_end+wo  ] = '.';
+                        string[word_end+wo+1] = '.';
+                        string[word_end+wo+2] = '.';
+                        wo += 2;
+                    }
+
+                    // '
+                    if (((u8)string[word_end+wo+1] == 0x80) && ((u8)string[word_end+wo+2] == 0x99))
+                    {
+                        string[word_end+wo  ] = '\2';
+                        string[word_end+wo+1] = '\2';
+                        string[word_end+wo+2] = '\'';
+                        wo += 2;
+                        continue;
+                    }
+
+                }
+                
                 word_end++;
             }
 

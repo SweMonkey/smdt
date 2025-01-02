@@ -5,6 +5,7 @@
 #include "Buffer.h"
 #include "DevMgr.h"
 #include "devices/RL_Network.h" // RLN_SendByte
+#include "system/File.h"
 
 // Tx flags
 #define TXF_NOBUFFER 1
@@ -23,6 +24,9 @@ typedef void NET_PingIP_CB(char *ip);
 extern Buffer RxBuffer;
 extern Buffer TxBuffer;
 extern SM_Device DRV_UART;      // Built-in UART
+
+extern SM_File *rxbuf;  // Rx buffer as an IO file
+extern SM_File *txbuf;  // Tx buffer as an IO file
 
 void NET_RxIRQ();
 void NET_SendChar(const u8 c, u8 flags);

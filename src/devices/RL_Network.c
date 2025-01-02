@@ -21,7 +21,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-Modified for use in SMDTC by smds.
+Modified for use in SMDT by smds.
 Originial source at: https://github.com/b1tsh1ft3r/retro.link/tree/main/sega_genesis/sgdk_example
 */
 
@@ -115,8 +115,7 @@ u8 RLN_ReadByte(void)
 // Sends a string of ascii 
 void RLN_SendMessage(char *str) 
 {
-    int i=0;
-    while (str[i] != '\0') { RLN_SendByte(str[i]); i++; }
+    while (*str) RLN_SendByte(*str++);
 }
 
 // Network Update
@@ -124,33 +123,21 @@ void RLN_SendMessage(char *str)
 // the software receive buffer. Designed to be called from Vblank 
 void RLN_Update(void)
 {
-    u32 timeout = 0;
-    //u8 n = 0;
+    u16 timeout = 0;
 
-    SYS_setInterruptMaskLevel(7);
-    //if (Buffer_IsEmpty(&RxBuffer) != 0xFF) return;
+    if (Buffer_IsEmpty(&RxBuffer) != TRUE) return;
 
-    while (Buffer_IsFull(&RxBuffer) != 0xFF)
+    while (RLN_RXReady())//(Buffer_IsFull(&RxBuffer) != TRUE)
     {
-        if (RLN_RXReady())
-        {
-            Buffer_Push(&RxBuffer, RLN_ReadByte());
-        }
-        else if (timeout++ >= 128)
-        {
-            break;
-        }
-
-        //if (n++ >= 96) break;
+        Buffer_Push(&RxBuffer, RLN_ReadByte());
+        
+        if (timeout++ >= 150) break;
     }
-    SYS_setInterruptMaskLevel(0);
 
-    /*while ((RLN_RXReady()) && (!Buffer_IsFull(&RxBuffer)))
+    /*while (RLN_RXReady() && (Buffer_IsFull(&RxBuffer) != TRUE))
     {
         u8 byte = RLN_ReadByte();
         Buffer_Push(&RxBuffer, byte);
-
-        //break;  // !!!
     }*/
 
     //if (UART_LSR & 0x01) Buffer_Push(&RxBuffer, UART_RHR);  // If RxReady then push a byte from Rx register into RxBuffer

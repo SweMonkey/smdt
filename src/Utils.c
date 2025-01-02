@@ -252,7 +252,13 @@ u32 syscall(register vu32 n, register vu32 a, register vu32 b, register vu32 c, 
 {
     kprintf("syscall\nn = $%lX\na = $%lX\nb = $%lX\nc = $%lX\nd = $%lX\ne = $%lX\nf = $%lX", n, a, b, c, d, e, f);
 
-    return 0;
+    Stdout_Push("Got caught in a trap! halting system!\n");
+    Stdout_Flush();
+    *((vu32*) 0xFF4004) = 0xDEADBEEF;
+
+    while (1);
+
+    SYSCALL_RET(0);
 }
 
 // strncat, modified strcat from SGDK
@@ -619,7 +625,7 @@ u16 snprintf(char *buffer, u16 size, const char *fmt, ...)
     return i;
 }
 
-u16 stdout_printf(const char *fmt, ...)
+u16 printf(const char *fmt, ...)
 {
     va_list args;
     u16 i;
@@ -682,7 +688,7 @@ size_t strcspn(const char *str1, const char *str2)
 
 const char *strchr(const char *str, int character)
 {
-    for (; *str != '\0'; ++str) if (*str == character) return (char *) str;
+    for (; *str != '\0'; ++str) if (*str == character) return (char*)str;
 
     return NULL;
 }

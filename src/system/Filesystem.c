@@ -2,6 +2,8 @@
 #include "Filesystem.h"
 #include "Utils.h"
 #include "Stdout.h"
+#include "File.h"
+#include "Network.h"
 
 #define MAX_PATH_LENGTH 256
 
@@ -102,8 +104,8 @@ bool FS_EraseSRAM()
     // Erase SRAM if present
     if ((u32)((r1 << 24) | (r2 << 16) | (r3 << 8) | (r4)) == 0xDEADBEEF)
     {
-        stdout_printf(" └[92mSRAM detected[0m\n");
-        //stdout_printf(" └%u KB SRAM detected\n", (SSize+1)/1024);
+        printf(" └[92mSRAM detected[0m\n");
+        //printf(" └%u KB SRAM detected\n", (SSize+1)/1024);
         //cfg.block_count = (SSize+1) / cfg.block_size; // Set lfs filesystem size to SRAM size
 
         for (u16 i = 0; i < SSize; i++)
@@ -115,7 +117,7 @@ bool FS_EraseSRAM()
         return TRUE;
     }
     
-    stdout_printf(" └[91mNo SRAM detected!\n[0m");
+    printf(" └[91mNo SRAM detected!\n[0m");
     SRAM_disable();
     return FALSE;
 }
@@ -137,7 +139,7 @@ void FS_Init()
             FS_MkDir("/system");
             FS_MkDir("/system/tmp");
 
-            lfs_file_t f;
+            /*lfs_file_t f;
             FS_OpenFile("/system/rxbuffer.io", LFS_O_CREAT, &f);
             FS_Close(&f);
             FS_OpenFile("/system/txbuffer.io", LFS_O_CREAT, &f);
@@ -145,7 +147,13 @@ void FS_Init()
             FS_OpenFile("/system/stdout.io", LFS_O_CREAT, &f);
             FS_Close(&f);
             FS_OpenFile("/system/stdin.io", LFS_O_CREAT, &f);
-            FS_Close(&f);
+            FS_Close(&f);*/
+
+            rxbuf = F_Open("/system/rxbuffer.io", LFS_O_CREAT | LFS_O_TRUNC | LFS_O_RDONLY);
+            txbuf = F_Open("/system/txbuffer.io", LFS_O_CREAT | LFS_O_TRUNC | LFS_O_WRONLY);
+            stdout = F_Open("/system/stdout.io",  LFS_O_CREAT | LFS_O_TRUNC | LFS_O_RDWR);    // LFS_O_WRONLY
+            stdin = F_Open("/system/stdin.io",    LFS_O_CREAT | LFS_O_RDONLY);
+            stderr = F_Open("/system/stderr.io",  LFS_O_CREAT | LFS_O_TRUNC | LFS_O_RDWR);
         }
     }
 
@@ -157,8 +165,8 @@ void FS_Init()
 
 void FS_PrintBlockDevices()
 {
-    stdout_printf("%5s %6s %12s  %-16s\n", "Name", "Size", "Allocated", "Mount");
-    stdout_printf("%5s %6ld %12ld  %-16s\n", "SRAM", cfg.block_count*cfg.block_size/1024, lfs_fs_size(&lfs), "/");
+    printf("%5s %6s %12s  %-16s\n", "Name", "Size", "Allocated", "Mount");
+    printf("%5s %6ld %12ld  %-16s\n", "SRAM", cfg.block_count*cfg.block_size/1024, lfs_fs_size(&lfs), "/");
 }
 
 char *FS_GetCWD()
@@ -302,7 +310,7 @@ void join_paths(char *result, const char *path1, const char *path2)
 {
     if (strlen(path1) + strlen(path2) + 2 > MAX_PATH_LENGTH) 
     {
-        stdout_printf("Path too long!\n");
+        printf("Path too long!\n");
         return;
     }
     if (strcmp(path1, "/") == 0) 
@@ -391,7 +399,7 @@ void FS_ChangeDir(const char *path)
     } 
     else 
     {
-        stdout_printf("Error: Path does not exist.\n");
+        printf("Error: Path does not exist.\n");
     }
 }
 

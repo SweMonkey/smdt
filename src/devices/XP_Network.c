@@ -50,12 +50,7 @@ void XPN_SendByte(u8 data)
 
 bool XPN_ReadByte(u8 *data)
 {
-    if (Buffer_Pop(&RxBuffer, data) == 0)
-    {
-        return TRUE;  // Data was successfully read
-    }
-
-    return FALSE;  // No data available
+    return Buffer_Pop(&RxBuffer, data);
 }
 
 void XPN_SendMessage(char *str) 
@@ -249,6 +244,7 @@ u8 XPN_GetIP(char *ret)
 // Only accepts an IP address to ping
 void XPN_PingIP(char *ip)
 {
+    u32 timeout = 0;
     u16 ping_counter = 0;
     u16 byte_count = 0;
     u8 byte = 0;
@@ -280,6 +276,12 @@ void XPN_PingIP(char *ip)
                 // Flush stdout after pushing byte
                 Stdout_Flush();
             }
+        }
+
+        if (timeout++ >= sv_ReadTimeout)
+        {
+            Stdout_Push("Ping response timeout!\n");
+            break;
         }
     }
 

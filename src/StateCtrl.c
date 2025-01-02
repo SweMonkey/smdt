@@ -35,7 +35,7 @@ void VBlank()
     {
         KB_Interpret_Scancode(kbdata);
     }
-
+    
     //if (CurrentState->VBlank) CurrentState->VBlank();
 
     if ((is_KeyDown(KEY_RWIN) || is_KeyDown(KEY_F8)) &&
@@ -116,7 +116,7 @@ void ChangeState(State new_state, u8 argc, char *argv[])
 
     TRM_SetStatusText(STATUS_TEXT);
     TRM_ResetStatusText();
-    
+
     SYS_enableInts();
 
     CurrentState->Enter(argc, argv);

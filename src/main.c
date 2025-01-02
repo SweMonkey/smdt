@@ -13,6 +13,7 @@
 #include "Telnet.h"
 
 #include "misc/ConfigFile.h"
+#include "misc/Exception.h"
 
 #include "system/Stdout.h"
 #include "system/File.h"
@@ -26,6 +27,8 @@ int main(bool hardReset)
 
     Z80_unloadDriver();
     Z80_requestBus(TRUE);   // Make sure SGDK library is built with HALT_Z80_ON_IO and HALT_Z80_ON_DMA set to 0, to make sure the bus never gets released again
+
+    SetupExceptions();
 
     #if (HALT_Z80_ON_IO != 0)
     kprintf("Warning: HALT_Z80_ON_IO is enabled!");
@@ -148,7 +151,8 @@ int main(bool hardReset)
     #if ((HALT_Z80_ON_DMA != 0) || (HALT_Z80_ON_IO != 0))
     for (u8 i = 0; i < 10; i++)
     {
-        stdout_printf(" Resuming boot in %u seconds\r", 9-i);
+        printf(" Resuming boot in %u seconds\r", 9-i);
+        Stdout_Flush();
         
         waitMs(1000);
     }
@@ -156,7 +160,7 @@ int main(bool hardReset)
     #endif
 
     bAutoFlushStdout = FALSE;
-
+    
     SYS_enableInts();
 
     SYS_doVBlankProcess();

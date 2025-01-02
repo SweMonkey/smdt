@@ -11,6 +11,10 @@
 extern u8 sv_AllowRemoteEnv;
 extern u8 vDECCKM;
 
+// DECSTBM
+extern s16 DMarginTop;
+extern s16 DMarginBottom;
+
 void TELNET_Init();
 void TELNET_ParseRX(u8 byte);
 

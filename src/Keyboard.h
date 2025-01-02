@@ -11,11 +11,11 @@ extern u8 bKB_Shift;
 extern u8 bKB_Alt;
 extern u8 bKB_Ctrl;
 
-typedef u8 KB_Poll_CB(u8 *data);
+typedef bool KB_Poll_CB(u8 *data);
 
 void KB_Init();
 void KB_SetKeyboard(KB_Poll_CB *cb);
-u8 KB_Poll(u8 *data);
+bool KB_Poll(u8 *data);
 void KB_Interpret_Scancode(u8 scancode);
 
 #endif // KEYBOARD_H_INCLUDED

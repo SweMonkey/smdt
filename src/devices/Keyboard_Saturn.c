@@ -20,7 +20,7 @@ bool KB_Saturn_Init()
     if (DEV_GetData(DRV_KBSATURN, 0xF) != 1)
     {
         kprintf("Unknown Saturn peripheral found (r = $%X)", DEV_GetData(DRV_KBSATURN, 0xF));
-        stdout_printf("└[93mUnknown Saturn peripheral found. r=$%X[0m\n", DEV_GetData(DRV_KBSATURN, 0xF));
+        printf("└[93mUnknown Saturn peripheral found. r=$%X[0m\n", DEV_GetData(DRV_KBSATURN, 0xF));
 
         return 0;
     }
@@ -36,7 +36,7 @@ bool KB_Saturn_Init()
     return 1;
 }
 
-u8 KB_Saturn_Poll(u8 *data)
+bool KB_Saturn_Poll(u8 *data)
 {
     u32 timeout = 0;
     u8 nibble[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -56,7 +56,7 @@ u8 KB_Saturn_Poll(u8 *data)
         DEV_ClrData(DRV_KBSATURN);
         while ((DEV_GetData(DRV_KBSATURN, 0x10) & 0x10) != 0)
         {
-            if (timeout++ >= TIMEOUT) return 0;
+            if (timeout++ >= TIMEOUT) return FALSE;
         }
 
         timeout = 0;
@@ -67,7 +67,7 @@ u8 KB_Saturn_Poll(u8 *data)
         
         while (DEV_GetData(DRV_KBSATURN, 0x10) != 0x10)
         {
-            if (timeout++ >= TIMEOUT) return 0;
+            if (timeout++ >= TIMEOUT) return FALSE;
         }
 
         timeout = 0;
@@ -179,7 +179,7 @@ u8 KB_Saturn_Poll(u8 *data)
         break;
     }
 
-    if (*data == 0) return 0;
+    if (*data == 0) return FALSE;
 
-    return 0xFF;
+    return TRUE;
 }

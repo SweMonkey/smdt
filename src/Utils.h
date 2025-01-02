@@ -4,8 +4,9 @@
 #include <genesis.h>
 
 // Title bar prefix
-#define STATUS_TEXT "SMDTC v0.31"
-#define STATUS_TEXT_SHORT "SMDTC"
+#define STATUS_VER_STR "v0.31.4"
+#define STATUS_TEXT "SMDT v31"
+#define STATUS_TEXT_SHORT "SMDT"
 
 // VRAM memory addresses for various graphics in tile units (/32)
 #define AVR_BGBLOCK 0       // $0000 - $01FF
@@ -67,7 +68,7 @@
 //#define IRC_LOGGING 1 // Log IRC debug messages (1 = Unhandled CMD only, 2 = LOG EVERYTHING)
 //#define TRM_LOGGING   // Log terminal debug messages
 //#define IAC_LOGGING   // Log IAC data
-//#define ESC_LOGGING 1 // Log ESC data (1 = Log necessary info, 2 = LOG EVERYTHING)
+//#define ESC_LOGGING 2 // Log ESC data (1 = Log prioritised info, 2 = log misc errors and warnings, 3 = log spam)
 //#define UTF_LOGGING   // Log UTF-8 messages
 //#define KB_DEBUG      // Log keyboard debug messages
 //#define GOP_LOGGING
@@ -102,13 +103,11 @@ char *strtok(char *s, char d);
 
 char *strncat(char *to, const char *from, u16 num);
 u16 snprintf(char *buffer, u16 size, const char *fmt, ...) __attribute__ ((format (printf, 3, 4)));
-u16 stdout_printf(const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
-
-
-u32 syscall(register vu32 n, register vu32 a, register vu32 b, register vu32 c, register vu32 d, register vu32 e, register vu32 f);
+u16 printf(const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
 
 s32 memcmp(const void *s1, const void *s2, u32 n);
 
+u32 syscall(register vu32 n, register vu32 a, register vu32 b, register vu32 c, register vu32 d, register vu32 e, register vu32 f);
 
 // Used by: LittleFS
 #define true 1

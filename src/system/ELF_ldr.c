@@ -147,7 +147,7 @@ void *ELF_LoadProc(const char *fn)
 
     if (file == NULL)
     {
-        stdout_printf("Failed to load \"%s\"\n", fn);
+        printf("Failed to load \"%s\"\n", fn);
         return NULL;
     }
 
@@ -161,13 +161,13 @@ void *ELF_LoadProc(const char *fn)
         return NULL;
     }
 
-    //stdout_printf("phoff: $%lX - phentsize: $%X - phnum: $%X\n", hdr.e_phoff, hdr.e_phentsize, hdr.e_phnum);
+    //printf("phoff: $%lX - phentsize: $%X - phnum: $%X\n", hdr.e_phoff, hdr.e_phentsize, hdr.e_phnum);
 
     Elf32_Phdr phdr[hdr.e_phnum];
 
     if (hdr.e_phoff == 0)
     {
-        stdout_printf("ELF has no program header table!\n");
+        printf("ELF has no program header table!\n");
         F_Close(file);
         return NULL;
     }
@@ -180,14 +180,14 @@ void *ELF_LoadProc(const char *fn)
 
     for (u8 p = 0; p < 1; p++)//hdr.e_phnum; p++)
     {
-        /*stdout_printf("type: $%lX\n", phdr[p].p_type);
-        stdout_printf("offset: $%lX\n", phdr[p].p_offset);
-        stdout_printf("vaddr: $%lX\n", phdr[p].p_vaddr);
-        stdout_printf("paddr: $%lX\n", phdr[p].p_paddr);
-        stdout_printf("filesz: $%lX\n", phdr[p].p_filesz);
-        stdout_printf("memsz: $%lX\n", phdr[p].p_memsz);
-        stdout_printf("flags: $%lX\n", phdr[p].p_flags);
-        stdout_printf("align: $%lX\n", phdr[p].p_align);
+        /*printf("type: $%lX\n", phdr[p].p_type);
+        printf("offset: $%lX\n", phdr[p].p_offset);
+        printf("vaddr: $%lX\n", phdr[p].p_vaddr);
+        printf("paddr: $%lX\n", phdr[p].p_paddr);
+        printf("filesz: $%lX\n", phdr[p].p_filesz);
+        printf("memsz: $%lX\n", phdr[p].p_memsz);
+        printf("flags: $%lX\n", phdr[p].p_flags);
+        printf("align: $%lX\n", phdr[p].p_align);
 
         kprintf("type: $%lX", phdr[p].p_type);
         kprintf("offset: $%lX", phdr[p].p_offset);
@@ -200,17 +200,25 @@ void *ELF_LoadProc(const char *fn)
 
         if (phdr[p].p_type != 1) continue;  // Not a loadable segment
 
-        if (p > 0) stdout_printf("Warning: more than one loadable segment. TODO: investigate\n");
+        if (p > 0) printf("Warning: more than one loadable segment. TODO: investigate\n");
 
         proc_space = MEM_allocAt(hdr.e_entry, phdr[p].p_memsz);
-        //ram_space  = MEM_allocAt(0xE0FFB000, 0x2000);
+        ram_space  = MEM_allocAt(0xFF8000, 0x2000);
 
         if (proc_space == NULL)
         {
             kprintf("Failed to allocate proc_space");
+            printf("Failed to allocate proc_space\n");
         }
 
-        memset((void*)hdr.e_entry, 0, phdr[p].p_memsz);
+        if (ram_space == NULL)
+        {
+            kprintf("Failed to allocate ram_space");
+            printf("Failed to allocate ram_space\n");
+        }
+
+        memset(proc_space, 0, phdr[p].p_memsz);
+        memset(ram_space, 0, 0x2000);
 
         F_Seek(file, phdr[p].p_vaddr, SEEK_SET);
         F_Read(proc_space, phdr[p].p_memsz, 1, file);

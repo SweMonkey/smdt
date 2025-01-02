@@ -23,7 +23,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-Modified for use in SMDTC by smds.
+Modified for use in SMDT by smds.
 Originial source at: https://github.com/b1tsh1ft3r/retro.link/tree/main/sega_genesis/sgdk_example
 */
 

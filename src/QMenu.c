@@ -249,13 +249,14 @@ static struct s_menu
      "Port 3"}
 },
 {//17
-    3,
+    4,
     0, 255, 0,
     NULL, WINFN_BGColor, NULL,
     "BG Colour",
-    {254, 254, 254},
+    {254, 254, 254, 254},
     {"Black",
      "White",
+     "Light BG+Dark FG",
      "Random"}
 },
 {//18
@@ -363,15 +364,17 @@ static struct s_menu
      "4x8 Mono"}
 },
 {//28
-    4,
+    6,
     0, 255, 0,
     NULL, WINFN_UITHEME, NULL,
     "UI theme",
-    {254, 254, 254, 254},
+    {254, 254, 254, 254, 254, 254},
     {"Dark blue",
      "Dark lime",
      "Dark amber",
-     "High contrast"}
+     "High contrast",
+     "Aqua",
+     "Hot pink"}
 },
 {//29
     2,
@@ -731,6 +734,33 @@ void WINFN_BGColor()
             sv_CBGCL = 0xEEE;
         break;
         case 2:
+            sv_CBGCL = 0xAAA;
+
+            PAL_setColor(0x0D, 0x000);
+            PAL_setColor(0x0C, 0x000);
+
+            PAL_setColor(0x1D, 0x006);
+            PAL_setColor(0x1C, 0x004);
+
+            PAL_setColor(0x2D, 0x060);
+            PAL_setColor(0x2C, 0x040);
+
+            PAL_setColor(0x3D, 0x066);
+            PAL_setColor(0x3C, 0x044);
+
+            PAL_setColor(0x0F, 0x600);
+            PAL_setColor(0x0E, 0x400);
+
+            PAL_setColor(0x1F, 0x606);
+            PAL_setColor(0x1E, 0x404);
+
+            PAL_setColor(0x2F, 0x660);
+            PAL_setColor(0x2E, 0x440);
+
+            PAL_setColor(0x3F, 0x666);
+            PAL_setColor(0x3E, 0x444);
+        break;
+        case 3:
             sv_CBGCL = random();
         break;
     
@@ -853,7 +883,7 @@ void WINFN_FONT_TERM()
     {
         TTY_SetFontSize(sv_TerminalFont);
         TTY_Reset(TRUE);
-        stdout_printf("%s> ", FS_GetCWD());
+        printf("%s> ", FS_GetCWD());
     }
 }
 

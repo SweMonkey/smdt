@@ -89,7 +89,7 @@ void Enter_Gopher(u8 argc, char *argv[])
         #endif
 
         Stdout_Push("[91mGopher Client: Failed to allocate memory for PageBuffer![0m\n");
-        stdout_printf("[91mFree: %u - LFree: %u - Needed: %u[0m\n", MEM_getFree(), MEM_getLargestFreeBlock(), B_PAGEBUF_LEN);
+        printf("[91mFree: %u - LFree: %u - Needed: %u[0m\n", MEM_getFree(), MEM_getLargestFreeBlock(), B_PAGEBUF_LEN);
         RevertState();
         return;
     }
@@ -133,50 +133,6 @@ void Enter_Gopher(u8 argc, char *argv[])
     Gopher_Init();
     Gopher_GetAddressFromStr(argv[1]);
     Gopher_GetPage();
-
-    // Debug playback/timing of a logged stream
-    #ifdef EMU_BUILD
-    u8 data;
-    u32 p = 0;
-    u32 s = 5589;//5586;//241;//0x671;
-    KDebug_StartTimer();
-    while (p < s)
-    {
-        while(Buffer_Push(&RxBuffer, gopherdump[p]) != 0xFF)
-        {
-            p++;
-            if (bOnce)
-            {
-                TRM_SetStatusIcon(ICO_NET_RECV, ICO_POS_1);
-                bOnce = !bOnce;
-            }
-
-            if (p >= s) break;
-        }
-        
-        while (Buffer_Pop(&RxBuffer, &data) != 0xFF)
-        {
-            Gopher_BufferByte(data);
-            
-            if (!bOnce)
-            {
-                TRM_SetStatusIcon(ICO_NET_IDLE_RECV, ICO_POS_1);
-                bOnce = !bOnce;
-            }
-
-            if ((data == '.') && (rxdata1 == 0xA) && (rxdata2 == 0xD))
-            {
-                kprintf("Final dot found @ %lu - data= '%c'", p, data);
-                Gopher_PrintLine(0, ScrHeight);
-            }
-
-            rxdata2 = rxdata1;
-            rxdata1 = data;
-        }
-    }
-    //Gopher_PrintLine(0, ScrHeight);
-    KDebug_StopTimer();
-    #endif
 }
 
 void ReEnter_Gopher()
@@ -213,7 +169,7 @@ void Run_Gopher()
     if (bPageDone) return;
     
     #ifndef EMU_BUILD
-    while (Buffer_Pop(&RxBuffer, &rxdata) != 0xFF)
+    while (Buffer_Pop(&RxBuffer, &rxdata))
     {
         Gopher_BufferByte(rxdata);
 
@@ -366,7 +322,7 @@ void Gopher_Init()
 
 void Gopher_Scroll(u8 dir)
 {
-    s32 old_sy = TTY_GetSY();
+    s16 old_sy = TTY_GetSY();
 
     if (dir == SCR_UP)
     {
@@ -569,7 +525,7 @@ void Gopher_BufferByte(u8 byte)
 
 void Gopher_PrintLine(u16 start_line, u8 num_lines)
 {
-    s32 old_sx = TTY_GetSX();
+    s16 old_sx = TTY_GetSX();
 
     if (PageBuffer[0] == 0) return;
 

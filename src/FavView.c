@@ -28,7 +28,7 @@ static const char *tab_text[3] =
 
 static char *list_telnet[] =
 {
-    "alt.org:23", "telehack.com:23", "bbs.bottomlessabyss.net:2023", "bbs.kd3.us:23"
+    "alt.org:23", "telehack.com:23", "bbs.bottomlessabyss.net:2023"
 };
 
 static char *list_irc[] =

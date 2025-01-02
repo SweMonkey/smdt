@@ -163,8 +163,7 @@ void TMB_PrintChar(u8 c)
 
 void TMB_PrintString(const char *str)
 {
-    u16 i = 0;
-    while (str[i] != '\0') TMB_PrintChar(str[i++]);
+    while (*str) TMB_PrintChar(*str++);
 }
 
 void TMB_ClearLine(u16 y, u16 line_count)
@@ -249,7 +248,7 @@ void TMB_MoveCursor(u8 dir, u8 num)
     }
 }
 
-inline void TMB_SetSX(s32 x)
+inline void TMB_SetSX(s16 x)
 {
     if (TMB_Ptr == NULL) return;
 
@@ -257,14 +256,14 @@ inline void TMB_SetSX(s32 x)
     TMB_Ptr->sx = TMB_Ptr->sx>C_XMAX?C_XMAX:TMB_Ptr->sx;    // sx greater than max_x? set to max_x
 }
 
-inline s32 TMB_GetSX()
+inline s16 TMB_GetSX()
 {
     if (TMB_Ptr == NULL) return 0;
     
     return TMB_Ptr->sx;
 }
 
-inline void TMB_SetSY_A(s32 y)
+inline void TMB_SetSY_A(s16 y)
 {
     if (TMB_Ptr == NULL) return;
     
@@ -273,21 +272,21 @@ inline void TMB_SetSY_A(s32 y)
     TMB_Ptr->sy += ((TMB_Ptr->VScroll >> 3) + C_YSTART);
 }
 
-inline s32 TMB_GetSY_A()
+inline s16 TMB_GetSY_A()
 {
     if (TMB_Ptr == NULL) return 0;
     
     return TMB_Ptr->sy - ((TMB_Ptr->VScroll >> 3) + C_YSTART);
 }
 
-inline void TMB_SetSY(s32 y)
+inline void TMB_SetSY(s16 y)
 {
     if (TMB_Ptr == NULL) return;
     
     TMB_Ptr->sy = y<0?0:y;
 }
 
-inline s32 TMB_GetSY()
+inline s16 TMB_GetSY()
 {
     if (TMB_Ptr == NULL) return 0;
     

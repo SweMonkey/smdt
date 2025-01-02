@@ -42,7 +42,7 @@ _Vectors_68K:
         dc.l    _INT
         dc.l    _VINT
         dc.l    _INT
-        dc.l    _trap_0                 /* Resume supervisor task */
+        dc.l    _trap_2 /*_trap_0*/
         dc.l    _INT,_trap_2,_INT,_INT,_INT,_INT,_INT
         dc.l    _INT,_INT,_INT,_INT,_INT,_INT,_INT,_INT
         dc.l    _INT,_INT,_INT,_INT,_INT,_INT,_INT,_INT
@@ -77,7 +77,7 @@ WrongVersion:
 
 * Configure a USER_STACK_LENGTH bytes user stack at bottom, and system stack on top of it
         move    %sp, %usp
-        sub     #USER_STACK_LENGTH, %sp
+        /*sub     #USER_STACK_LENGTH, %sp*/
 
         move.w  %d7,(%a1)
         move.w  %d7,(%a2)
@@ -245,10 +245,9 @@ _VINT:
         rte
 
 _trap_2:
-        /*movem.l %d0-%d1/%a0-%a1,-(%sp)*/
-        /*move.l  syscall, %a0*/
-        /*jsr    (%a0)*/
-        /*movem.l (%sp)+,%d0-%d1/%a0-%a1*/
+        movem.l %d0-%d1/%a0-%a1,-(%sp)
+        jsr syscall
+        movem.l (%sp)+,%d0-%d1/%a0-%a1
         rte
 
 *------------------------------------------------

@@ -131,21 +131,16 @@ void DetectDevices()
 
     // -- PS/2 Keyboard setup --------------------------
     bool ps2_r = FALSE;
-    
-    // Try to find the keyboard twice... because apparently that is needed in some cases
-    for (u8 i = 0; i < 2; i++)
-    {
-        if ( DevId0 == DEVICE_UNKNOWN)            {ps2_r = KB_PS2_Init(DP_Port1);}
-        if ((DevId1 == DEVICE_UNKNOWN) && !ps2_r) {ps2_r = KB_PS2_Init(DP_Port2);}
-        if ((DevId2 == DEVICE_UNKNOWN) && !ps2_r) {ps2_r = KB_PS2_Init(DP_Port3);}
 
-        if (ps2_r)
-        {
-            DevList[DevSeq++] = &DRV_KBPS2;
-            TRM_SetStatusIcon(ICO_KB_OK, ICO_POS_0);
-            bNoKeyboard = FALSE;
-            break;
-        }
+    if ( DevId0 == DEVICE_UNKNOWN)            {ps2_r = KB_PS2_Init(DP_Port1);}
+    if ((DevId1 == DEVICE_UNKNOWN) && !ps2_r) {ps2_r = KB_PS2_Init(DP_Port2);}
+    if ((DevId2 == DEVICE_UNKNOWN) && !ps2_r) {ps2_r = KB_PS2_Init(DP_Port3);}
+
+    if (ps2_r)
+    {
+        DevList[DevSeq++] = &DRV_KBPS2;
+        TRM_SetStatusIcon(ICO_KB_OK, ICO_POS_0);
+        bNoKeyboard = FALSE;
     }
 
     // -- Saturn Keyboard setup ------------------------
@@ -198,11 +193,11 @@ void DetectDevices()
     char SEGASTR[5] = {0, 0, 0, 0, 0};
     memcpyU32((u32*)SEGASTR, (u32*)0x400100, 1);
 
-    //stdout_printf("SEGASTR= \"%s\" -- SCDver= %u\n%c %c %c %c\n", SEGASTR, SCDver, *((vu8*) 0x400100), *((vu8*) 0x400101), *((vu8*) 0x400102), *((vu8*) 0x400103));
+    //printf("SEGASTR= \"%s\" -- SCDver= %u\n%c %c %c %c\n", SEGASTR, SCDver, *((vu8*) 0x400100), *((vu8*) 0x400101), *((vu8*) 0x400102), *((vu8*) 0x400103));
 
     if ((SCDver) || (strcmp(SEGASTR, "SEGA") == 0))
     {
-        stdout_printf("%s CD found.\n", bPALSystem ? "SEGA" : "MEGA");
+        printf("%s CD found.\n", bPALSystem ? "SEGA" : "MEGA");
         bMegaCD = TRUE;
     }*/
 
@@ -269,6 +264,9 @@ void DetectDevices()
 
         Stdout_Push("├[93mNo network adapters found[0m\n");
         Stdout_Push("└[97mListening on built in UART[0m\n");
+
+        TRM_SetStatusIcon(ICO_NET_ERROR, ICO_POS_1);
+        TRM_SetStatusIcon(ICO_NET_ERROR, ICO_POS_2);
     }
 }
 

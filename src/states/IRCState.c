@@ -27,21 +27,12 @@
     THIS SEQUENCE OF EVENTS CANNOT BE EMULATED BY REPLAYING A LOGGED STREAM!
 */
 
-#ifndef EMU_BUILD
-static u8 rxdata;
-#endif
-
 static u8 bOnce = FALSE;
+static u8 rxdata;
 static SM_Window *UserWin = NULL;
 static u16 UserListScroll = 0;
 static u8 KBTxData[40];            // Buffer for the last 40 typed characters from the keyboard
 u8 sv_IRCFont = FONT_4x8_1;
-
-#ifdef EMU_BUILD
-#include "kdebug.h"
-asm(".global ircdump\nircdump:\n.incbin \"tmp/streams/rx_freenode.log\"");
-extern const unsigned char ircdump[];
-#endif
 
 void IRC_PrintChar(u8 c);
 
@@ -71,8 +62,6 @@ void Enter_IRC(u8 argc, char *argv[])
     TRM_SetWinParam(FALSE, TRUE, 20, 1);
     TRM_SetStatusText(STATUS_TEXT_SHORT);
 
-    PAL_setColor( 1, 0x0AE);    // Set the red icon colour to a brighter shade to avoid colour bleed when using RF/Composite CRT (Colour entry used for selected channel BG and by the Tx icon)
-
     UserWin = malloc(sizeof(SM_Window));
     if (UserWin == NULL)
     {
@@ -80,45 +69,10 @@ void Enter_IRC(u8 argc, char *argv[])
         RevertState();
     }
     UI_CreateWindow(UserWin, "", UC_NOBORDER);
+    UI_SetVisible(UserWin, FALSE);
 
     memset(KBTxData, 0, 40);
     PrintTextLine(KBTxData);    // Calling this here to clear VRAM tiles used for textbox
-
-    // Debug playback/timing of a logged stream
-    #ifdef EMU_BUILD
-    u8 data; 
-    u32 p = 0;
-    u32 s = 18403;
-    KDebug_StartTimer();
-    while (p < s)
-    {
-        while(Buffer_Push(&RxBuffer, ircdump[p]) != 0xFF)
-        {
-            p++;
-            if (bOnce)
-            {
-                TRM_SetStatusIcon(ICO_NET_RECV, ICO_POS_1);
-                bOnce = !bOnce;
-            }
-
-            if (p >= s) break;
-        }
-        
-        while (Buffer_Pop(&RxBuffer, &data) != 0xFF)
-        {
-            IRC_ParseRX(data);
-            
-            if (!bOnce)
-            {
-                TRM_SetStatusIcon(ICO_NET_IDLE_RECV, ICO_POS_1);
-                bOnce = !bOnce;
-            }
-        }
-        
-        TMB_UploadBuffer(PG_Buffer[PG_CurrentIdx]);
-    }
-    KDebug_StopTimer();
-    #endif
 
     Buffer_Flush(&TxBuffer);
     Buffer_Flush(&RxBuffer);
@@ -127,9 +81,7 @@ void Enter_IRC(u8 argc, char *argv[])
     {
         if (NET_Connect(argv[1]) == FALSE) 
         {
-            /*char TitleBuf[40];
-            sprintf(TitleBuf, "%s - <Connection Error>", STATUS_TEXT);
-            TRM_SetStatusText(TitleBuf);*/
+            // Connection failed; Inform the user here
         }
     }
 }
@@ -146,7 +98,7 @@ void Exit_IRC()
 
     Buffer_Flush(&TxBuffer);
     
-    sprintf(TitleBuf, "%s - Disconnecting...", STATUS_TEXT_SHORT);
+    sprintf(TitleBuf, "%s - Disconnecting...     ", STATUS_TEXT_SHORT);
     TRM_SetStatusText(TitleBuf);
 
     NET_Disconnect();
@@ -154,7 +106,6 @@ void Exit_IRC()
     VDP_setPlaneSize(128, 32, FALSE);   // Reset VDP tilemap size back to default (128x32)
     TRM_ClearArea(26, 1, 14, 25, PAL1, TRM_CLEAR_BG); // Clear area where the user list window may have been drawn
     TRM_SetWinParam(FALSE, FALSE, 0, 1);// Restore default window parameters
-    PAL_setColor( 1, 0x00e);            // Restore icon red colour
 
     if (UserWin != NULL)
     {
@@ -171,7 +122,7 @@ void Reset_IRC()
 void Run_IRC()
 {
     #ifndef EMU_BUILD
-    while (Buffer_Pop(&RxBuffer, &rxdata) != 0xFF)
+    while (Buffer_Pop(&RxBuffer, &rxdata))
     {
         IRC_ParseRX(rxdata);
 
@@ -252,9 +203,6 @@ void ChangePage(u8 num)
 
     char TitleBuf[32];
     PG_CurrentIdx = num;
-    //TMB_SetActiveBuffer(PG_Buffer[PG_CurrentIdx]);
-
-    //if (PG_CurrentIdx == 0) UI_SetVisible(UserWin, FALSE);
 
     if (strcmp(PG_Buffer[PG_CurrentIdx]->Title, PG_EMPTYNAME) == 0)
     {
@@ -284,7 +232,7 @@ u8 ParseTx()
     memset(outbuf, 0, 300);
 
     // Pop the TxBuffer back into inbuf
-    while ((Buffer_Pop(&TxBuffer, &data) != 0xFF) && (i < 256))
+    while (Buffer_Pop(&TxBuffer, &data) && (i < 256))
     {
         inbuf[i] = data;
         i++;
@@ -316,7 +264,7 @@ u8 ParseTx()
             strncpy(command, (char*)inbuf+end_p, end_c-end_p-1);
 
             sprintf((char*)outbuf, "PRIVMSG %s :%s\n", command, (char*)inbuf+end_c);
-            sprintf((char*)tmbbuf, "\2%s: \1%s\n", v_UsernameReset, (char*)inbuf+end_c);
+            sprintf((char*)tmbbuf, "\5%s: \4%s\n", v_UsernameReset, (char*)inbuf+end_c);
 
             // Try to find an unused page or an existing one
             for (u8 ch = 0; ch < IRC_MAX_CHANNELS; ch++)
@@ -441,7 +389,7 @@ u8 ParseTx()
         TMB_SetActiveBuffer(PG_Buffer[PG_CurrentIdx]);
 
         sprintf((char*)outbuf, "PRIVMSG %s :%s\n", PG_Buffer[PG_CurrentIdx]->Title, (char*)inbuf);
-        sprintf((char*)tmbbuf, "\2%s: \1%s\n", v_UsernameReset, (char*)inbuf);
+        sprintf((char*)tmbbuf, "\5%s: \4%s\n", v_UsernameReset, (char*)inbuf);
 
         IRC_PrintString((char*)tmbbuf);
     }

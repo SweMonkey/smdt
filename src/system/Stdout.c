@@ -6,7 +6,7 @@
 #include "StateCtrl.h"  // StateTick()
 #include "Keyboard.h"
 
-Buffer stdout;
+Buffer StdoutBuffer;
 extern Buffer TxBuffer;
 bool bAutoFlushStdout = FALSE;
 
@@ -14,9 +14,15 @@ void TickClock();
 void ScreensaverTick();
 void CR_Blink();
 
+SM_File *rxbuf = NULL;
+SM_File *txbuf = NULL;
+SM_File *stdout = NULL;
+SM_File *stdin = NULL;
+SM_File *stderr = NULL;
+
 
 // Hacky function to pause printing when screen has been filled
-void MoreFunc(s32 *start)
+void MoreFunc(s16 *start)
 {
     u8 kbdata = 0;
     
@@ -69,32 +75,35 @@ void MoreFunc(s32 *start)
 
 void Stdout_Push(const char *str)
 {
-    u8 r = 0;
-    for (u16 c = 0; c < strlen(str); c++)
+    bool r = TRUE;
+    
+    while (*str) // Loop until the null terminator
     {
-        if (bAutoFlushStdout) TELNET_ParseRX((u8)str[c]);
-        else r = Buffer_Push(&stdout, (u8)str[c]);
+        if (bAutoFlushStdout) TELNET_ParseRX((u8)*str);
+        else r = Buffer_Push(&StdoutBuffer, (u8)*str);
 
         // Check if stdout is full, if it is then flush it
-        if (r)
+        if (r == FALSE)
         {
             Stdout_Flush();
-            Buffer_Push(&stdout, (u8)str[c]);   // Push character again since it was previously dropped
+            Buffer_Push(&StdoutBuffer, (u8)*str);   // Push character again since it was previously dropped
         }
+
+        str++; // Move to the next character
     }
 }
 
 void Stdout_PushByte(u8 byte)
 {
-    Buffer_Push(&stdout, byte);
+    Buffer_Push(&StdoutBuffer, byte);
 }
 
 void Stdout_Flush()
 {
     u8 data = 0;
-    s32 start = TTY_GetSY();
+    s16 start = TTY_GetSY();
 
-    while (Buffer_Pop(&stdout, &data) != 0xFF)
+    while (Buffer_Pop(&StdoutBuffer, &data))
     {
         TELNET_ParseRX(data);
         MoreFunc(&start);

@@ -55,7 +55,6 @@ typedef struct s_device
 
 #define DEV_PORT ((s >> 1)+1)
 #define DEV_SLOT(device) (device.Id.Bitshift >> 1)
-#define DEV_FULL(device) DEV_PORT, DEV_SLOT(device)
 
 #define DEV_MASK_SHIFT(d) (d.Id.Bitmask << d.Id.Bitshift)                                           // Helper macro to get the shifted mask
 #define DEV_MASK_AND_SHIFT(d, b) ((b & d.Id.Bitmask) << d.Id.Bitshift)                              // Helper macro to apply the mask and shift to a value 'b'

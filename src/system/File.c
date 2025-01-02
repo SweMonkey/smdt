@@ -25,7 +25,7 @@ SM_File *F_Open(const char *filename, FileMode openmode)
 
     if (file == NULL)
     {
-        stdout_printf("No free filedescriptors available!\n");
+        printf("No free filedescriptors available!\n");
         return NULL;
     }
 
@@ -33,11 +33,11 @@ SM_File *F_Open(const char *filename, FileMode openmode)
 
     if (r)
     {
-        //stdout_printf("Error opening file \"%s\"\nError code $%lX (%ld)\n", filename, r, r);
+        //printf("Error opening file \"%s\"\nError code $%lX (%ld)\n", filename, r, r);
         return NULL;
     }
 
-    //stdout_printf("Opened file \"%s\"\n", filename);
+    //printf("Opened file \"%s\"\n", filename);
 
     return file;
 }

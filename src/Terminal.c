@@ -7,13 +7,7 @@
 #include "Cursor.h"
 #include "Screensaver.h"
 
-#ifdef EMU_BUILD
-#include "StateCtrl.h"
-extern u32 StreamPos;   // Stream replay position
-#endif
-
 #define TTY_CURSOR_X (((sv_Font?(sx << 2):(sx << 3))) + HScroll + 128)
-//#define TTY_CURSOR_X (((sv_Font?(sx << 2):(sx << 3))) + (HScroll-(BufferSelect<<4)) + 128)
 #define TTY_CURSOR_Y ((sy << 3) - VScroll + 128)
 
 // Modifiable variables
@@ -21,16 +15,16 @@ u8 vNewlineConv = 0;     // 0 = none (\n = \n) -- 1 = \n becomes \n\r
 u8 sv_TermType = 0;      // Terminal type. See TermType table further down
 u8 vDoEcho = 0;          // 0 = Do echo typed characters back to screen -- 1 = Rely on remote server to echo back typed characters
 u8 vLineMode = 0;        // Line edit mode - 1 = LMSM_EDIT
-u8 vBackspace = 1;       // 0 = DEL (0x7F) - 1 = ^H (0x8)
+u8 vBackspace = 0;       // 0 = DEL (0x7F) - 1 = ^H (0x8)
 char sv_Baud[5] = "4800";// Report this baud speed to remote servers if they ask
 
 // Font
-u8 sv_Font = FONT_4x8_8; // Font size. 0=8x8 16 colour - 1=4x8 8 colour AA - 2=4x8 monochrome AA
+u8 sv_Font = FONT_4x8_8; // Font size. 0=8x8 16 colour - 1=4x8 8 colour AA - 2=4x8 monochrome AA - 3=4x8 16 colour AA
 u8 sv_BoldFont = FALSE;  // Use bold 8x8 font
 u8 EvenOdd = 0;          // Even/Odd character being printed
 
 // TTY
-s32 sx = 0, sy = C_YSTART;              // Character x and y output position
+s16 sx = 0, sy = C_YSTART;              // Character x and y output position
 s8 sv_HSOffset = 0;                     // HScroll offset
 s16 HScroll = 0;                        // VDP horizontal scroll position
 s16 VScroll = 0;                        // VDP vertical scroll position
@@ -120,8 +114,8 @@ void TTY_Reset(u8 bClearScreen)
     VDP_setVerticalScroll(BG_A, VScroll);
     VDP_setVerticalScroll(BG_B, VScroll);
 
-    TRM_SetStatusIcon(ICO_NET_IDLE_RECV, ICO_POS_1);
-    TRM_SetStatusIcon(ICO_NET_IDLE_SEND, ICO_POS_2);
+    //TRM_SetStatusIcon(ICO_NET_IDLE_RECV, ICO_POS_1);
+    //TRM_SetStatusIcon(ICO_NET_IDLE_SEND, ICO_POS_2);
 
     if (bClearScreen)
     {
@@ -341,6 +335,13 @@ inline void TTY_PrintChar(u8 c)
 {
     u16 addr = 0;
 
+    // I really don't want this here, but its required to work around a "complex" wraparound issue
+    if (sx >= C_XMAX)
+    {
+        sx = 0;
+        TTY_MoveCursor(TTY_CURSOR_DOWN, 1);
+    }
+
     switch (sv_Font)
     {
         case FONT_8x8_16: // 8x8
@@ -395,8 +396,7 @@ inline void TTY_PrintChar(u8 c)
 
 inline void TTY_PrintString(const char *str)
 {
-    u16 i = 0;
-    while (str[i] != '\0') TTY_PrintChar(str[i++]);
+    while (*str) TTY_PrintChar(*str++);
 }
 
 inline void TTY_ClearLine(u16 y, u16 line_count)
@@ -617,7 +617,7 @@ inline void TTY_SetAttribute(u8 v)
             bInverse = FALSE;
 
             #ifdef ATT_LOGGING
-            kprintf("Text reset at $%lX", StreamPos);
+            kprintf("Text reset at $%lX", RXBytes);
             #endif
         break;
 
@@ -627,7 +627,7 @@ inline void TTY_SetAttribute(u8 v)
             bIntense = TRUE;
 
             #ifdef ATT_LOGGING
-            kprintf("Text increased intensity at $%lX", StreamPos);
+            kprintf("Text increased intensity at $%lX", RXBytes);
             #endif
         break;
 
@@ -637,7 +637,7 @@ inline void TTY_SetAttribute(u8 v)
             bIntense = FALSE;
 
             #ifdef ATT_LOGGING
-            kprintf("Text decreased intensity at $%lX", StreamPos);
+            kprintf("Text decreased intensity at $%lX", RXBytes);
             #endif
         break;
 
@@ -645,7 +645,7 @@ inline void TTY_SetAttribute(u8 v)
             bInverse = TRUE;
 
             #ifdef ATT_LOGGING
-            kprintf("Text inverse on at $%lX", StreamPos);
+            kprintf("Text inverse on at $%lX", RXBytes);
             #endif
         break;
 
@@ -655,7 +655,7 @@ inline void TTY_SetAttribute(u8 v)
             bIntense = FALSE;
 
             #ifdef ATT_LOGGING
-            kprintf("Text Normal intensity at $%lX", StreamPos);
+            kprintf("Text Normal intensity at $%lX", RXBytes);
             #endif
         break;
 
@@ -663,13 +663,13 @@ inline void TTY_SetAttribute(u8 v)
             bInverse = FALSE;
 
             #ifdef ATT_LOGGING
-            kprintf("Text inverse off at $%lX", StreamPos);
+            kprintf("Text inverse off at $%lX", RXBytes);
             #endif
         break;
 
         case 38:    // Set foreground color
             #ifdef ATT_LOGGING
-            kprintf("Text set foreground color at $%lX", StreamPos);
+            kprintf("Text set foreground color at $%lX", RXBytes);
             #endif
         break;
 
@@ -677,7 +677,7 @@ inline void TTY_SetAttribute(u8 v)
             ColorFG = CL_FG;
 
             #ifdef ATT_LOGGING
-            kprintf("Text FG color reset at $%lX", StreamPos);
+            kprintf("Text FG color reset at $%lX", RXBytes);
             #endif
         break;
 
@@ -685,7 +685,7 @@ inline void TTY_SetAttribute(u8 v)
             ColorBG = CL_BG;
 
             #ifdef ATT_LOGGING
-            kprintf("Text BG color reset at $%lX", StreamPos);
+            kprintf("Text BG color reset at $%lX", RXBytes);
             #endif
         break;
 
@@ -694,7 +694,7 @@ inline void TTY_SetAttribute(u8 v)
     }
 }
 
-inline void TTY_SetSX(s32 x)
+inline void TTY_SetSX(s16 x)
 {
     sx = x<0?0:x;               // sx less than 0? set to 0
     sx = sx>C_XMAX?C_XMAX:sx;   // sx greater than max_x? set to max_x
@@ -702,29 +702,29 @@ inline void TTY_SetSX(s32 x)
     EvenOdd = !(sx & 1);
 }
 
-inline s32 TTY_GetSX()
+inline s16 TTY_GetSX()
 {
     return sx;
 }
 
-inline void TTY_SetSY_A(s32 y)
+inline void TTY_SetSY_A(s16 y)
 {
     sy = y<0?0:y;               // sy less than 0? set to 0
     sy = sy>C_YMAX?C_YMAX:sy;   // sy greater than max_y? set to max_y
     sy += ((VScroll >> 3) + C_YSTART);
 }
 
-inline s32 TTY_GetSY_A()
+inline s16 TTY_GetSY_A()
 {
     return sy - ((VScroll >> 3) + C_YSTART);
 }
 
-inline void TTY_SetSY(s32 y)
+inline void TTY_SetSY(s16 y)
 {
     sy = y<0?0:y;
 }
 
-inline s32 TTY_GetSY()
+inline s16 TTY_GetSY()
 {
     return sy;
 }
@@ -737,7 +737,7 @@ inline void TTY_MoveCursor(u8 dir, u8 num)
     {
         case TTY_CURSOR_RIGHT:
         {
-            if (sx+num >= C_XMAX)
+            if (sx+num > C_XMAX)    // >=
             {
                 if (sv_bWrapAround) 
                 {
@@ -850,4 +850,34 @@ inline void TTY_MoveCursor(u8 dir, u8 num)
             SetSprite_X(SPRITE_ID_CURSOR, sprx);
         break;
     }
+}
+
+void TTY_DrawScrollback(u8 num)
+{
+    const  u8 n       = num-1;                                 // Number of lines to scroll up
+    const u16 Top     = DMarginTop + n;                        // Top row which source address will be based on
+    const u16 VScrOff = (VScroll >> 3) * 256;                  // VDP VScroll offset
+    const u16 Rows    = (DMarginBottom - Top);                 // Number of rows to copy
+    const u16 Src     = (VScrOff + (Top*256) + 256)  % 0x2000; // Source address for start of DMA copy
+    const u16 Dst     = (VScrOff + (DMarginTop*256)) % 0x2000; // Destination address for DMA copy
+
+    #if ESC_LOGGING == 2
+    kprintf("Scrollback Normal");
+    kprintf("VScrOff = $%X", VScrOff);
+    kprintf("n       = %u ", n);
+    kprintf("Rows    = %u ", Rows);
+    kprintf("Src     = $%X", Src);
+    kprintf("Dst     = $%X", Dst);
+    #endif
+
+    DMA_doVRamCopy(AVR_PLANE_A + Src, AVR_PLANE_A + Dst, Rows*256, 1);
+    DMA_waitCompletion();
+    DMA_doVRamCopy(AVR_PLANE_B + Src, AVR_PLANE_B + Dst, Rows*256, 1);
+    DMA_waitCompletion();
+
+    TTY_ClearLine(DMarginBottom-n, n+1);
+}
+
+void TTY_DrawScrollback_RI(u8 num)
+{
 }

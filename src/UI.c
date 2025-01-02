@@ -49,24 +49,70 @@ void UI_ApplyTheme()
     switch (sv_ThemeUI)
     {
         case 0: // Dark blue
+            PAL_setColor( 3, 0x444);    // Window title background
+            PAL_setColor( 5, 0x222);    // Icon background
+
+            PAL_setColor(19, 0x222);    // Window inner BG
+            PAL_setColor(20, 0x444);    // Window title BG
+
             PAL_setColor(21, 0xA40);    // Window shadow
             PAL_setColor(22, 0xE80);    // Window border
             PAL_setColor(49, 0xE80);    // Cursor outline
         break;
         case 1: // Dark lime
+            PAL_setColor( 3, 0x444);    // Window title background
+            PAL_setColor( 5, 0x222);    // Icon background
+            
+            PAL_setColor(19, 0x222);    // Window inner BG
+            PAL_setColor(20, 0x444);    // Window title BG
+
             PAL_setColor(21, 0x0A4);    // Window shadow
             PAL_setColor(22, 0x0E8);    // Window border
             PAL_setColor(49, 0x0E8);    // Cursor outline
         break;
         case 2: // Dark amber
+            PAL_setColor( 3, 0x444);    // Window title background
+            PAL_setColor( 5, 0x222);    // Icon background
+            
+            PAL_setColor(19, 0x222);    // Window inner BG
+            PAL_setColor(20, 0x444);    // Window title BG
+
             PAL_setColor(21, 0x04A);    // Window shadow
             PAL_setColor(22, 0x08E);    // Window border
             PAL_setColor(49, 0x08E);    // Cursor outline
         break;
         case 3: // High contrast
+            PAL_setColor( 3, 0x444);    // Window title background
+            PAL_setColor( 5, 0x222);    // Icon background
+            
+            PAL_setColor(19, 0x222);    // Window inner BG
+            PAL_setColor(20, 0x444);    // Window title BG
+
             PAL_setColor(21, 0x000);    // Window shadow
             PAL_setColor(22, 0xEEE);    // Window border
             PAL_setColor(49, 0xEEE);    // Cursor outline
+        break;
+        case 4: // Aqua
+            PAL_setColor( 3, RGB24_TO_VDPCOLOR(0x406060));    // Window title background
+            PAL_setColor( 5, RGB24_TO_VDPCOLOR(0x204040));    // Icon background
+
+            PAL_setColor(19, RGB24_TO_VDPCOLOR(0x204040));    // Window inner BG
+            PAL_setColor(20, RGB24_TO_VDPCOLOR(0x406060));    // Window title BG
+
+            PAL_setColor(21, RGB24_TO_VDPCOLOR(0x008080));    // Window shadow
+            PAL_setColor(22, RGB24_TO_VDPCOLOR(0x00C0C0));    // Window border
+            PAL_setColor(49, RGB24_TO_VDPCOLOR(0x008080));    // Cursor outline
+        break;
+        case 5: // Hot pink
+            PAL_setColor( 3, RGB24_TO_VDPCOLOR(0x604060));    // Window title background
+            PAL_setColor( 5, RGB24_TO_VDPCOLOR(0x402040));    // Icon background
+
+            PAL_setColor(19, RGB24_TO_VDPCOLOR(0x402040));    // Window inner BG
+            PAL_setColor(20, RGB24_TO_VDPCOLOR(0x604060));    // Window title BG
+
+            PAL_setColor(21, RGB24_TO_VDPCOLOR(0x800080));    // Window shadow
+            PAL_setColor(22, RGB24_TO_VDPCOLOR(0xC000C0));    // Window border
+            PAL_setColor(49, RGB24_TO_VDPCOLOR(0xC000C0));    // Cursor outline
         break;
     
         default:
