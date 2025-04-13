@@ -104,7 +104,7 @@ bool FS_EraseSRAM()
     // Erase SRAM if present
     if ((u32)((r1 << 24) | (r2 << 16) | (r3 << 8) | (r4)) == 0xDEADBEEF)
     {
-        printf(" └[92mSRAM detected[0m\n");
+        printf("  └[92mSRAM detected[0m\n");
         //printf(" └%u KB SRAM detected\n", (SSize+1)/1024);
         //cfg.block_count = (SSize+1) / cfg.block_size; // Set lfs filesystem size to SRAM size
 
@@ -117,7 +117,7 @@ bool FS_EraseSRAM()
         return TRUE;
     }
     
-    printf(" └[91mNo SRAM detected!\n[0m");
+    printf("  └[91mNo SRAM detected!\n[0m");
     SRAM_disable();
     return FALSE;
 }
@@ -131,7 +131,7 @@ void FS_Init()
     // This should only happen on the first boot
     if (InitFail) 
     {
-        Stdout_Push("└[91mFilesystem error! Reformatting...[0m\n");
+        Stdout_Push(" └[91mFilesystem error! Reformatting...[0m\n");
         if (FS_EraseSRAM())
         {
             lfs_format(&lfs, &cfg);
@@ -149,11 +149,11 @@ void FS_Init()
             FS_OpenFile("/system/stdin.io", LFS_O_CREAT, &f);
             FS_Close(&f);*/
 
-            rxbuf = F_Open("/system/rxbuffer.io", LFS_O_CREAT | LFS_O_TRUNC | LFS_O_RDONLY);
-            txbuf = F_Open("/system/txbuffer.io", LFS_O_CREAT | LFS_O_TRUNC | LFS_O_WRONLY);
-            stdout = F_Open("/system/stdout.io",  LFS_O_CREAT | LFS_O_TRUNC | LFS_O_RDWR);    // LFS_O_WRONLY
-            stdin = F_Open("/system/stdin.io",    LFS_O_CREAT | LFS_O_RDONLY);
-            stderr = F_Open("/system/stderr.io",  LFS_O_CREAT | LFS_O_TRUNC | LFS_O_RDWR);
+            rxbuf = F_Open("/system/rxbuffer.io", LFS_O_CREAT | LFS_O_TRUNC  | LFS_O_RDONLY | LFS_O_IO);
+            txbuf = F_Open("/system/txbuffer.io", LFS_O_CREAT | LFS_O_TRUNC  | LFS_O_WRONLY | LFS_O_IO);
+            stdout = F_Open("/system/stdout.io",  LFS_O_CREAT | LFS_O_TRUNC  | LFS_O_RDWR   | LFS_O_IO);    // LFS_O_WRONLY
+            stdin = F_Open("/system/stdin.io",    LFS_O_CREAT | LFS_O_RDONLY | LFS_O_IO);
+            stderr = F_Open("/system/stderr.io",  LFS_O_CREAT | LFS_O_TRUNC  | LFS_O_RDWR   | LFS_O_IO);
         }
     }
 

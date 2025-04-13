@@ -35,17 +35,17 @@ void Input_Init()
     KB_Init();
 }
 
-bool is_KeyDown(u16 key)
+inline bool is_KeyDown(u16 key)
 {
-    return (KeyMap[key & KM_SZ] == KEYSTATE_DOWN)?TRUE:FALSE;
+    return KeyMap[key & KM_SZ] == KEYSTATE_DOWN;
 }
 
-bool is_KeyUp(u16 key)
+inline bool is_KeyUp(u16 key)
 {
-    return (KeyMap[key & KM_SZ] == KEYSTATE_UP)?TRUE:FALSE;
+    return KeyMap[key & KM_SZ] == KEYSTATE_UP;
 }
 
-bool is_AnyKey()
+inline bool is_AnyKey()
 {
     for (u16 i = 0; i < KM_SZ; i++)
     {
@@ -60,14 +60,14 @@ u16 get_KeyPress(u8 KeyState)
     return 0;//KeyMap[KeyState & KM_SZ];
 }
 
-void set_KeyPress(u16 key, u8 KeyState)
+inline void set_KeyPress(u16 key, u8 KeyState)
 {
     KeyMap[key & KM_SZ] = KeyState;
 
     InactiveCounter = -1;
 }
 
-void InputTick()
+inline void InputTick()
 {
     QMenu_Input();
     HexView_Input();

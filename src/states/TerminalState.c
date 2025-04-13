@@ -15,7 +15,7 @@
 #define INPUT_SIZE 128
 #define INPUT_SIZE_ARGV 64
 
-u8 sv_TerminalFont = FONT_8x8_16;//FONT_4x8_8;//
+u8 sv_TerminalFont = FONT_4x8_16;
 static char TimeString[9];
 static s32 LastTime = 666;
 static bool bRunCMD = FALSE;
@@ -133,15 +133,14 @@ u8 DoBackspace()
 
 void SetupTerminal()
 {
-    TELNET_Init();
+    TTY_SetFontSize(sv_TerminalFont);
+    TELNET_Init(TF_Everything);
 
     // Variable overrides
     vDoEcho = 0;
     vLineMode = LMSM_EDIT;
     vNewlineConv = 1;
     sv_bWrapAround = TRUE;
-
-    TTY_SetFontSize(sv_TerminalFont);
 
     //DoTimeSync(sv_TimeServer);
 
@@ -150,7 +149,7 @@ void SetupTerminal()
     MEM_pack();
 }
 
-void Enter_Terminal(u8 argc, char *argv[])
+u16 Enter_Terminal(u8 argc, char *argv[])
 {
     SetupTerminal();
     Stdout_Push("SMDT Command Interpreter v0.2\n");
@@ -158,6 +157,10 @@ void Enter_Terminal(u8 argc, char *argv[])
     Stdout_Push("Press [32mF8[0m for quick menu\n\n");
 
     printf("%s> ", FS_GetCWD());
+
+    Stdout_Flush();
+
+    return EXIT_SUCCESS;
 }
 
 void ReEnter_Terminal()
@@ -165,21 +168,17 @@ void ReEnter_Terminal()
     SetupTerminal();
     Stdout_Flush();
 
-    // Fixme: Upon returning from an error in the IRC client neither the IRC or terminal can reset tilemap size back to 128x32 ??
-
-    if (Buffer_IsEmpty(&StdoutBuffer))
-    {
-        printf("%s> ", FS_GetCWD());
-    }
+    printf("%s> ", FS_GetCWD());
 }
 
 void Exit_Terminal()
 {
+    Telnet_Quit();
 }
 
 void Reset_Terminal()
 {
-    TTY_Reset(TRUE);
+    TTY_Init(TF_ClearScreen);
 }
 
 void Run_Terminal()
@@ -198,76 +197,78 @@ void Run_Terminal()
 
 void Input_Terminal()
 {
-    if (!bWindowActive)
+    if (bWindowActive) return;
+
+    if (is_KeyDown(KEY_UP))
     {
-        if (is_KeyDown(KEY_UP))
-        {
-            if (strlen(LastCommand[LCPos]) > 0)
-            {
-                while (DoBackspace());
-
-                Stdout_Push(LastCommand[LCPos]);
-
-                for (u16 i = 0; i < strlen(LastCommand[LCPos]); i++) Buffer_Push(&TxBuffer, LastCommand[LCPos][i]);
-            }
-
-            if ((LCPos == 0) && (strlen(LastCommand[1]) > 0)) LCPos = 1;
-        }
-
-        if (is_KeyDown(KEY_DOWN))
+        if (strlen(LastCommand[LCPos]) > 0)
         {
             while (DoBackspace());
 
-            if (LCPos == 1) 
+            Stdout_Push(LastCommand[LCPos]);
+
+            for (u16 i = 0; i < strlen(LastCommand[LCPos]); i++) Buffer_Push(&TxBuffer, LastCommand[LCPos][i]);
+        }
+
+        if ((LCPos == 0) && (strlen(LastCommand[1]) > 0)) LCPos = 1;
+    }
+
+    if (is_KeyDown(KEY_DOWN))
+    {
+        while (DoBackspace());
+
+        if (LCPos == 1) 
+        {
+            LCPos = 0;
+
+            Stdout_Push(LastCommand[LCPos]);
+
+            for (u16 i = 0; i < strlen(LastCommand[LCPos]); i++) Buffer_Push(&TxBuffer, LastCommand[LCPos][i]);
+        }
+    }
+
+    if (is_KeyDown(KEY_DELETE))
+    {
+    }
+
+    // Temp - cant type ^[ in emulator
+    /*if (is_KeyDown(KEY_END))
+    {
+        TTY_PrintChar(0x1B);
+        NET_SendChar(0x1B, 0);
+    }*/
+
+    if (is_KeyDown(KEY_RETURN) || is_KeyDown(KEY_KP_RETURN))
+    {
+        Stdout_Push("\n\r");
+
+        if (ParseInputString())
+        {
+            Stdout_Flush();     // Flush stdout before printing the newline below, otherwise it might get caught up in the "More" prompt
+            
+            if (isCurrentState(PS_Terminal) && StateHasChanged() == FALSE) 
             {
-                LCPos = 0;
-
-                Stdout_Push(LastCommand[LCPos]);
-
-                for (u16 i = 0; i < strlen(LastCommand[LCPos]); i++) Buffer_Push(&TxBuffer, LastCommand[LCPos][i]);
+                Stdout_Push("\n\r");
             }
         }
 
-        if (is_KeyDown(KEY_DELETE))
+        if (isCurrentState(PS_Terminal) && StateHasChanged() == FALSE)
         {
+            printf("%s> ", FS_GetCWD());
         }
+    }
 
-        // Temp - cant type ^[ in emulator
-        /*if (is_KeyDown(KEY_END))
-        {
-            TTY_PrintChar(0x1B);
-            NET_SendChar(0x1B, 0);
-        }*/
+    if (is_KeyDown(KEY_BACKSPACE))
+    {
+        DoBackspace();
+    }
 
-        if (is_KeyDown(KEY_RETURN))
-        {
-            Stdout_Push("\n");
-
-            if (ParseInputString())
-            {
-                Stdout_Flush();     // Flush stdout before printing the newline below, otherwise it might get caught up in the "More" prompt
-                
-                if (isCurrentState(PS_Terminal)) Stdout_Push("\n");
-            }
-
-            if (isCurrentState(PS_Terminal))
-            {
-                printf("%s> ", FS_GetCWD());
-            }
-        }
-
-        if (is_KeyDown(KEY_BACKSPACE))
-        {
-            DoBackspace();
-        }
-
-        // ^C special case
-        if (is_KeyDown(KEY_C) && bKB_Ctrl)
-        {
-            Stdout_Flush();
-            printf("\n%s> ", FS_GetCWD());
-            Buffer_Flush0(&TxBuffer);
-        }
+    // ^C special case
+    if (is_KeyDown(KEY_C) && bKB_Ctrl)
+    {
+        Stdout_Flush();
+        printf("\n%s> ", FS_GetCWD());
+        Buffer_Flush0(&TxBuffer);
     }
 }
 

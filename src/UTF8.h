@@ -3,7 +3,7 @@
 
 #include <genesis.h>
 
-extern u8 bUTF8;
+extern u8 UTF_Bytes;
 
 void UTF8_Init();
 void DoUTF8(u8 byte);

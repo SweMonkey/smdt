@@ -64,7 +64,7 @@ enum Elf_Ident
 
 enum Elf_Type
 {
-    ET_NONE = 0,    // Unkown Type
+    ET_NONE = 0,    // Unknown Type
     ET_REL  = 1,    // Relocatable File
     ET_EXEC = 2     // Executable File
 };
@@ -178,17 +178,9 @@ void *ELF_LoadProc(const char *fn)
     // this might not always be TRUE...
     //u32 top = hdr.e_entry;
 
-    for (u8 p = 0; p < 1; p++)//hdr.e_phnum; p++)
+    /*kprintf("e_phnum: $%lX", hdr.e_phnum);
+    for (u8 p = 0; p < hdr.e_phnum; p++)
     {
-        /*printf("type: $%lX\n", phdr[p].p_type);
-        printf("offset: $%lX\n", phdr[p].p_offset);
-        printf("vaddr: $%lX\n", phdr[p].p_vaddr);
-        printf("paddr: $%lX\n", phdr[p].p_paddr);
-        printf("filesz: $%lX\n", phdr[p].p_filesz);
-        printf("memsz: $%lX\n", phdr[p].p_memsz);
-        printf("flags: $%lX\n", phdr[p].p_flags);
-        printf("align: $%lX\n", phdr[p].p_align);
-
         kprintf("type: $%lX", phdr[p].p_type);
         kprintf("offset: $%lX", phdr[p].p_offset);
         kprintf("vaddr: $%lX", phdr[p].p_vaddr);
@@ -196,35 +188,57 @@ void *ELF_LoadProc(const char *fn)
         kprintf("filesz: $%lX", phdr[p].p_filesz);
         kprintf("memsz: $%lX", phdr[p].p_memsz);
         kprintf("flags: $%lX", phdr[p].p_flags);
-        kprintf("align: $%lX", phdr[p].p_align);*/
+        kprintf("align: $%lX", phdr[p].p_align);
 
+        kprintf("e_entry: $%lX", hdr.e_entry);
+    }*/
+
+    //proc_space = MEM_allocAt(hdr.e_entry, phdr[p].p_memsz);   // ! -2
+    //ram_space  = MEM_allocAt(0xFFD600, 0x2000);
+    proc_space = (void*)0xFF9600;
+    ram_space  = (void*)0xFFD600;
+
+    kprintf("proc_space was allocated at %p", proc_space);
+
+    if (proc_space == NULL)
+    {
+        kprintf("Failed to allocate proc_space");
+        printf("Failed to allocate proc_space\n");
+    }
+
+    if (ram_space == NULL)
+    {
+        kprintf("Failed to allocate ram_space");
+        printf("Failed to allocate ram_space\n");
+    }
+
+    memset(proc_space, 0, 0x4000);
+    memset(ram_space, 0, 0x2000);
+
+    for (u8 p = 0; p < hdr.e_phnum; p++)//1; p++)//
+    {
         if (phdr[p].p_type != 1) continue;  // Not a loadable segment
+
+        kprintf("Loading segment %u ...", p);
+
+        /*kprintf("type: $%lX", phdr[p].p_type);
+        kprintf("offset: $%lX", phdr[p].p_offset);
+        kprintf("vaddr: $%lX", phdr[p].p_vaddr);
+        kprintf("paddr: $%lX", phdr[p].p_paddr);
+        kprintf("filesz: $%lX", phdr[p].p_filesz);
+        kprintf("memsz: $%lX", phdr[p].p_memsz);
+        kprintf("flags: $%lX", phdr[p].p_flags);
+        kprintf("align: $%lX", phdr[p].p_align);
+        kprintf("e_entry: $%lX", hdr.e_entry);*/
 
         if (p > 0) printf("Warning: more than one loadable segment. TODO: investigate\n");
 
-        proc_space = MEM_allocAt(hdr.e_entry, phdr[p].p_memsz);
-        ram_space  = MEM_allocAt(0xFF8000, 0x2000);
-
-        if (proc_space == NULL)
-        {
-            kprintf("Failed to allocate proc_space");
-            printf("Failed to allocate proc_space\n");
-        }
-
-        if (ram_space == NULL)
-        {
-            kprintf("Failed to allocate ram_space");
-            printf("Failed to allocate ram_space\n");
-        }
-
-        memset(proc_space, 0, phdr[p].p_memsz);
-        memset(ram_space, 0, 0x2000);
-
-        F_Seek(file, phdr[p].p_vaddr, SEEK_SET);
-        F_Read(proc_space, phdr[p].p_memsz, 1, file);
+        F_Seek(file, phdr[p].p_offset, SEEK_SET);
+        u16 r = F_Read((void*)phdr[p].p_paddr, phdr[p].p_memsz, 1, file);
+        kprintf("Read %u bytes into memory at $%lX", r, (u32)phdr[p].p_paddr);
     }
 
-    //kprintf("e_entry: $%lX - p_vaddr: $%lX - p_memsz: $%lX", hdr.e_entry, phdr[0].p_vaddr, phdr[0].p_memsz);
+    kprintf("e_entry: $%lX - p_vaddr: $%lX - p_memsz: $%lX", hdr.e_entry, phdr[0].p_vaddr, phdr[0].p_memsz);
 
     F_Close(file);
 

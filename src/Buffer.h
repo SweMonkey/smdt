@@ -3,13 +3,13 @@
 
 #include <genesis.h>
 
-#define BUFFER_LEN 1024
+#define BUFFER_LEN 1024     // Using buffer sizes below 2320 may cause the 'more' function to fail due to excessive flushing
 
-typedef struct s_buffer
+typedef struct
 {
-    u8 data[BUFFER_LEN];
     u16 head;
     u16 tail;
+    u8 data[BUFFER_LEN];
 } Buffer;
 
 bool Buffer_IsFull(Buffer *b);

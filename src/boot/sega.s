@@ -1,5 +1,3 @@
-#include "task_cst.h"
-
 .section .text.keepboot
 
 *-------------------------------------------------------
@@ -42,8 +40,10 @@ _Vectors_68K:
         dc.l    _INT
         dc.l    _VINT
         dc.l    _INT
-        dc.l    _trap_2 /*_trap_0*/
-        dc.l    _INT,_trap_2,_INT,_INT,_INT,_INT,_INT
+        dc.l    _trap_0
+        dc.l    _trap_1
+        dc.l    _trap_2
+        dc.l    _INT,_INT,_INT,_INT,_INT
         dc.l    _INT,_INT,_INT,_INT,_INT,_INT,_INT,_INT
         dc.l    _INT,_INT,_INT,_INT,_INT,_INT,_INT,_INT
         dc.l    _INT,_INT,_INT,_INT,_INT,_INT,_INT,_INT
@@ -76,8 +76,9 @@ WrongVersion:
         move.w  (%a4),%d0
 
 * Configure a USER_STACK_LENGTH bytes user stack at bottom, and system stack on top of it
+        move.l  #0xFFF600, %ssp
         move    %sp, %usp
-        /*sub     #USER_STACK_LENGTH, %sp*/
+        move.l  #0x1000000, %ssp
 
         move.w  %d7,(%a1)
         move.w  %d7,(%a2)
@@ -244,10 +245,19 @@ _VINT:
         movem.l (%sp)+,%d0-%d1/%a0-%a1
         rte
 
-_trap_2:
-        movem.l %d0-%d1/%a0-%a1,-(%sp)
+_trap_0:
+        movem.l %d0-%d6/%a0-%a6,-(%sp)
         jsr syscall
-        movem.l (%sp)+,%d0-%d1/%a0-%a1
+        movem.l (%sp)+,%d0-%d6/%a0-%a6
+        rte
+
+_trap_1:
+        jmp _start_entry
+
+_trap_2:
+        movem.l %d0-%d6/%a0-%a1,-(%sp)
+        jsr syscall
+        movem.l (%sp)+,%d0-%d6/%a0-%a1
         rte
 
 *------------------------------------------------

@@ -61,10 +61,10 @@ void Gopher_PrintString(const char *str);   // Print string to screen
 void Gopher_PrintChar(u8 c);                // Print character to screen
 
 
-void Enter_Gopher(u8 argc, char *argv[])
+u16 Enter_Gopher(u8 argc, char *argv[])
 {
     sv_Font = FONT_4x8_8;
-    TTY_Init(TRUE);
+    TTY_Init(TF_Everything);
 
     // Allocate LineBuf buffer
     LineBuf = malloc(B_LINEBUF_LEN);
@@ -75,8 +75,7 @@ void Enter_Gopher(u8 argc, char *argv[])
         #endif
 
         Stdout_Push("[91mGopher Client: Failed to allocate memory\n for LineBuf![0m\n");
-        RevertState();
-        return;
+        return EXIT_FAILURE;
     }
     //memset(LineBuf, 0, B_LINEBUF_LEN);
 
@@ -90,8 +89,7 @@ void Enter_Gopher(u8 argc, char *argv[])
 
         Stdout_Push("[91mGopher Client: Failed to allocate memory for PageBuffer![0m\n");
         printf("[91mFree: %u - LFree: %u - Needed: %u[0m\n", MEM_getFree(), MEM_getLargestFreeBlock(), B_PAGEBUF_LEN);
-        RevertState();
-        return;
+        return EXIT_FAILURE;
     }
     //memset(PageBuffer, 0, B_PAGEBUF_LEN);
 
@@ -104,8 +102,7 @@ void Enter_Gopher(u8 argc, char *argv[])
         #endif
 
         Stdout_Push("[91mGopher Client: Failed to allocate memory\n for LFPos![0m\n");
-        RevertState();
-        return;
+        return EXIT_FAILURE;
     }
     //memset(LFPos, 0, B_PAGEROWS*2);
     //LFPos[LFCount++] = 0;   // First entry should point to the start of the PageBuffer
@@ -128,11 +125,13 @@ void Enter_Gopher(u8 argc, char *argv[])
     bDoCursorBlink = FALSE;
     sv_bWrapAround = FALSE;
     C_XMAX = 127;//(sv_Font ? 254 : 126);
-    ScrHeight = bPALSystem ? 29 : 27;
+    ScrHeight = C_SYSTEM_YMAX;
 
     Gopher_Init();
     Gopher_GetAddressFromStr(argv[1]);
     Gopher_GetPage();
+
+    return EXIT_SUCCESS;
 }
 
 void ReEnter_Gopher()
@@ -242,7 +241,7 @@ void Input_Gopher()
                 PointerY++;
             }
 
-            if (PointerY_A < (bPALSystem?28:26)) // < 26
+            if (PointerY_A < (C_SYSTEM_YMAX - 1)) // < 26
             {
                 PointerY_A++;
                 SetSprite_Y(SPRITE_ID_POINTER, (PointerY_A*8)+142);
@@ -374,7 +373,7 @@ void Gopher_GetPage()
     NET_Connect(addr);
     //if (NET_Connect(addr))
     {
-        snprintf(TitleBuf, 29, "%s %-21s", STATUS_TEXT_SHORT, gserv);
+        snprintf(TitleBuf, 29, "%s %-21s", STATUS_TEXT_SHORT, gserv);   // %-27s ?
         TRM_SetStatusText(TitleBuf);
         NET_SendString(link);
     }    

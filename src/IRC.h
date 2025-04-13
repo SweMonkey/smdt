@@ -22,9 +22,10 @@ extern u16 PG_UserNum;
 extern u8 bPG_UpdateUserlist;
 extern bool bPG_HasNewMessages[];
 extern bool bPG_UpdateMessage;
+extern u8 NameOffset;
 
-void IRC_Init();
-void IRC_Reset();
+u16 IRC_Init();
+u16 IRC_Reset();
 void IRC_Exit();
 
 void PrintTextLine(const u8 *str);    // Text input at bottom of screen

@@ -1,4 +1,39 @@
-v0.31.4
+v0.32.0:
+Telnet/Term: Added tabstops (forward and backward) and all related escape codes.
+Telnet/Term: Rejigged how IAC/ESCAPE/UTF8/Data codes are handled in TELNET_ParseRX().
+Telnet/Term: A boatload of fixes and additions to the escape parser, still far from perfect but running esctest; <https://github.com/ThomasDickey/esctest2> is starting to show some good results...
+Telnet/Term: A boatload of new escape codes added, many of which are still not quite perfect and a few fixes to common escape codes
+Telnet/Term: Once again I have shortened the titlebar prefix to only "SMDT".
+Telnet/Term: Fixed telnet IAC NAWS subnegotiation, turns out I sent `IAC SB ...` instead of `IAC SB NAWS ...`. This has been broken ever since IAC support was added, whoops!
+Telnet/Term: Font change now takes which of the buffer is used into account (main or alternate), previously it would always change the screen to the main buffer even if the terminal was using the alternate buffer.
+Telnet/Term: Terminal should no longer be blank after a soft reboot.
+Telnet/Term: Character set is now selectable between CP437 and UTF-8; QuickMenu ->  Settings -> Client settings -> Terminal -> Character set.
+IRC: Nick colour can now be changed when using 4x8 font; QuickMenu -> Settings -> Colours -> 4x8 Mono colour.
+IRC: The nick list now caps at the max number of nicks it can show, previously you could scroll down beyond what it could show (this is a memory limitation).
+IRC: Fixed an issue where the NAMES list parsing could cause the MD to lock up by writing beyond allocated memory. (Number of nicks on a channel being more than SMDT can handle).
+IRC: Some fixes to word wrapping.
+IRC: Multi line messages are now indented following previous lines.
+UTF-8: Rewrote the UTF-8 parser and handling; It can now interpret all codepages and if not found it will print an ? to the screen instead of garbage bytes. 
+       Previously it was very hardcoded to only handle $Ex xx yy UTF-8 codes.
+UTF-8: The fact that the UTF-8 parser can now distinguish what is and isn't UTF-8 bytes means that it won't swallow up bytes that may be a part of some other code like an escape sequence.
+Network: Split and rewrote NET_SendChar/NET_TransmitBuffer/NET_BufferChar functions to be a bit ... leaner(?). 
+         Data that needs to be sent directly does not have to wade through a bunch of buffer code anymore. 
+         NET_TransmitBuffer() now calls NET_SendChar() instead of sending data on its own.
+Misc: Miscellaneous keyboard code cleanups.
+Misc: RxBytes and TxBytes are no longer reset upon state changes in release builds.
+Misc: Debug logging changes / more gatekeeping.
+Misc: Added the DebugStreamer back, although as a seperate function. This is used to play back logged streams and debug them.
+Misc: HexView will now stop printing lines if the opened file is less than 192 bytes in size and only print the amount of data that is actually in the file.
+Misc: The telnet `-tty` option has been removed, it is no longer necessary.
+Misc: Added some numpad keys to scancode table.
+
+Known bugs:
+Spurious keyboard in certain terminal applications / telnet servers - Can easily be reproduced in blastEm while running dwarf fortress, meanwhile I have yet to be able to reproduce this glitch on real hardware.
+Sticky shift key - Sometimes the shift key gets "stuck", fixed by pressing shift again.
+Slider in scrollbars - their position may go beyond the edge due to rounding errors.
+Gopher client is broken atm. It assumes some things of the terminal which is no longer true, which causes quite a few rendering errors. Not sure if I'm going to keep the gopher client or remove it from SMDT...
+
+v0.31.4:
 IRC: Added NICK and PART to the internal command parser that parses messages received from the server.  (Sending NICK/PART from client to server is already supported)
 IRC: Reverted the upload icon colour back to default, changing it from red to orange serves no purpose anymore.
 Drivers: Added timeout to pinging in xport driver, apparently there wasn't one already...
@@ -37,16 +72,16 @@ TimeToStr_Full() in IRC client does not take your timezone into account? (Comman
 4x8 colouring in IRC can only colour even number of characters, uneven number will result in the final character being uncoloured.
 
 
-v0.31.3 Minor bugfix
+v0.31.3 Minor bugfix:
 IRC mono colour antialiasing colour is now updated to reflect the new amber text colour.
 Interrupts were disabled to early on StateExit() which made the XPN drivers unable to actually communicate during Disconnect(). This caused excessive delays when trying to disconnect from servers.
 Added timeouts when doing date synchronization, in case the time server is not responding.
 Changed Backspace default from DEL to ^H . As before, this can be changed manually in the quick menu.
 
-v0.31.2 Minor bugfix
+v0.31.2 Minor bugfix:
 IRC TM buffers were not setup correctly on creation, leading to the first line getting coloured.
 
-v0.31.1 Bugfixes & IRC QoL additions
+v0.31.1 Bugfixes & IRC QoL additions:
 Hexview no longer fails to start when trying to open an empty file.
 Rx statistics enabled again in terminal/telnet client, it would previously not record received bytes.
 Automatic more/less enabled again. What does this do? well it makes sure that only a screens worth of text can be printed at once, after which is will stop printing text until you press a key.

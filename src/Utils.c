@@ -247,18 +247,102 @@ char *strtok(char *s, char d)
     return result;
 }
 
+struct iovec
+{
+    void  *iov_base;    // Starting address
+    size_t iov_len;     // Number of bytes to transfer
+};
 #define SYSCALL_RET(x) {n=x;return 0;}
-u32 syscall(register vu32 n, register vu32 a, register vu32 b, register vu32 c, register vu32 d, register vu32 e, register vu32 f)
+u32 syscall(vu32 n, vu32 a, vu32 b, vu32 c, vu32 d, vu32 e, vu32 f)
 {
     kprintf("syscall\nn = $%lX\na = $%lX\nb = $%lX\nc = $%lX\nd = $%lX\ne = $%lX\nf = $%lX", n, a, b, c, d, e, f);
 
-    Stdout_Push("Got caught in a trap! halting system!\n");
+    switch (n)
+    {
+        case 333:     // preadv
+        {
+            // (a)unsigned long fd, (b)const struct iovec *vec, (c)unsigned long vlen, (d)unsigned long pos_l, (e)unsigned long pos_h
+            printf("syscall <NI> preadv\n");
+            /*printf("a: %u\n", a);
+            printf("b: $%X\n", b);
+            printf("c: %u\n", c);
+            printf("d: %u\n", d);
+            printf("e: %u\n", e);
+            printf("f: %u\n", f);
+
+            struct iovec *v = (struct iovec*)b;
+            struct iovec *v2 = (struct iovec*)b+1;
+
+            printf("len v: %lu\n", v->iov_len);
+            printf("base v: $%X\n", v->iov_base);
+            printf("len v2: %lu\n", v2->iov_len);
+            printf("base v2: $%X\n", v2->iov_base);*/
+
+            u32 read = 0;
+            //read += hdd_fread2(v->iov_base, v->iov_len, 1, a);
+            //read += hdd_fread2(v2->iov_base, v2->iov_len, 1, a);
+
+            Stdout_Flush();
+            while (1);            
+
+            SYSCALL_RET(read);
+        }
+
+        case 334:   // pwritev
+        {
+            switch (a)
+            {
+                case 0: // stdin
+                {
+                    Stdout_Push("writev: write to stdin not implemented\n");
+                    Stdout_Flush();
+
+                    SYSCALL_RET(0);
+                }
+                case 1: // stdout
+                {
+                    Stdout_Push("writev: write to stdout not implemented\n");
+                    Stdout_Flush();
+
+                    SYSCALL_RET(0);
+                }
+                case 2: // stderr
+                {
+                    Stdout_Push("writev: write to stderr not implemented\n");
+                    Stdout_Flush();
+
+                    SYSCALL_RET(0);
+                }
+
+                default:
+                break;
+            }
+
+            SYSCALL_RET(0);
+        }
+
+        case 666:
+        {
+            SYSCALL_RET(0);
+        }
+    
+        default:    
+            Stdout_Push("Got caught in a trap! halting system!");
+            Stdout_Flush();
+    
+            while (1);
+        break;
+    }
+
+    /*printf("syscall\nn = $%lX\na = $%lX\nb = $%lX\nc = $%lX\nd = $%lX\ne = $%lX\nf = $%lX\n\n", n, a, b, c, d, e, f);
+
+    Stdout_Push("Got caught in a trap! halting system!");
     Stdout_Flush();
-    *((vu32*) 0xFF4004) = 0xDEADBEEF;
+    // *((vu32*) 0xFF4004) = 0xDEADBEEF;
 
     while (1);
 
-    SYSCALL_RET(0);
+    SYSCALL_RET(0);*/
 }
 
 // strncat, modified strcat from SGDK

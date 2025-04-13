@@ -4,7 +4,7 @@ __attribute__((externally_visible))
 const ROMHeader rom_header = 
 {
     "SEGA MEGA DRIVE ",                                 // System type
-    "(C)DECEPTSOFT'24",                                 // Copyright/Release date
+    "(C)DECEPTSOFT'25",                                 // Copyright/Release date
     "SMD Terminal Emulator                           ", // Domestic title
     "SMD Terminal Emulator                           ", // Overseas title
     "GM DSTC2017-32",                                   // Serial number
@@ -16,7 +16,7 @@ const ROMHeader rom_header =
     0xE0FFFFFF,                                         // RAM end address
     "RA",                                               // SRAM enabled
     0xF820,                                             // SRAM 8 bit ODD
-    0x00200000,                                         // SRAM start address
+    0x00200001,                                         // SRAM start address
     0x0021FFFF,                                         // SRAM end address
     "            ",                                     // Modem support
     "SMD Terminal Emulator                   ",         // Notes

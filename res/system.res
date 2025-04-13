@@ -33,4 +33,4 @@ TILESET GFX_POINTER "mouse.png" BEST NONE
 TILESET GFX_SCRSAV "screensaverball.png" BEST NONE
 
 # Font glyphs for IRC typing input
-TILESET GFX_IRC_TYPE "irc_type.png" NONE NONE
+TILESET GFX_IRC_TYPE "irc_type.png" BEST NONE

@@ -30,23 +30,27 @@ s16 HScroll = 0;                        // VDP horizontal scroll position
 s16 VScroll = 0;                        // VDP vertical scroll position
 u8 C_XMAX = 63;                         // Cursor max X position
 u8 C_YMAX = C_YMAX_PAL;                 // Cursor max Y position
+u8 C_XMIN = 0;                          // Cursor min X position
+u8 C_YMIN = 0;                          // Cursor min Y position
 u8 ColorBG = CL_BG, ColorFG = CL_FG;    // Selected BG/FG colour
 u8 bIntense = FALSE;                    // Text highlighed
 u8 bInverse = FALSE;                    // Text BG/FG reversed
 u8 sv_bWrapAround = TRUE;               // Force wrap around at column 40/80
 u8 sv_TermColumns = D_COLUMNS_80;       // Number of terminal character columns (40/80)
+u8 PendingWrap = FALSE;
+u8 PendingScroll = FALSE;
 u16 BufferSelect = 0;
 s16 Saved_VScroll = 0;
 
 // Colours
 u16 sv_CBGCL = 0;       // Custom BG colour
-u16 sv_CFG0CL = 0xEEE;  // Custom text colour for 4x8 font
-u16 sv_CFG1CL = 0x666;  // Custom text antialiasing colour for 4x8 font
+u16 sv_CFG0CL = 0x0AE;  // Custom text colour for 4x8 font
+u16 sv_CFG1CL = 0x046;  // Custom text antialiasing colour for 4x8 font
 u8 sv_bHighCL = TRUE;   // Use the upper 8 colours instead when using sv_Font=1
 
 static const u16 pColors[16] =
 {
-    0x000, 0x00c, 0x0c0, 0x0cc, 0xc00, 0xc0c, 0xcc0, 0xccc,   // Normal
+    0x222, 0x00c, 0x0c0, 0x0cc, 0xc00, 0xc0c, 0xcc0, 0xccc,   // Normal
     0x444, 0x66e, 0x6e6, 0x6ee, 0xe64, 0xe6e, 0xee6, 0xeee,   // Highlighted
 };
 
@@ -81,60 +85,19 @@ const char * const TermTypeList[] =
 };
 
 
-void TTY_Init(u8 bHardReset)
+void TTY_Init(TTY_InitFlags flags)
 {
-    if (bHardReset)
-    {
-        TTY_SetColumns(sv_TermColumns);
-        RXBytes = 0;
-        TXBytes = 0;
-    }
-    
-    TTY_Reset(TRUE);
-}
-
-void TTY_Reset(u8 bClearScreen)
-{
-    TTY_SetSX(0);
-    sy = C_YSTART;
-    C_YMAX = bPALSystem ? C_YMAX_PAL : C_YMAX_NTSC;
-    HScroll = sv_HSOffset;
-    VScroll = D_VSCROLL;
-    ColorBG = CL_BG;
-    ColorFG = CL_FG;
-    bIntense = FALSE;
-    bInverse = FALSE;
-    bDoCursorBlink = TRUE;
-
-    BufferSelect = 0;
-    Saved_VScroll = 0;
-
-    TTY_SetFontSize(sv_Font);
-
-    VDP_setVerticalScroll(BG_A, VScroll);
-    VDP_setVerticalScroll(BG_B, VScroll);
-
-    //TRM_SetStatusIcon(ICO_NET_IDLE_RECV, ICO_POS_1);
-    //TRM_SetStatusIcon(ICO_NET_IDLE_SEND, ICO_POS_2);
-
-    if (bClearScreen)
+    if (flags & TF_ClearScreen)
     {
         TRM_FillPlane(BG_A, 0);
         TRM_FillPlane(BG_B, 0);
     }
 
-    TTY_MoveCursor(TTY_CURSOR_DUMMY);
-}
-
-void TTY_SetColumns(u8 col)
-{
-    sv_TermColumns = col;
-
     switch (sv_TermColumns)
     {
         case D_COLUMNS_80:
         {
-            VDP_setPlaneSize(128, 32, FALSE);
+            if (flags & TF_ResetPlaneSize) VDP_setPlaneSize(128, 32, FALSE);
 
             if (!sv_Font) C_XMAX = DCOL8_128;
             else C_XMAX = DCOL4_128;
@@ -143,8 +106,7 @@ void TTY_SetColumns(u8 col)
         }
         case D_COLUMNS_40:
         {
-            //VDP_setPlaneSize(64, 32, FALSE);
-            VDP_setPlaneSize(128, 32, FALSE);
+            if (flags & TF_ResetPlaneSize) VDP_setPlaneSize(128, 32, FALSE);
 
             if (!sv_Font) C_XMAX = DCOL8_64;
             else C_XMAX = DCOL4_64;
@@ -152,6 +114,45 @@ void TTY_SetColumns(u8 col)
             break;
         }
     }
+
+    TTY_SetSX(0);
+    sy = C_YSTART;
+    C_YMAX = C_SYSTEM_YMAX;
+    HScroll = sv_HSOffset;
+    VScroll = D_VSCROLL;
+    ColorBG = CL_BG;
+    ColorFG = CL_FG;
+    bIntense = FALSE;
+    bInverse = FALSE;
+    bDoCursorBlink = TRUE;
+    PendingWrap = FALSE;
+    PendingScroll = FALSE;
+
+    BufferSelect = 0;
+    Saved_VScroll = 0;
+
+    VDP_setVerticalScroll(BG_A, VScroll);
+    VDP_setVerticalScroll(BG_B, VScroll);
+
+    if (flags & TF_ReloadFont)
+    {
+        TTY_SetFontSize(sv_Font);
+    }
+
+    if (flags & TF_ResetPalette)
+    {
+        TTY_ReloadPalette();
+    }
+
+    #if (ESC_LOGGING | EMU_BUILD)// | TRM_LOGGING)
+    if (flags & TF_ResetNetCount)
+    {
+        RXBytes = 0;
+        TXBytes = 0;
+    }
+    #endif
+
+    TTY_MoveCursor(TTY_CURSOR_DUMMY);
 }
 
 void TTY_ReloadPalette()
@@ -258,17 +259,23 @@ void TTY_SetFontSize(u8 size)
 {
     sv_Font = size;
 
-    TTY_ReloadPalette();
-
     if (sv_Font == FONT_4x8_16)   // 4x8 16 colour AA
     {
         VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA_16, AVR_FONT0, DMA);
-        VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA_14, AVR_FONT1, DMA);
-        VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA_12, AVR_FONT0, DMA);
-        VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA_10, AVR_FONT1, DMA);
+        VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA_14, AVR_FONT1, DMA); 
+        VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA_12, AVR_FONT0, DMA);   // This overwrites first half of AA_16 (Inverted characters)
+        VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA_10, AVR_FONT1, DMA);   // This overwrites first half of AA_14 (Inverted characters)
 
-        VDP_setHorizontalScroll(BG_A, HScroll+4);   // -4
-        VDP_setHorizontalScroll(BG_B, HScroll  );   // -8
+        if (BufferSelect)
+        {
+            VDP_setHorizontalScroll(BG_A, (HScroll+4-320));
+            VDP_setHorizontalScroll(BG_B, (HScroll-320));
+        }
+        else
+        {
+            VDP_setHorizontalScroll(BG_A, HScroll+4);
+            VDP_setHorizontalScroll(BG_B, HScroll  );
+        }
 
         LastCursor = 0x13;
         EvenOdd = 1;
@@ -281,8 +288,16 @@ void TTY_SetFontSize(u8 size)
         VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA_16, AVR_FONT0, DMA);
         VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA_14, AVR_FONT1, DMA);
 
-        VDP_setHorizontalScroll(BG_A, HScroll+4);   // -4
-        VDP_setHorizontalScroll(BG_B, HScroll  );   // -8
+        if (BufferSelect)
+        {
+            VDP_setHorizontalScroll(BG_A, (HScroll+4-320));
+            VDP_setHorizontalScroll(BG_B, (HScroll-320));
+        }
+        else
+        {
+            VDP_setHorizontalScroll(BG_A, HScroll+4);
+            VDP_setHorizontalScroll(BG_B, HScroll  );
+        }
 
         LastCursor = 0x13;
         EvenOdd = 1;
@@ -294,8 +309,16 @@ void TTY_SetFontSize(u8 size)
     {
         VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA_16, AVR_FONT0, DMA);
 
-        VDP_setHorizontalScroll(BG_A, HScroll+4);   // -4
-        VDP_setHorizontalScroll(BG_B, HScroll  );   // -8
+        if (BufferSelect)
+        {
+            VDP_setHorizontalScroll(BG_A, (HScroll+4-320));
+            VDP_setHorizontalScroll(BG_B, (HScroll-320));
+        }
+        else
+        {
+            VDP_setHorizontalScroll(BG_A, HScroll+4);
+            VDP_setHorizontalScroll(BG_B, HScroll  );
+        }
 
         LastCursor = 0x13;
         EvenOdd = 1;
@@ -307,8 +330,16 @@ void TTY_SetFontSize(u8 size)
     {
         VDP_loadTileSet((sv_BoldFont ? &GFX_ASCII_TERM_BOLD : &GFX_ASCII_TERM_NORMAL), AVR_FONT0, DMA);
 
-        VDP_setHorizontalScroll(BG_A, HScroll);
-        VDP_setHorizontalScroll(BG_B, HScroll);
+        if (BufferSelect)
+        {
+            VDP_setHorizontalScroll(BG_A, HScroll-320);
+            VDP_setHorizontalScroll(BG_B, HScroll-320);
+        }
+        else
+        {
+            VDP_setHorizontalScroll(BG_A, HScroll);
+            VDP_setHorizontalScroll(BG_B, HScroll);
+        }
 
         LastCursor = 0x10;
         
@@ -331,7 +362,7 @@ void TTY_SetFontSize(u8 size)
     SetSprite_TILE(SPRITE_ID_CURSOR, LastCursor);
 }
 
-inline void TTY_PrintChar(u8 c)
+void TTY_PrintChar(u8 c)
 {
     u16 addr = 0;
 
@@ -384,6 +415,7 @@ inline void TTY_PrintChar(u8 c)
             *((vu16*) VDP_DATA_PORT) = PF_Table[ColorFG & 0xF] + c;                                         // Set plane tilemap data
 
             EvenOdd = sx & 1;
+
             break;
         }
     
@@ -399,7 +431,7 @@ inline void TTY_PrintString(const char *str)
     while (*str) TTY_PrintChar(*str++);
 }
 
-inline void TTY_ClearLine(u16 y, u16 line_count)
+void TTY_ClearLine(u16 y, u16 line_count)
 {
     u16 j;
     u16 i = line_count;
@@ -462,7 +494,7 @@ inline void TTY_ClearLine(u16 y, u16 line_count)
     }
 }
 
-inline void TTY_ClearLineSingle(u16 y)
+void TTY_ClearLineSingle(u16 y)
 {
     u16 j;
     *((vu16*) VDP_CTRL_PORT) = 0x8F02;  // Set VDP autoinc to 2
@@ -514,7 +546,7 @@ inline void TTY_ClearLineSingle(u16 y)
     }
 }
 
-inline void TTY_ClearPartialLine(u16 y, u16 from_x, u16 to_x)
+void TTY_ClearPartialLine(u16 y, u16 from_x, u16 to_x)
 {
     u16 j;
     *((vu16*) VDP_CTRL_PORT) = 0x8F02;  // Set VDP autoinc to 2
@@ -566,7 +598,7 @@ inline void TTY_ClearPartialLine(u16 y, u16 from_x, u16 to_x)
     }
 }
 
-inline void TTY_SetAttribute(u8 v)
+void TTY_SetAttribute(u8 v)
 {
     // Normal intensity color
     if ((v >= 30) && (v <= 37))
@@ -696,8 +728,29 @@ inline void TTY_SetAttribute(u8 v)
 
 inline void TTY_SetSX(s16 x)
 {
-    sx = x<0?0:x;               // sx less than 0? set to 0
-    sx = sx>C_XMAX?C_XMAX:sx;   // sx greater than max_x? set to max_x
+    sx = x < C_XMIN ? C_XMIN : x;     // sx less than 0? set to 0
+
+    // sx greater than max_x? set to max_x
+    if (sx >= C_XMAX-1)
+    {
+        sx = C_XMAX-1;
+        PendingWrap = TRUE;
+    }
+
+    EvenOdd = !(sx & 1);
+}
+
+inline void TTY_SetSX_Relative(s16 v)
+{
+    s16 x = sx + v;
+    sx = x < C_XMIN ? C_XMIN : x;     // sx less than 0? set to 0
+
+    // sx greater than max_x? set to max_x
+    if (sx >= C_XMAX-1)
+    {
+        sx = C_XMAX-1;
+        PendingWrap = TRUE;
+    }
 
     EvenOdd = !(sx & 1);
 }
@@ -709,8 +762,15 @@ inline s16 TTY_GetSX()
 
 inline void TTY_SetSY_A(s16 y)
 {
-    sy = y<0?0:y;               // sy less than 0? set to 0
-    sy = sy>C_YMAX?C_YMAX:sy;   // sy greater than max_y? set to max_y
+    sy = y < C_YMIN ? C_YMIN : y;     // sy less than 0? set to 0
+    
+    // sy greater than max_y? set to max_y    
+    if (sy >= C_YMAX-1)
+    {
+        sy = C_YMAX-1;
+        PendingScroll = TRUE;
+    }
+
     sy += ((VScroll >> 3) + C_YSTART);
 }
 
@@ -721,7 +781,27 @@ inline s16 TTY_GetSY_A()
 
 inline void TTY_SetSY(s16 y)
 {
-    sy = y<0?0:y;
+    sy = y < C_YMIN ? C_YMIN : y;     // sy less than 0? set to 0
+
+    // sy greater than max_y? set to max_y
+    if (sy >= C_YMAX-1)
+    {
+        sy = C_YMAX-1;
+        PendingScroll = TRUE;
+    }
+}
+
+inline void TTY_SetSY_Relative(s16 v)
+{
+    s16 y = sy + v;
+    sy = y < C_YMIN ? C_YMIN : y;     // sy less than 0? set to 0
+    
+    // sy greater than max_y? set to max_y
+    if (sy >= C_YMAX-1)
+    {
+        sy = C_YMAX-1;
+        PendingScroll = TRUE;
+    }
 }
 
 inline s16 TTY_GetSY()
@@ -729,7 +809,37 @@ inline s16 TTY_GetSY()
     return sy;
 }
 
-inline void TTY_MoveCursor(u8 dir, u8 num)
+inline void TTY_SetVScroll(s16 v)
+{
+    VScroll += v;
+                            
+    *((vu32*) VDP_CTRL_PORT) = 0x40000010;
+    *((vu16*) VDP_DATA_PORT) = VScroll;
+    *((vu32*) VDP_CTRL_PORT) = 0x40020010;
+    *((vu16*) VDP_DATA_PORT) = VScroll;
+}
+
+inline void TTY_SetVScrollAbs(s16 v)
+{
+    VScroll = v;
+                            
+    *((vu32*) VDP_CTRL_PORT) = 0x40000010;
+    *((vu16*) VDP_DATA_PORT) = VScroll;
+    *((vu32*) VDP_CTRL_PORT) = 0x40020010;
+    *((vu16*) VDP_DATA_PORT) = VScroll;
+}
+
+inline void TTY_ResetVScroll()
+{
+    VScroll = D_VSCROLL;
+                            
+    *((vu32*) VDP_CTRL_PORT) = 0x40000010;
+    *((vu16*) VDP_DATA_PORT) = VScroll;
+    *((vu32*) VDP_CTRL_PORT) = 0x40020010;
+    *((vu16*) VDP_DATA_PORT) = VScroll;
+}
+
+void TTY_MoveCursor(u8 dir, u8 num)
 {
     u16 sprx, spry;
 
@@ -750,12 +860,7 @@ inline void TTY_MoveCursor(u8 dir, u8 num)
                             TTY_ClearLineSingle(sy);
 
                             // Update vertical scroll
-                            VScroll += 8;
-                            
-                            *((vu32*) VDP_CTRL_PORT) = 0x40000010;
-                            *((vu16*) VDP_DATA_PORT) = VScroll;
-                            *((vu32*) VDP_CTRL_PORT) = 0x40020010;
-                            *((vu16*) VDP_DATA_PORT) = VScroll;
+                            TTY_SetVScroll(8);
                         }
                     }
                     else
@@ -765,12 +870,27 @@ inline void TTY_MoveCursor(u8 dir, u8 num)
                     
                     spry = TTY_CURSOR_Y;
                     SetSprite_Y(SPRITE_ID_CURSOR, spry);
+
+                    // Disable line below and Enable line +6 below to allow cursor X to wrap back to 0
+                    //TTY_SetSX(num-1);
+                    sx = num-1;
                 }
-                TTY_SetSX(num-1);
+                else
+                {
+                    // Enable line below to allow cursor X to wrap back to 0
+                    //TTY_SetSX(num-1);
+    
+                    // Disable line below if line above is Enabled!
+                    //TTY_SetSX(C_XMAX);
+                    sx = C_XMAX;
+                }
             }
             else
             {
-                TTY_SetSX(sx+num);
+                //TTY_SetSX(sx+num);
+                sx = sx+num;
+
+                if (sx > C_XMAX) PendingWrap = TRUE;
             }
 
             sprx = TTY_CURSOR_X;
@@ -785,15 +905,15 @@ inline void TTY_MoveCursor(u8 dir, u8 num)
                 sy += num;
                 if (sy > (C_YMAX + (VScroll >> 3)))
                 {
-                    TTY_ClearLine((sy-num)+1, num);
+                    TTY_ClearLine((sy-num)+1, num); // This may not be needed if the statement below is true
+                    
+                    if (C_YMAX < C_SYSTEM_YMAX)
+                    {
+                        TTY_ClearLineSingle(sy + (C_SYSTEM_YMAX - C_YMAX) + 1);
+                    }
 
                     // Update vertical scroll
-                    VScroll += 8 * num;
-
-                    *((vu32*) VDP_CTRL_PORT) = 0x40000010;
-                    *((vu16*) VDP_DATA_PORT) = VScroll;
-                    *((vu32*) VDP_CTRL_PORT) = 0x40020010;
-                    *((vu16*) VDP_DATA_PORT) = VScroll;
+                    TTY_SetVScroll(8 * num);
                 }
             }
             else
@@ -823,12 +943,20 @@ inline void TTY_MoveCursor(u8 dir, u8 num)
         case TTY_CURSOR_LEFT:
             if (sx-num < 0)
             {
-                TTY_SetSX(C_XMAX-(sx-num));
-                if (sv_bWrapAround && (sy > 0)) 
+                if (sv_bWrapAround) 
                 {
-                    sy--;
-                    spry = TTY_CURSOR_Y;
-                    SetSprite_Y(SPRITE_ID_CURSOR, spry);
+                    TTY_SetSX(C_XMAX-(sx-num));
+
+                    if (sy > 0)
+                    {
+                        sy--;
+                        spry = TTY_CURSOR_Y;
+                        SetSprite_Y(SPRITE_ID_CURSOR, spry);
+                    }
+                }
+                else
+                {
+                    TTY_SetSX(0);
                 }
             }
             else
@@ -854,15 +982,21 @@ inline void TTY_MoveCursor(u8 dir, u8 num)
 
 void TTY_DrawScrollback(u8 num)
 {
+    if ((DMarginTop == 0) && (DMarginBottom == C_SYSTEM_YMAX))
+    {
+        TTY_SetVScroll(8 * num);    // +
+        return;
+    }
+
     const  u8 n       = num-1;                                 // Number of lines to scroll up
     const u16 Top     = DMarginTop + n;                        // Top row which source address will be based on
     const u16 VScrOff = (VScroll >> 3) * 256;                  // VDP VScroll offset
-    const u16 Rows    = (DMarginBottom - Top);                 // Number of rows to copy
+          u16 Rows    = (DMarginBottom - Top);                 // Number of rows to copy
     const u16 Src     = (VScrOff + (Top*256) + 256)  % 0x2000; // Source address for start of DMA copy
     const u16 Dst     = (VScrOff + (DMarginTop*256)) % 0x2000; // Destination address for DMA copy
 
-    #if ESC_LOGGING == 2
-    kprintf("Scrollback Normal");
+    #if ESC_LOGGING >= 3
+    kprintf("[93mScrollback Normal - num: %u[0m", num);
     kprintf("VScrOff = $%X", VScrOff);
     kprintf("n       = %u ", n);
     kprintf("Rows    = %u ", Rows);
@@ -870,14 +1004,69 @@ void TTY_DrawScrollback(u8 num)
     kprintf("Dst     = $%X", Dst);
     #endif
 
-    DMA_doVRamCopy(AVR_PLANE_A + Src, AVR_PLANE_A + Dst, Rows*256, 1);
-    DMA_waitCompletion();
-    DMA_doVRamCopy(AVR_PLANE_B + Src, AVR_PLANE_B + Dst, Rows*256, 1);
-    DMA_waitCompletion();
+    Rows *= 256;
+
+    if ((AVR_PLANE_A + Dst + Rows) <= (AVR_PLANE_A + 0x2000))
+    {
+        DMA_doVRamCopy(AVR_PLANE_A + Src, AVR_PLANE_A + Dst, Rows, 1);
+        DMA_waitCompletion();
+    }
+    #if ESC_LOGGING >= 3
+    else
+    {
+        kprintf("Scrollback skipped on PLANE_A; Dst = $%04X", (AVR_PLANE_A + Dst + Rows));
+    }
+    #endif
+
+    if ((AVR_PLANE_B + Dst + Rows) <= (AVR_PLANE_B + 0x2000))
+    {
+        DMA_doVRamCopy(AVR_PLANE_B + Src, AVR_PLANE_B + Dst, Rows, 1);
+        DMA_waitCompletion();
+    }
+    #if ESC_LOGGING >= 3
+    else
+    {
+        kprintf("Scrollback skipped on PLANE_B; Dst = $%04X", (AVR_PLANE_A + Dst + Rows));
+    }
+    #endif
 
     TTY_ClearLine(DMarginBottom-n, n+1);
 }
 
 void TTY_DrawScrollback_RI(u8 num)
 {
+    // Reverse index code removed due to a few issues with it
+
+    // Note to self; backup code is in ../tmp/reverse index.txt
+}
+
+u16 TTY_ReadCharacter(u8 x, u8 y)
+{
+    const u16 plane = x & 1 ? AVR_PLANE_A : AVR_PLANE_B;
+    u16 addr = 0;
+    s16 ny = (VScroll>>3) + y + C_YSTART;
+    
+    if (sv_Font)
+    {
+        addr = ((x+BufferSelect) & 254) + YAddr_Table[ny & 31];
+    }
+    else
+    {
+        addr = (((x+BufferSelect) & 127) << 1) + YAddr_Table[ny & 31];
+    }
+
+    *((vu32*) VDP_CTRL_PORT) = VDP_READ_VRAM_ADDR(plane + addr);
+    u16 r = *((vu16*) VDP_DATA_PORT);
+
+    //kprintf("VRAM word: $%X - VS: %d - y: %u", r, (VScroll>>3), y);
+
+    if (r)
+    {
+        r -= 0x40;  // Remove font offset
+        r &= 0xFF;  // Mask off attributes and fontset - This should be done outside this function later on, in case a function needs to know the attributes
+    }
+
+    //kprintf("Returning VRAM character: $%X", r);
+
+    return r;
 }

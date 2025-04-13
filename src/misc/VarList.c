@@ -50,8 +50,10 @@ SM_VarList VarList[] =
     {ST_WORD, &sv_EpochStart,       "epoch"},
     {ST_BYTE, &sv_ShowJoinQuitMsg,  "ircjqmsg"},
     {ST_BYTE, &sv_WrapAtScreenEdge, "ircwrap"},
+    {ST_BYTE, &sv_EnableUTF8,       "enableutf8"},
     {0, 0, 0}  // List terminator
 };
+
 
 // This is broken for some reason, do not use.
 void getenv(const char *name, char *ret)

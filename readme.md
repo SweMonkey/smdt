@@ -1,19 +1,19 @@
 
-# SMD Terminal emulator, Telnet and IRC client v0.31+
+# SMD Terminal emulator, Telnet and IRC client
 A terminal emulator, telnet and IRC client for the Sega Mega Drive/Genesis with support for keyboards and RS-232 communication.<br>
-![Screenshot of the telnet client in 80 column + 16 colour mode](https://deceptsoft.com/smdtc_extra_git/v311/telnet.png)
-![Screenshot of the IRC client](https://deceptsoft.com/smdtc_extra_git/v311/irc.png)
-![Screenshot of the terminal emulator showing nano](https://deceptsoft.com/smdtc_extra_git/v311/nano.png)
-![Screenshot of a debugging utility to inspect streams](https://deceptsoft.com/smdtc_extra_git/v311/hexview.png)
-![Screenshot of the telnet client in 80 column + 8 colour mode](https://deceptsoft.com/smdtc_extra_git/v311/nethack.png)
-![Screenshot of the terminal emulator](https://deceptsoft.com/smdtc_extra_git/v311/terminal.png)
+![Screenshot of the telnet client in 80 column + 16 colour mode](/doc/images/telnet.png?raw=true)
+![Screenshot of the IRC client](/doc/images/irc_02.png?raw=true)
+![Screenshot of the terminal emulator showing dwarf fortress](/doc/images/dwarf_fortress.png?raw=true)
+![Screenshot of a debugging utility to inspect streams](/doc/images/hexview.png?raw=true)
+![Screenshot of the telnet client in 80 column + 8 colour mode](/doc/images/nethack.png?raw=true)
+![Screenshot of the terminal emulator](/doc/images/terminal.png?raw=true)
 
 ##### Table of Contents
 * [Disclaimer](#disclaimer)
 * [Thanks](#thanks-to)
-* [Building from source](#building-smdtc-from-source)
-* [Running SMDTC](#running-smdtc)
-  * [Running SMDTC in blastEm](#running-smdtc-in-blastem)
+* [Building from source](#building-smdt-from-source)
+* [Running SMDT](#running-smdt)
+  * [Running SMDT in blastEm](#running-smdt-in-blastem)
 * [Required hardware](#required-hardware)
 * [Devices](#devices)
   * [Autodetected devices](#list-of-autodetected-devices)
@@ -46,22 +46,22 @@ Sik - For creating the website [Plutiedev](https://plutiedev.com/) with valuable
 [littlefs](https://github.com/littlefs-project/littlefs) - For an awesome little filesystem<br>
 <br>
 
-## Building SMDTC from source
+## Building SMDT from source
 **This part needs to be expanded, for now it assumes you are familiar with SGDK and how to use it.**<br><br>
- To build SMDTC from source you will need SGDK version 1.80 (newer versions untested but will probably work as SMDTC mostly only uses macros and basic functions from SGDK)<br>
+ To build SMDT from source you will need SGDK version 1.80 (newer versions untested but will probably work as SMDT mostly only uses macros and basic functions from SGDK)<br>
 The SGDK library must be rebuilt with the flags `HALT_Z80_ON_IO` and `HALT_Z80_ON_DMA` set to 0 in config.h to make sure the z80 CPU is never getting its bus back.<br>
 <br>
 
-## Running SMDTC
-SMDTC is made to run on the original Mega Drive / Genesis hardware;<br>
-Easiest way to run SMDTC on your system is by transferring the binary file `smdt_vX.YY.Z.bin` to a flashcart.<br>
+## Running SMDT
+SMDT is made to run on the original Mega Drive / Genesis hardware;<br>
+Easiest way to run SMDT on your system is by transferring the binary file `smdt_vX.YY.Z.bin` to a flashcart.<br>
 <br>
-You can also run SMDTC in a Mega Drive / Genesis emulator and easily check it out; Do mind that most emulators do not provide any way to actually connect any external serial devices or keyboards.<br><br>
-I highly recommend the emulator [BlastEm 0.6.3+](https://www.retrodev.com/blastem/nightlies/) since it supports the Sega Saturn keyboard as well as providing the functionality to connect the serial port to a UNIX socket, allowing SMDTC to connect to remote servers.<br>
+You can also run SMDT in a Mega Drive / Genesis emulator and easily check it out; Do mind that most emulators do not provide any way to actually connect any external serial devices or keyboards.<br><br>
+I highly recommend the emulator [BlastEm 0.6.3+](https://www.retrodev.com/blastem/nightlies/) since it supports the Sega Saturn keyboard as well as providing the functionality to connect the serial port to a UNIX socket, allowing SMDT to connect to remote servers.<br>
 <br>
 
-## Running SMDTC in blastEm
-To run SMDTC on blastEm you need setup IO devices in blastEm, this is partially done by going into the system settings in blastEm (Settings -> System)<br><br>
+## Running SMDT in blastEm
+To run SMDT on blastEm you need setup IO devices in blastEm, this is partially done by going into the system settings in blastEm (Settings -> System)<br><br>
 For IO Port 1 Device, select "Saturn keyboard"<br><br>
 To setup IO Port 2 Device you need to navigate to your `blastem.cfg` file, on linux this file is by default located in `~/.config/blastem/`<br>
 Open `blastem.cfg` and scroll down to the `io` section.<br>
@@ -119,20 +119,28 @@ If all is well SMDT should print out "XPN: xPort module OK" to the boot messages
 
 RetroLink network cartridge as an alternative network adapter is being worked on.<br>
 
+> [!NOTE]
+> Many functions in SMDT can be accessed even if you don't have any keyboard input devices, with the obvious exception of anything that requires text input.<br><br>
+> Default joypad -> keyboard bindings:<br>
+> Joypad A = Keyboard RETURN<br>
+> Joypad B = Keyboard ESCAPE<br>
+> Joypad Start = Keyboard F8 / Right windows key<br>
+> Joypad directionals = Keyboard cursor keys<br>
+
 ## Devices
-SMDTC has a device manager which can autodetect if a device is present and where it is plugged in.<br>
+SMDT has a device manager which can autodetect if a device is present and where it is plugged in.<br>
 Device detection is only done on bootup, no plug & play support (yet).<br>
 <br>
 A total of 2 PS/2 devices and 1 UART device can potentially be connected to a single MD controller port. However, beware the power draw may exceed what the MD can supply!<br>
 <br>
 When a keyboard is connected and detected a 'K' icon will be visible in the status bar.<br>
-A fallback joypad device will be activated if SMDTC fails to find a keyboard or when a keyboard is plugged into PORT 2, allowing the use of a regular joypad.<br>
+A fallback joypad device will be activated if SMDT fails to find a keyboard or when a keyboard is plugged into PORT 2, allowing the use of a regular joypad.<br>
 <br>
 All detected devices can be viewed in the "Connected devices" list (Quick menu -> Mega Drive settings -> Connected devices)<br>
 <br>
 > [!NOTE]
-> SMDTC is limited when it comes to detecting the presence of a serial connection on the built in UART.<br>
-> By default SMDTC will listen for incoming connections and attempt to find serial devices on PORT 2 UART.<br>
+> SMDT is limited when it comes to detecting the presence of a serial connection on the built in UART.<br>
+> By default SMDT will listen for incoming connections and attempt to find serial devices on PORT 2 UART.<br>
 > This setting can be changed in the "Select serial port" menu (Quick menu -> Mega Drive settings -> Select serial port)<br>
 > Do not forget to save your changes! (Quick menu -> System -> Save config)<br>
 <br>
@@ -146,7 +154,7 @@ RetroLink network adapter cartridge (Currently being worked on, support may be i
 <br>
 
 ### How to wire up a PS/2 keyboard
-For PS/2 devices (a keyboard or mouse) SMDTC has two ways to connect one:<br>
+For PS/2 devices (a keyboard or mouse) SMDT has two ways to connect one:<br>
 
 Example keyboard wiring (1):<br>
 MD port pin 1 = PS/2 clock pin 5<br>

@@ -1,8 +1,9 @@
 #include "StateCtrl.h"
 
 
-void Enter_Dummy(u8 argc, char *argv[])
+u16 Enter_Dummy(u8 argc, char *argv[])
 {
+    return EXIT_SUCCESS;
 }
 
 void ReEnter_Dummy()

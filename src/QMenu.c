@@ -41,6 +41,7 @@ void WINFN_Backspace();
 void WINFN_StartMenu();
 void WINFN_WrapAtScreenEdge();
 void WINFN_ShowJQMsg();
+void WINFN_CharSet();
 
 extern u8 sv_IRCFont;
 extern u8 sv_TelnetFont;
@@ -386,13 +387,14 @@ static struct s_menu
      "^H"}
 },
 {//30
-    2,
+    3,
     0, 255, 0,
     NULL, NULL, NULL,
     "Terminal",
-    {9, 6},
+    {9, 6, 34},
     {"Terminal type",
-     "Variables"}
+     "Variables",
+     "Character set"}
 },
 {//31
     2,
@@ -420,6 +422,15 @@ static struct s_menu
     {254, 254},
     {"No",
      "Yes"}
+},
+{//34
+    2,
+    0, 255, 0,
+    NULL, WINFN_CharSet, NULL,
+    "Character set",
+    {254, 254},
+    {"CP437",
+     "UTF-8"}
 }};
 
 static const u8 QFrame[5][24] = 
@@ -436,8 +447,9 @@ static u8 MenuIdx = 0;
 static const u8 MenuPosX = 1, MenuPosY = 0;
 bool bShowQMenu = FALSE;
 u8 sv_QBGCL  = 0;    // Selected BG colour entry in quick menu
-u8 sv_QFGCL  = 1;    // Selected FG colour entry in quick menu
+u8 sv_QFGCL  = 2;    // Selected FG colour entry in quick menu
 u8 sv_QCURCL = 0;    // Selected cursor colour entry in quick menu
+extern u8 sv_EnableUTF8;
 
 
 void QMenu_Input()
@@ -474,10 +486,12 @@ void SetupQItemTags()
     MainMenu[22].tagged_entry = vLineMode>1?0:vLineMode;
     MainMenu[24].tagged_entry = sv_bHighCL;
     MainMenu[25].tagged_entry = sv_bScreensaver;
+    MainMenu[26].tagged_entry = sv_QCURCL;
     MainMenu[28].tagged_entry = sv_ThemeUI;
     MainMenu[29].tagged_entry = vBackspace;
     MainMenu[32].tagged_entry = sv_WrapAtScreenEdge;
     MainMenu[33].tagged_entry = sv_ShowJoinQuitMsg;
+    MainMenu[34].tagged_entry = sv_EnableUTF8;
 
     switch (sv_TerminalFont)
     {
@@ -783,41 +797,50 @@ void WINFN_FGColor()
     switch (SelectedIdx)
     {
         case 0: // Black
-            sv_CursorCL = 0x0E0;
+            //sv_CursorCL = 0x0E0;
             sv_CFG0CL = 0;
             sv_CFG1CL = 0x222;
         break;
         case 1: // White
-            sv_CursorCL = 0x0E0;
+            //sv_CursorCL = 0x0E0;
             sv_CFG0CL = 0xEEE;
             sv_CFG1CL = 0x666;
         break;
         case 2: // Amber
-            sv_CursorCL = 0x0AE;
+            //sv_CursorCL = 0x0AE;
             sv_CFG0CL = 0x0AE;
             sv_CFG1CL = 0x046;
         break;
         case 3: // Green
-            sv_CursorCL = 0x0E0;
+            //sv_CursorCL = 0x0E0;
             sv_CFG0CL = 0x0A0;
             sv_CFG1CL = 0x040;
         break;
         case 4: // Random
-            sv_CursorCL = r;
+            //sv_CursorCL = r;
             sv_CFG0CL = r;
             sv_CFG1CL = r & 0x666;
         break;
     
         default:
-            sv_CursorCL = 0x0E0;
+            //sv_CursorCL = 0x0E0;
             sv_CFG0CL = 0xEEE;
             sv_CFG1CL = 0x666;
         break;
     }
     
     sv_QFGCL = SelectedIdx;
-    PAL_setColor(47, sv_CFG0CL);
-    PAL_setColor(46, sv_CFG0CL);
+
+    if (getState() == PS_IRC)
+    {
+        PAL_setColor(14, sv_CFG1CL);
+        PAL_setColor(15, sv_CFG0CL);
+    }
+    else
+    {
+        PAL_setColor(46, sv_CFG1CL);
+        PAL_setColor(47, sv_CFG0CL);
+    }
 }
 
 void WINFN_TERMTYPE()
@@ -882,7 +905,7 @@ void WINFN_FONT_TERM()
     if (getState() == PS_Terminal) 
     {
         TTY_SetFontSize(sv_TerminalFont);
-        TTY_Reset(TRUE);
+        TTY_Init(TF_ClearScreen | TF_ResetPalette);
         printf("%s> ", FS_GetCWD());
     }
 }
@@ -1048,7 +1071,7 @@ void WINFN_DEVLISTENTRY()
 
     if (bMegaCD)
     {
-        sprintf(buf, "EXTD= %s", bPALSystem ? "Sega CC" : "Mega CD");
+        sprintf(buf, "EXTD= %s CD", bPALSystem ? "Sega" : "Mega");
 
         ChangeText(7, d, buf);
         d++;
@@ -1208,4 +1231,9 @@ void WINFN_ShowJQMsg()
             sv_ShowJoinQuitMsg = 1;
         break;
     }
+}
+
+void WINFN_CharSet()
+{
+    sv_EnableUTF8 = SelectedIdx;
 }

@@ -23,9 +23,10 @@
 // Default cursor minmaxing
 #define C_YMAX_PAL 29
 #define C_YMAX_NTSC 27
-#define C_HTAB 4
+#define C_HTAB 8
 #define C_VTAB 2
 #define C_YSTART 1  // 0 if no window plane
+#define C_SYSTEM_YMAX (bPALSystem ? C_YMAX_PAL : C_YMAX_NTSC)
 
 // Default X/Y Scroll
 #define D_VSCROLL 0
@@ -39,6 +40,19 @@
 #define FONT_4x8_8  1
 #define FONT_4x8_1  2
 #define FONT_4x8_16 3
+
+
+typedef enum 
+{
+    TF_None             = 0,
+    TF_ClearScreen      = 0x1, 
+    TF_ResetPlaneSize   = 0x2, 
+    TF_ResetPalette     = 0x4,
+    TF_ResetNetCount    = 0x8,
+    TF_ReloadFont       = 0x10,
+
+    TF_Everything       = 0xFF,
+} TTY_InitFlags;
 
 // Modifiable variables
 extern s8 sv_HSOffset;
@@ -55,10 +69,13 @@ extern s16 HScroll;
 extern s16 VScroll;
 extern u8 C_XMAX;
 extern u8 C_YMAX;
+extern u8 C_XMIN;
+extern u8 C_YMIN;
 extern u8 sv_bWrapAround;
 extern u8 sv_TermColumns;
 extern u16 BufferSelect;
 extern s16 Saved_VScroll;
+extern u8 PendingWrap;
 
 extern u16 sv_CBGCL;
 extern u16 sv_CFG0CL;   // Custom text colour for 4x8 font
@@ -76,9 +93,7 @@ extern u8 sv_bHighCL;
 extern u32 RXBytes;
 extern u32 TXBytes;
 
-void TTY_Init(u8 bHardReset);
-void TTY_Reset(u8 bClearScreen);
-void TTY_SetColumns(u8 col);
+void TTY_Init(TTY_InitFlags flags);
 void TTY_ReloadPalette();
 void TTY_SetFontSize(u8 size);
 
@@ -97,8 +112,14 @@ s16 TTY_GetSY_A();          // Get SY without VScroll   (VScroll gets removed in
 void TTY_SetSY(s16 y);      // Set SY + VScroll         (VScroll does NOT get added in function)
 s16 TTY_GetSY();            // Get SY + VScroll         (VScroll does NOT get removed in function)
 
+void TTY_SetVScroll(s16 v);     // Set vscroll to relative value
+void TTY_SetVScrollAbs(s16 v);  // Set vscroll to absolute value
+void TTY_ResetVScroll();        // Reset vscroll to default value (0)
+
 void TTY_MoveCursor(u8 direction, u8 lines);
 void TTY_DrawScrollback(u8 num);
 void TTY_DrawScrollback_RI(u8 num);
+
+u16 TTY_ReadCharacter(u8 x, u8 y);
 
 #endif // TERMINAL_H_INCLUDED

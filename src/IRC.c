@@ -62,7 +62,7 @@ static const u16 pColors[16] =
 
 char sv_Username[32] = "smd_user";                   // Saved preferred IRC nickname
 char v_UsernameReset[32] = "ERROR_NOTSET";           // Your IRC nickname modified to suit the server (nicklen etc)
-char sv_QuitStr[32] = "MegaDrive IRC client quit";   // IRC quit message
+char sv_QuitStr[32] = "SMDT IRC client quit";        // IRC quit message
 u8 sv_ShowJoinQuitMsg = 1;
 u8 sv_WrapAtScreenEdge = 1;
 
@@ -75,20 +75,23 @@ u8 bPG_UpdateUserlist = 2;                           // Flag to update the user 
 bool bPG_HasNewMessages[IRC_MAX_CHANNELS] = {FALSE}; // Flag to show if a channel has new messages
 bool bPG_UpdateMessage = TRUE;                       // Flag to update the "HasNewMessages" text
 u16 UserIterator = 0;                                // Used to iterate through PG_UserList during a 353 command
+u8 NameOffset = 0;                                   // Used to indent multiline messages
 
 
-void IRC_Init()
+u16 IRC_Init()
 {
-    TTY_Init(TRUE);
-    IRC_Reset();
+    TTY_Init(TF_Everything);
+    return IRC_Reset();
 }
 
-void IRC_Reset()
+u16 IRC_Reset()
 {
     if (sv_Font) 
     {
-        PAL_setColor(15, 0x0AE);    // The one colour you get with 1 bit 4x8 fonts :)
-        PAL_setColor(14, 0x046);    // AA Colour
+        PAL_setColor(14, sv_CFG1CL);    // Nick name colour - AA
+        PAL_setColor(15, sv_CFG0CL);    // Nick name colour
+        PAL_setColor(46, 0x666);        // Text colour - AA
+        PAL_setColor(47, 0xEEE);        // Text colour
     }
     else
     {
@@ -106,10 +109,15 @@ void IRC_Reset()
     vLineMode = LMSM_EDIT;
     bFirstRun = TRUE;
     NickReRegisterCount = 0;
+    NameOffset = 0;
     LastCursor = 0x12;
     
     Stdout_Flush();
     Buffer_Flush(&TxBuffer);
+
+    // Upload typing fontset to VRAM, it will be used as source for DMA VRAM copy - Do this here or we won't have enough memory to unpack the fontset
+    VDP_loadTileSet(&GFX_IRC_TYPE, AVR_FONT1, DMA);
+    DMA_waitCompletion();
 
     // Allocate and setup channel slots
     for (u8 ch = 0; ch < IRC_MAX_CHANNELS; ch++)
@@ -121,9 +129,8 @@ void IRC_Reset()
             kprintf("Failed to allocate memory for PG_Buffer[%u]", ch);
             #endif
             
-            Stdout_Push("[91mIRC Client: Failed to allocate memory\n for PG_Buf![0m\n");
-            RevertState();
-            return;
+            Stdout_Push("[91mIRC Client: Failed to allocate memory for PG_Buf![0m\n");
+            return EXIT_FAILURE;
         }
         TMB_SetActiveBuffer(PG_Buffer[ch]);
         TMB_ZeroCurrentBuffer();
@@ -139,9 +146,8 @@ void IRC_Reset()
         kprintf("Failed to allocate memory for LineBuf");
         #endif
 
-        Stdout_Push("[91mIRC Client: Failed to allocate memory\n for LineBuf![0m\n");
-        RevertState();
-        return;
+        Stdout_Push("[91mIRC Client: Failed to allocate memory for LineBuf![0m\n");
+        return EXIT_FAILURE;
     }
     memset(LineBuf, 0, sizeof(struct s_linebuf));
 
@@ -153,9 +159,8 @@ void IRC_Reset()
         kprintf("Failed to allocate memory for RXString");
         #endif
 
-        Stdout_Push("[91mIRC Client: Failed to allocate memory\n for RXString![0m\n");
-        RevertState();
-        return;
+        Stdout_Push("[91mIRC Client: Failed to allocate memory for RXString![0m\n");
+        return EXIT_FAILURE;
     }
     memset(RXString, 0, B_RXSTRING_LEN);
 
@@ -172,19 +177,11 @@ void IRC_Reset()
                 #ifdef IRC_LOGGING
                 kprintf("Failed to allocate memory for PG_UserList[%u]", i);
                 #endif
-                //Stdout_Push("[91mIRC Client: Failed to allocate memory\n for PG_UserList[x]![0m\n\n");
-                char tmp[80];
 
-                sprintf(tmp, "[91mIRC Client: Failed to allocate memory\n for PG_UserList[%u]!\n", i);
-                Stdout_Push(tmp);
+                printf("[91mIRC Client: Failed to allocate memory for PG_UserList[%u]!\n", i);
+                printf("Free: %u - Needed: %u (Total: %u)[0m\n", MEM_getLargestFreeBlock(), IRC_MAX_USERNAME_LEN, IRC_MAX_USERNAME_LEN*IRC_MAX_USERLIST);
 
-                sprintf(tmp, "Free: %u - Needed: %u (Total: %u)", MEM_getLargestFreeBlock(), IRC_MAX_USERNAME_LEN, IRC_MAX_USERNAME_LEN*IRC_MAX_USERLIST);
-                Stdout_Push(tmp);
-
-                Stdout_Push("[0m\n");
-
-                RevertState();
-                return;
+                return EXIT_FAILURE;
             }
             memset(PG_UserList[i], 0, IRC_MAX_USERNAME_LEN);
         }
@@ -196,8 +193,7 @@ void IRC_Reset()
         #endif
 
         Stdout_Push("[91mFailed to allocate memory for PG_UserList![0m\n");
-        RevertState();
-        return;
+        return EXIT_FAILURE;
     }
 
     // Set defaults
@@ -235,9 +231,7 @@ void IRC_Reset()
     SetSprite_TILE(SPRITE_ID_CURSOR, LastCursor);
     //SetSprite_SIZELINK(SPRITE_ID_CURSOR, 0, 1);
 
-    // Upload typing text font to VRAM, it will be used as source for DMA VRAM copy
-    VDP_loadTileSet(&GFX_IRC_TYPE, AVR_FONT1, DMA);
-    DMA_waitCompletion();
+    return EXIT_SUCCESS;
 }
 
 void IRC_Exit()
@@ -261,8 +255,11 @@ void IRC_Exit()
 
     for (u16 i = 0; i < IRC_MAX_USERLIST; i++)
     {
-        free(PG_UserList[i]);
-        PG_UserList[i] = NULL;
+        if (((int)PG_UserList[i] & 0xFFFFFF) > 0xFF0000)
+        {
+            free(PG_UserList[i]);
+            PG_UserList[i] = NULL;
+        }
     }
 
     free(PG_UserList);
@@ -407,8 +404,9 @@ void IRC_DoCommand()
     char PrintBuf[B_PRINTSTR_LEN] = {0};    // Do not overflow this please
     char subprefix[B_SUBPREFIX_LEN] = {0};
     char subparam[B_SUBPREFIX_LEN] = {0};
-    char ChanBuf[40];   // Channel name    
+    char ChanBuf[40];   // Channel name
 
+    NameOffset = 0;
     strncpy(ChanBuf, PG_Buffer[0]->Title, 40);
 
     if (LineBuf->param[1][0] == 1)
@@ -476,6 +474,7 @@ void IRC_DoCommand()
         strncpy(subprefix, LineBuf->prefix, end-1);
 
         snprintf(PrintBuf, B_PRINTSTR_LEN, "\5%s: \4%s\n", subprefix, LineBuf->param[1]);
+        NameOffset = strlen(subprefix) + 2;
 
         if (strcmp(LineBuf->param[0], v_UsernameReset) == 0)
         {
@@ -667,7 +666,7 @@ void IRC_DoCommand()
                 {
                     while (1)
                     {
-                        if (PG_UserList == NULL) break;
+                        if ((PG_UserList == NULL) || (UserIterator >= IRC_MAX_USERLIST-1)) break;
 
                         // Find the end of a nick or break on CR
                         while (LineBuf->param[3][end++] != ' ')
@@ -770,7 +769,7 @@ void IRC_DoCommand()
             }
         
             default:
-                #if IRC_LOGGING == 1
+                #if IRC_LOGGING >= 1
                 kprintf("Error: Unhandled IRC CMD: %u ---------------------------------------------", cmd);
                 kprintf("Error: Prefix: \"%s\"", LineBuf->prefix);
                 kprintf("Error: Command: \"%s\"", LineBuf->command);
@@ -902,7 +901,7 @@ void IRC_ParseString()
         it++;
     }
 
-    #if IRC_LOGGING == 2
+    #if IRC_LOGGING >= 2
     kprintf("Prefix: \"%s\"", LineBuf->prefix);
     kprintf("Command: \"%s\"", LineBuf->command);
     for (u8 i = 0; i < 16; i++) if (strlen(LineBuf->param[i]) > 0) kprintf("Param[%u]: \"%s\"", i, LineBuf->param[i]);
@@ -964,7 +963,7 @@ void IRC_PrintString(char *string)
 {
     u16 len = strlen(string);
     u16 screen_width = ((sv_Font == 0) ? 40 : 80) - (sv_HSOffset >> 3); // Effective screen width
-    u16 current_column = 0;
+    s16 current_column = -1;
     u16 i = 0;
 
     while (i < len) 
@@ -981,6 +980,7 @@ void IRC_PrintString(char *string)
                    string[word_end+wo] != 0x4  && // Custom text colour reset
                    string[word_end+wo] != 0x5  && // Custom text colour set
                    string[word_end+wo] != 0xF  && // Colour reset
+                   string[word_end+wo] != '\\' && 
                    string[word_end+wo] != '\n') 
             {
                 if ((string[word_end+wo-1] == 0x3 || string[word_end+wo-2] == 0x3) && (string[word_end+wo] >= '0' || string[word_end+wo] <= '9'))
@@ -1022,7 +1022,7 @@ void IRC_PrintString(char *string)
             if (current_column + word_length > screen_width) 
             {
                 // If the word itself is too long for the screen width, print as much as fits
-                if (word_length > screen_width) 
+                if (word_length + NameOffset > screen_width)
                 {
                     u16 chars_to_print = screen_width - current_column;
                     
@@ -1035,26 +1035,41 @@ void IRC_PrintString(char *string)
                     }
 
                     IRC_PrintChar('\n');      // Insert newline after reaching screen width
-                    current_column = 0;       // Reset column for new line
+
+                    for (u8 sp = 0; sp < NameOffset; sp++) IRC_PrintChar(' ');  // Offset any extra lines to line messages up
+                    current_column = NameOffset;                                // Reset column for new line + offset for extra lines
                 }
                 else 
                 {
                     // If the word can fit on the next line, wrap before printing it
                     IRC_PrintChar('\n');
-                    current_column = 0;
+
+                    for (u8 sp = 0; sp < NameOffset; sp++) IRC_PrintChar(' ');  // Offset any extra lines to line messages up
+                    current_column = NameOffset;                                // Reset column for new line + offset for extra lines
                 }
             }
         }
 
         // Print the current character and move to the next
         IRC_PrintChar(string[i]);
-        current_column++;
         i++;
+        
+        if (string[i] != 0x0  && 
+            string[i] != 0x1  && // ...
+            string[i] != 0x3  && // Control character
+            string[i] != 0x4  && // Custom text colour reset
+            string[i] != 0x5  && // Custom text colour set
+            string[i] != 0xF  && // Colour reset
+            string[i] != '\\' && 
+            string[i] != '\n')
+        {
+            current_column++;
+        }
 
         // Reset column counter if a newline character is encountered in the input
         if (string[i - 1] == '\n') 
         {
-            current_column = 0;
+            current_column = -1;
         }
     }
 }

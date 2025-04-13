@@ -25,10 +25,15 @@ int main(bool hardReset)
     VDP_setEnable(FALSE);
     SYS_disableInts();
 
+    SetupExceptions();
+
+    PAL_setPalette(PAL0, palette_black, DMA);
+    PAL_setPalette(PAL1, palette_black, DMA);
+    PAL_setPalette(PAL2, palette_black, DMA);
+    PAL_setPalette(PAL3, palette_black, DMA);
+
     Z80_unloadDriver();
     Z80_requestBus(TRUE);   // Make sure SGDK library is built with HALT_Z80_ON_IO and HALT_Z80_ON_DMA set to 0, to make sure the bus never gets released again
-
-    SetupExceptions();
 
     #if (HALT_Z80_ON_IO != 0)
     kprintf("Warning: HALT_Z80_ON_IO is enabled!");
@@ -52,6 +57,8 @@ int main(bool hardReset)
     {
         ChangeState(PS_Dummy, 0, NULL); 
         SetSprite_Y(SPRITE_ID_CURSOR, 0);
+        RXBytes = 0;
+        TXBytes = 0;
     }
 
     bPALSystem = IS_PAL_SYSTEM;
@@ -60,11 +67,6 @@ int main(bool hardReset)
     {
         VDP_setScreenHeight240();
     }
-
-    PAL_setPalette(PAL0, palette_black, DMA);
-    PAL_setPalette(PAL1, palette_black, DMA);
-    PAL_setPalette(PAL2, palette_black, DMA);
-    PAL_setPalette(PAL3, palette_black, DMA);
 
     PSG_init();
     PSG_setEnvelope(0, PSG_ENVELOPE_MAX);
@@ -96,14 +98,13 @@ int main(bool hardReset)
 
     // Initialize terminal for boot output text
     sv_Font = FONT_8x8_16;
-    sv_HSOffset = 8;
-    TELNET_Init();
+    TELNET_Init(TF_Everything);
     vNewlineConv = 1;
     bAutoFlushStdout = TRUE;
     
     VDP_setEnable(TRUE);
  
-    Stdout_Push("[97mInitializing system...[0m\n");
+    Stdout_Push(" [97mInitializing system...[0m\n");
 
     Input_Init();
 
@@ -112,16 +113,16 @@ int main(bool hardReset)
     TRM_SetStatusIcon(ICO_NET_IDLE_SEND, ICO_POS_2);
     TRM_SetStatusIcon(ICO_NONE,          ICO_POS_3);
 
-    Stdout_Push("[97mMounting filesystem...[0m\n");
+    Stdout_Push(" [97mMounting filesystem...[0m\n");
     FS_Init();
 
-    Stdout_Push("[97mLoading config...[0m\n");
+    Stdout_Push(" [97mLoading config...[0m\n");
     if (CFG_LoadData()) 
     {
-        Stdout_Push("└[91mFailed to load config file![0m\n");
+        Stdout_Push(" └[91mFailed to load config file![0m\n");
         CFG_SaveData();
     }
-    else Stdout_Push("└[92mSuccessfully loaded config file[0m\n");
+    else Stdout_Push(" └[92mSuccessfully loaded config file[0m\n");
         
     VDP_setReg(0xB, 0x8);               // Enable VDP ext interrupt (Enable: 8 - Disable: 0)
     SYS_setInterruptMaskLevel(0);       // Enable all interrupts
@@ -130,7 +131,7 @@ int main(bool hardReset)
     // Enable interrupts during driver init, certain devices will need ExtIRQ working for detection
     SYS_enableInts();
 
-    Stdout_Push("[97mConfiguring devices...[0m\n");
+    Stdout_Push(" [97mConfiguring devices...[0m\n");
     DeviceManager_Init();
 
     SYS_disableInts();
@@ -140,12 +141,12 @@ int main(bool hardReset)
     bShowQMenu = FALSE;
 
     #if (HALT_Z80_ON_IO != 0)
-    Stdout_Push("\n[91mWarning: HALT_Z80_ON_IO is enabled\n");
-    Stdout_Push("in SGDK! This may cause issues![0m\n\n");
+    Stdout_Push("\n [91mWarning: HALT_Z80_ON_IO is enabled");
+    Stdout_Push("\n in SGDK! This may cause issues![0m\n\n");
     #endif 
     #if (HALT_Z80_ON_DMA != 0)
-    Stdout_Push("\n[91mWarning: HALT_Z80_ON_DMA is enabled\n");
-    Stdout_Push("in SGDK! This may cause issues![0m\n\n");
+    Stdout_Push("\n [91mWarning: HALT_Z80_ON_DMA is enabled");
+    Stdout_Push("\n in SGDK! This may cause issues![0m\n\n");
     #endif
 
     #if ((HALT_Z80_ON_DMA != 0) || (HALT_Z80_ON_IO != 0))
@@ -169,8 +170,6 @@ int main(bool hardReset)
     #ifndef EMU_BUILD
     waitMs(1000);
     #endif
-    
-    //waitMs(1000);
 
     // Setup icon and default window colours
     PAL_setColor( 1, 0x00E);    // Icon Red
@@ -179,7 +178,7 @@ int main(bool hardReset)
     PAL_setColor( 4, 0x0E0);    // Cursor
     PAL_setColor( 5, 0x222);    // Icon BG
     PAL_setColor( 6, 0xEEE);    // Icon Normal
-    PAL_setColor( 7, 0x0E0);    // Icon Green (Previously in slot 3)
+    PAL_setColor( 7, 0x0C0);    // Icon Green (Previously in slot 3)
     PAL_setColor(18, 0xEEE);    // Window text FG Normal - This is set to black during boot, revert it back
     PAL_setColor(19, 0x222);    // Window inner BG       - This is set to black during boot, revert it back
     UI_ApplyTheme();

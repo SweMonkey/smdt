@@ -3,7 +3,7 @@
 
 #include <genesis.h>
 
-typedef struct s_time
+typedef struct
 {
     u32 year;
     u32 month;

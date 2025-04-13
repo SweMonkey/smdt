@@ -65,7 +65,15 @@ u16 F_Read(void *dest, u32 size, u32 count, SM_File *file)
 
     if ((file->f.flags & FM_RDWR) || (file->f.flags & FM_RDONLY))
     {
-        return FS_ReadFile(dest, size*count, &file->f);
+        if (file->f.flags & FM_IO)
+        {
+            // ... read from io here
+            kprintf("Attempting to read from IO file - Not implemented.");
+        }
+        else 
+        {
+            return FS_ReadFile(dest, size*count, &file->f);
+        }
     }
 
     return 0;    
@@ -77,7 +85,15 @@ u16 F_Write(void *src, u32 size, u32 count, SM_File *file)
 
     if ((file->f.flags & FM_RDWR) || (file->f.flags & FM_WRONLY))
     {
-        return FS_WriteFile(src, size*count, &file->f);
+        if (file->f.flags & FM_IO)
+        {
+            // ... write to io here
+            kprintf("Attempting to write to IO file - Not implemented.");
+        }
+        else 
+        {
+            return FS_WriteFile(src, size*count, &file->f);
+        }
     }
 
     return 0;    

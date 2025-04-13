@@ -18,20 +18,22 @@
 
 typedef bool NET_Connect_CB(char *str);
 typedef void NET_Disconnect_CB();
-typedef u8 NET_GetIP_CB(char *str);
+typedef u8 NET_GetIP_CB(char *str);     // Ret: 0= Success, 1= Generic error, 2= Timeout
 typedef void NET_PingIP_CB(char *ip);
 
 extern Buffer RxBuffer;
 extern Buffer TxBuffer;
 extern SM_Device DRV_UART;      // Built-in UART
 
-extern SM_File *rxbuf;  // Rx buffer as an IO file
-extern SM_File *txbuf;  // Tx buffer as an IO file
+extern SM_File *rxbuf;  // RxBuffer as an IO file
+extern SM_File *txbuf;  // TxBuffer as an IO file
 
 void NET_RxIRQ();
-void NET_SendChar(const u8 c, u8 flags);
+void NET_SendChar(const u8 c);
+void NET_BufferChar(const u8 c);
 void NET_TransmitBuffer();
 void NET_SendString(const char *str);
+void NET_SendStringLen(const char *str, u16 len);
 
 
 void NET_SetConnectFunc(NET_Connect_CB *cb);
@@ -41,7 +43,7 @@ void NET_SetDisconnectFunc(NET_Disconnect_CB *cb);
 void NET_Disconnect();
 
 void NET_SetGetIPFunc(NET_GetIP_CB *cb);
-bool NET_GetIP(char *str);
+u8 NET_GetIP(char *str);
 
 void NET_SetPingFunc(NET_PingIP_CB *cb);
 void NET_PingIP(char *ip);

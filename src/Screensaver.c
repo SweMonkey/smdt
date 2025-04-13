@@ -13,7 +13,7 @@ static s16 ScrDy = 1;
 
 void ScreensaverInit()
 {
-    State cs = getState();
+    State ps = getState();
     InactiveCounter = 0;
     if (bPALSystem) InactiveUpper = 15000;   // NTSC = 18000 - PAL = 15000
 
@@ -23,9 +23,9 @@ void ScreensaverInit()
     SetSprite_TILE(SPRITE_ID_SCRSAV, (0xE000 | AVR_SCRSAV));
 
     // Point screensaver sprite link back to 0 or next sprite depending on which state smdt is in
-    if (cs == PS_Gopher) {SetSprite_SIZELINK(SPRITE_ID_SCRSAV, SPR_HEIGHT_1x4 | SPR_WIDTH_4x1, SPRITE_ID_POINTER);} // Gopher.   ScrSaveSprite -> Mouse pointer
-    else if (cs != PS_IRC) {SetSprite_SIZELINK(SPRITE_ID_SCRSAV, SPR_HEIGHT_1x4 | SPR_WIDTH_4x1, SPRITE_ID_CURSOR);}// Terminal. ScrSaveSprite -> Cursor
-    else {SetSprite_SIZELINK(SPRITE_ID_SCRSAV, SPR_HEIGHT_1x4 | SPR_WIDTH_4x1, 2);}                                 // IRC. ScrSaveSprite -> First text input box
+         if (ps == PS_Gopher){SetSprite_SIZELINK(SPRITE_ID_SCRSAV, SPR_HEIGHT_1x4 | SPR_WIDTH_4x1, SPRITE_ID_POINTER);}    // Gopher.   ScrSaveSprite -> Mouse pointer
+    else if (ps != PS_IRC)   {SetSprite_SIZELINK(SPRITE_ID_SCRSAV, SPR_HEIGHT_1x4 | SPR_WIDTH_4x1, SPRITE_ID_CURSOR);}     // Terminal. ScrSaveSprite -> Cursor
+    else                     {SetSprite_SIZELINK(SPRITE_ID_SCRSAV, SPR_HEIGHT_1x4 | SPR_WIDTH_4x1, 2);}                    // IRC.      ScrSaveSprite -> First text input box
 
     // Update cursor sprite link to point to screensaver
     SetSprite_SIZELINK(SPRITE_ID_CURSOR, SPR_SIZE_1x1, SPRITE_ID_SCRSAV);

@@ -22,55 +22,51 @@ SM_File *stderr = NULL;
 
 
 // Hacky function to pause printing when screen has been filled
-void MoreFunc(s16 *start)
+void MoreFunc()
 {
     u8 kbdata = 0;
-    
-    if (((TTY_GetSY()) - *start) >= (bPALSystem?27:25))
+
+    TELNET_ParseRX('\n');
+    TELNET_ParseRX('');
+    TELNET_ParseRX('[');
+    TELNET_ParseRX('7');
+    TELNET_ParseRX('m');
+    TELNET_ParseRX('<');
+    TELNET_ParseRX('M');
+    TELNET_ParseRX('o');
+    TELNET_ParseRX('r');
+    TELNET_ParseRX('e');
+    TELNET_ParseRX('>');
+    TELNET_ParseRX(' ');
+    TELNET_ParseRX('');
+    TELNET_ParseRX('[');
+    TELNET_ParseRX('0');
+    TELNET_ParseRX('m');
+
+    while (1)
     {
-        TELNET_ParseRX('\n');
-        TELNET_ParseRX('');
-        TELNET_ParseRX('[');
-        TELNET_ParseRX('7');
-        TELNET_ParseRX('m');
-        TELNET_ParseRX('<');
-        TELNET_ParseRX('M');
-        TELNET_ParseRX('o');
-        TELNET_ParseRX('r');
-        TELNET_ParseRX('e');
-        TELNET_ParseRX('>');
-        TELNET_ParseRX(' ');
-        TELNET_ParseRX('');
-        TELNET_ParseRX('[');
-        TELNET_ParseRX('0');
-        TELNET_ParseRX('m');
-
-        while (1)
+        while (KB_Poll(&kbdata))
         {
-            while (KB_Poll(&kbdata))
-            {
-                KB_Interpret_Scancode(kbdata);
-            }
-
-            if (is_AnyKey())
-            {
-                TTY_SetSX(0);
-                TTY_MoveCursor(TTY_CURSOR_UP, 1); // Only move up in case the initial \n is printed above
-                Buffer_Flush(&TxBuffer);
-                break;
-            }
-
-            #ifdef ENABLE_CLOCK
-            TickClock();        // Clock will drift when interrupts are disabled!
-            #endif
-            ScreensaverTick();  // Screensaver counter/animation
-            CR_Blink();         // Cursor blink
-            VDP_waitVSync();
+            KB_Interpret_Scancode(kbdata);
         }
 
-        *start = TTY_GetSY();
-        InputTick();    // Flush input queue to prevent inputs from above "leaking" out into stdout
+        if (is_AnyKey())
+        {
+            TTY_SetSX(0);
+            TTY_MoveCursor(TTY_CURSOR_UP, 1); // Only move up in case the initial \n is printed above
+            Buffer_Flush(&TxBuffer);
+            break;
+        }
+
+        #ifdef ENABLE_CLOCK
+        TickClock();        // Clock will drift when interrupts are disabled!
+        #endif
+        ScreensaverTick();  // Screensaver counter/animation
+        CR_Blink();         // Cursor blink
+        VDP_waitVSync();
     }
+
+    InputTick();    // Flush input queue to prevent inputs from above "leaking" out into stdout
 }
 
 void Stdout_Push(const char *str)
@@ -100,12 +96,17 @@ void Stdout_PushByte(u8 byte)
 
 void Stdout_Flush()
 {
-    u8 data = 0;
     s16 start = TTY_GetSY();
+    u8 data = 0;
 
     while (Buffer_Pop(&StdoutBuffer, &data))
     {
         TELNET_ParseRX(data);
-        MoreFunc(&start);
+
+        if ((TTY_GetSY() - start) >= (bPALSystem?27:25))
+        {
+            start = TTY_GetSY();
+            MoreFunc();
+        }
     }
 }

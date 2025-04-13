@@ -7,7 +7,6 @@
 #include "UI.h"
 #include "Network.h"
 #include "Screensaver.h"
-#include "HexView.h"
 
 #include "devices/RL_Network.h"
 #include "misc/ConfigFile.h"
@@ -34,14 +33,17 @@ static u16 UserListScroll = 0;
 static u8 KBTxData[40];            // Buffer for the last 40 typed characters from the keyboard
 u8 sv_IRCFont = FONT_4x8_1;
 
+extern bool bShowFavView;
+extern bool bShowHexView;
+
 void IRC_PrintChar(u8 c);
 
 
-void Enter_IRC(u8 argc, char *argv[])
+u16 Enter_IRC(u8 argc, char *argv[])
 {
     sv_Font = sv_IRCFont;
 
-    IRC_Init();
+    if (IRC_Init() == EXIT_FAILURE) return EXIT_FAILURE;
 
     // Set VDP tilemap size to 64 or 128 depending on TMB_SIZE_SELECTOR value
     VDP_setPlaneSize(TMB_TILEMAP_WIDTH, 32, FALSE);
@@ -65,10 +67,10 @@ void Enter_IRC(u8 argc, char *argv[])
     UserWin = malloc(sizeof(SM_Window));
     if (UserWin == NULL)
     {
-        Stdout_Push("[91mFailed to allocate memory;\nCan't create UserWin[0m\n");
-        RevertState();
+        Stdout_Push("[91mIRC Client: Failed to allocate memory. Can't create UserWin\n[0m\n");
+        return EXIT_FAILURE;
     }
-    UI_CreateWindow(UserWin, "", UC_NOBORDER);
+    UI_CreateWindow(UserWin, "", WF_NoBorder);
     UI_SetVisible(UserWin, FALSE);
 
     memset(KBTxData, 0, 40);
@@ -84,6 +86,8 @@ void Enter_IRC(u8 argc, char *argv[])
             // Connection failed; Inform the user here
         }
     }
+
+    return EXIT_SUCCESS;
 }
 
 void ReEnter_IRC()
@@ -150,7 +154,7 @@ void Run_IRC()
 
     if (bPG_UpdateUserlist)
     {
-        if (UI_GetVisible(UserWin) && !bShowHexView)
+        if (UI_GetVisible(UserWin) && !(bShowHexView || bShowFavView))
         {
             if (PG_UserNum > 0)
             {
@@ -177,7 +181,7 @@ void Run_IRC()
         }
     }
     
-    if (bShowHexView)
+    if (bShowHexView || bShowFavView)
     {
         // Do redraw because a window has been opened since last time
         bPG_UpdateUserlist = 2;
@@ -227,6 +231,7 @@ u8 ParseTx()
     u8 outbuf[300];
     u16 i = 0, j = 0;
     u8 data;
+    NameOffset = 0;
 
     memset(inbuf, 0, 256);
     memset(outbuf, 0, 300);
@@ -265,6 +270,7 @@ u8 ParseTx()
 
             sprintf((char*)outbuf, "PRIVMSG %s :%s\n", command, (char*)inbuf+end_c);
             sprintf((char*)tmbbuf, "\5%s: \4%s\n", v_UsernameReset, (char*)inbuf+end_c);
+            NameOffset = strlen(v_UsernameReset) + 2;
 
             // Try to find an unused page or an existing one
             for (u8 ch = 0; ch < IRC_MAX_CHANNELS; ch++)
@@ -390,6 +396,7 @@ u8 ParseTx()
 
         sprintf((char*)outbuf, "PRIVMSG %s :%s\n", PG_Buffer[PG_CurrentIdx]->Title, (char*)inbuf);
         sprintf((char*)tmbbuf, "\5%s: \4%s\n", v_UsernameReset, (char*)inbuf);
+        NameOffset = strlen(v_UsernameReset) + 2;
 
         IRC_PrintString((char*)tmbbuf);
     }
@@ -407,154 +414,153 @@ u8 ParseTx()
 
 void Input_IRC()
 {
-    if (!bWindowActive)
+    if (bWindowActive) return;
+    
+    if (is_KeyDown(KEY_UP))
     {
-        if (is_KeyDown(KEY_UP))
+        if (UserListScroll > 0) 
         {
-            if (UserListScroll > 0) 
+            UserListScroll--;
+            
+            // Redraw user list window
+            bPG_UpdateUserlist = 2;
+        }
+    }
+
+    if (is_KeyDown(KEY_DOWN))
+    {
+        if (UserListScroll < (PG_UserNum-22))
+        {
+            UserListScroll++;
+            
+            // Redraw user list window
+            bPG_UpdateUserlist = 2;
+        }
+    }
+
+    if (is_KeyDown(KEY_KP4_LEFT))
+    {
+        if (!sv_Font)
+        {
+            HScroll += 8;
+            VDP_setHorizontalScroll(BG_A, HScroll);
+            VDP_setHorizontalScroll(BG_B, HScroll);
+        }
+        else
+        {
+            HScroll += 4;
+            VDP_setHorizontalScroll(BG_A, (HScroll+4));  // -4
+            VDP_setHorizontalScroll(BG_B, (HScroll  ));  // -8
+        }
+    }
+
+    if (is_KeyDown(KEY_KP6_RIGHT))
+    {
+        if (!sv_Font)
+        {
+            HScroll -= 8;
+            VDP_setHorizontalScroll(BG_A, HScroll);
+            VDP_setHorizontalScroll(BG_B, HScroll);
+        }
+        else
+        {
+            HScroll -= 4;
+            VDP_setHorizontalScroll(BG_A, (HScroll+4));  // -4
+            VDP_setHorizontalScroll(BG_B, (HScroll  ));  // -8
+        }
+    }
+
+    if (is_KeyDown(KEY_RETURN))
+    {
+        // Parse user input and send it
+        if (ParseTx() == 0) NET_TransmitBuffer();
+    }
+
+    if (is_KeyDown(KEY_BACKSPACE))
+    {
+        Buffer_ReversePop(&TxBuffer);
+    }
+
+    if (is_KeyDown(KEY_F1))
+    {
+        ChangePage(0);
+    }
+    if (is_KeyDown(KEY_F2))
+    {
+        ChangePage(1);
+    }
+    if (is_KeyDown(KEY_F3))
+    {
+        ChangePage(2);
+    }
+
+    #if TMB_SIZE_SELECTOR == 6
+    if (is_KeyDown(KEY_F4))
+    {
+        ChangePage(3);
+    }
+    if (is_KeyDown(KEY_F5))
+    {
+        ChangePage(4);
+    }
+    if (is_KeyDown(KEY_F6))
+    {
+        ChangePage(5);
+    }
+    #endif
+
+    if (is_KeyDown(KEY_LEFT))
+    {
+        if (PG_CurrentIdx > 0) PG_CurrentIdx--;
+
+        ChangePage(PG_CurrentIdx);
+    }
+
+    if (is_KeyDown(KEY_RIGHT))
+    {
+        if (PG_CurrentIdx < IRC_MAX_CHANNELS-1) PG_CurrentIdx++;
+
+        ChangePage(PG_CurrentIdx);
+    }
+
+    // Toggle user list window and request NAMES list from remote server, list will be recieved at a later point
+    if (is_KeyDown(KEY_TAB))
+    {
+        char req[40];
+        u16 i = 0;
+
+        UserListScroll = 0;
+        memset(req, 0, 40);
+
+        TRM_ClearArea(26, 1, 14, 25, PAL1, TRM_CLEAR_BG); // Clear area where the user list window will be drawn
+
+        //if (PG_CurrentIdx != 0)
+        {
+            UI_ToggleVisible(UserWin);
+
+            if (UserWin->bVisible)
             {
-                UserListScroll--;
-                
-                // Redraw user list window
+                TRM_SetWinParam(FALSE, TRUE, 13, 1);
+
+                #ifndef EMU_BUILD
+                snprintf(req, 40, "NAMES %s\n", PG_Buffer[PG_CurrentIdx]->Title);
+
+                Buffer_Flush(&TxBuffer);
+
+                while (i < strlen(req))
+                {
+                    Buffer_Push(&TxBuffer, req[i]);
+                    i++;
+                }
+
+                NET_TransmitBuffer();
+                #endif
+
                 bPG_UpdateUserlist = 2;
             }
-        }
-
-        if (is_KeyDown(KEY_DOWN))
-        {
-            if (UserListScroll < (PG_UserNum-22))
+            else 
             {
-                UserListScroll++;
-                
-                // Redraw user list window
-                bPG_UpdateUserlist = 2;
-            }
-        }
-
-        if (is_KeyDown(KEY_KP4_LEFT))
-        {
-            if (!sv_Font)
-            {
-                HScroll += 8;
-                VDP_setHorizontalScroll(BG_A, HScroll);
-                VDP_setHorizontalScroll(BG_B, HScroll);
-            }
-            else
-            {
-                HScroll += 4;
-                VDP_setHorizontalScroll(BG_A, (HScroll+4));  // -4
-                VDP_setHorizontalScroll(BG_B, (HScroll  ));  // -8
-            }
-        }
-
-        if (is_KeyDown(KEY_KP6_RIGHT))
-        {
-            if (!sv_Font)
-            {
-                HScroll -= 8;
-                VDP_setHorizontalScroll(BG_A, HScroll);
-                VDP_setHorizontalScroll(BG_B, HScroll);
-            }
-            else
-            {
-                HScroll -= 4;
-                VDP_setHorizontalScroll(BG_A, (HScroll+4));  // -4
-                VDP_setHorizontalScroll(BG_B, (HScroll  ));  // -8
-            }
-        }
-
-        if (is_KeyDown(KEY_RETURN))
-        {
-            // Parse user input and send it
-            if (ParseTx() == 0) NET_TransmitBuffer();
-        }
-
-        if (is_KeyDown(KEY_BACKSPACE))
-        {
-            Buffer_ReversePop(&TxBuffer);
-        }
-
-        if (is_KeyDown(KEY_F1))
-        {
-            ChangePage(0);
-        }
-        if (is_KeyDown(KEY_F2))
-        {
-            ChangePage(1);
-        }
-        if (is_KeyDown(KEY_F3))
-        {
-            ChangePage(2);
-        }
-
-        #if TMB_SIZE_SELECTOR == 6
-        if (is_KeyDown(KEY_F4))
-        {
-            ChangePage(3);
-        }
-        if (is_KeyDown(KEY_F5))
-        {
-            ChangePage(4);
-        }
-        if (is_KeyDown(KEY_F6))
-        {
-            ChangePage(5);
-        }
-        #endif
-
-        if (is_KeyDown(KEY_LEFT))
-        {
-            if (PG_CurrentIdx > 0) PG_CurrentIdx--;
-
-            ChangePage(PG_CurrentIdx);
-        }
-
-        if (is_KeyDown(KEY_RIGHT))
-        {
-            if (PG_CurrentIdx < IRC_MAX_CHANNELS-1) PG_CurrentIdx++;
-
-            ChangePage(PG_CurrentIdx);
-        }
-
-        // Toggle user list window and request NAMES list from remote server, list will be recieved at a later point
-        if (is_KeyDown(KEY_TAB))
-        {
-            char req[40];
-            u16 i = 0;
-
-            UserListScroll = 0;
-            memset(req, 0, 40);
-
-            TRM_ClearArea(26, 1, 14, 25, PAL1, TRM_CLEAR_BG); // Clear area where the user list window will be drawn
-
-            //if (PG_CurrentIdx != 0)
-            {
-                UI_ToggleVisible(UserWin);
-
-                if (UserWin->bVisible)
-                {
-                    TRM_SetWinParam(FALSE, TRUE, 13, 1);
-
-                    #ifndef EMU_BUILD
-                    snprintf(req, 40, "NAMES %s\n", PG_Buffer[PG_CurrentIdx]->Title);
-
-                    Buffer_Flush(&TxBuffer);
-
-                    while (i < strlen(req))
-                    {
-                        Buffer_Push(&TxBuffer, req[i]);
-                        i++;
-                    }
-
-                    NET_TransmitBuffer();
-                    #endif
-
-                    bPG_UpdateUserlist = 2;
-                }
-                else 
-                {
-                    TRM_SetWinParam(FALSE, TRUE, 20, 1);
-                }
+                TRM_SetWinParam(FALSE, TRUE, 20, 1);
             }
         }
     }

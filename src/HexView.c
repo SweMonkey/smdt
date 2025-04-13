@@ -13,6 +13,7 @@ static char *bufptr = NULL;
 static u16 bufsize = 0;
 static char WinTitle[38];
 static bool bIOFILE = FALSE;
+static u8 NumLines = 23;
 
 
 static void DrawDataLine(u8 Line)
@@ -47,7 +48,7 @@ static void UpdateView()
 
     UI_Begin(HexWindow);
 
-    for (u8 l = 0; l < 23; l++) 
+    for (u8 l = 0; l < NumLines; l++) 
     {
         DrawDataLine(l);
         FileOffset += 8;
@@ -123,7 +124,7 @@ static void DrawHexView()
     TRM_SetWinHeight(30);
     TRM_ClearArea(0, 1, 40, 26, PAL1, TRM_CLEAR_BG);  // h=27
 
-    UI_CreateWindow(HexWindow, WinTitle, UC_NONE);
+    UI_CreateWindow(HexWindow, WinTitle, WF_None);
 
     UI_Begin(HexWindow);
     UI_FillRect(0, 27, 40, 2, 0xDE);
@@ -141,6 +142,7 @@ void HexView_Open(const char *filename)
     FS_ResolvePath(filename, fn_buf);
     bIOFILE = FALSE;
 
+    // Open file, take special care of IO files
     if (strcmp(fn_buf, "/system/rxbuffer.io") == 0)
     {
         strcpy(WinTitle, "HexView - Rx Buffer");
@@ -194,6 +196,7 @@ void HexView_Open(const char *filename)
         snprintf(WinTitle, 38, "HexView - %s", filename);
     }
 
+    // Create hex viewer window
     HexWindow = malloc(sizeof(SM_Window));
 
     if (HexWindow == NULL)
@@ -202,6 +205,15 @@ void HexView_Open(const char *filename)
         return;
     }
 
+    // Determine number of lines that will be needed if file is smaller than 192 bytes
+    if (bufsize < 0xC0)
+    {
+        NumLines  = bufsize / 8;
+        NumLines += (bufsize % 8 ? 1 : 0);
+    }
+    else NumLines = 23;
+
+    // Redraw hex viewer window and present it
     DrawHexView();
 
     bShowHexView = TRUE;

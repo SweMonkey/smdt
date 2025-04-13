@@ -21,7 +21,7 @@ static bool bEdit = FALSE;
 static char AddrStr[64];
 static u8 pLineMode = 1;
 
-static const char *tab_text[3] =
+static const char * const tab_text[3] =
 {
     "Telnet", "IRC", "Gopher"
 };
@@ -43,10 +43,6 @@ static char *list_gopher[] =
 
 static const u16 num_fav[3] = {ARR_SIZE(list_telnet)-1, ARR_SIZE(list_irc)-1, ARR_SIZE(list_gopher)-1};
 
-
-void DrawList(u8 Line)
-{
-}
 
 static void UpdateView()
 {
@@ -79,13 +75,13 @@ static void UpdateView()
     {
         UI_DrawWindow(6, 6, 26, 10, TRUE, "Add bookmark");
         UI_DrawTextInput(7, 9, 24, "Address", AddrStr, swIdx==0?TRUE:FALSE);
-        UI_DrawConfirmBox(12, 13, UC_MODEL_OK_CANCEL, swIdx-1);
+        UI_DrawConfirmBox(12, 13, CM_Ok_Cancel, swIdx-1);
     }
     else if (bEdit)
     {
         UI_DrawWindow(6, 6, 26, 10, TRUE, "Edit bookmark");
         UI_DrawTextInput(7, 9, 24, "Address", AddrStr, swIdx==0?TRUE:FALSE);
-        UI_DrawConfirmBox(12, 13, UC_MODEL_OK_CANCEL, swIdx-1);
+        UI_DrawConfirmBox(12, 13, CM_Ok_Cancel, swIdx-1);
     }
 
     UI_DrawText( 0, 21, PAL1, "[RET] Open");
@@ -353,7 +349,7 @@ void FavView_Toggle()
         pLineMode = vLineMode;  // Save linemode setting
         vLineMode = 1;          // Causes keyboard input to be buffered
 
-        UI_CreateWindow(FavWindow, "Bookmarks - WIP", UC_NONE);
+        UI_CreateWindow(FavWindow, "Bookmarks - WIP", WF_None);
         DrawFavView();
     }
 

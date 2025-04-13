@@ -25,12 +25,18 @@ static PRG_State *PrevState = &DummyState;
 static State CurrentStateEnum = PS_Dummy;
 static State PrevStateEnum = PS_Dummy;
 
+static u16 SC_RetValue = 0;         // Return value from new state init
+static bool bStateChanged = FALSE;  // Indicates wheter a state change has occured during the previous frame (needed in case a state change fails and reverts state change back)
 static u8 kbdata;
 bool bWindowActive = FALSE;
 
 
 void VBlank()
 {
+    #ifdef SHOW_FRAME_USAGE
+    PAL_setColor(0, 0x00A);
+    #endif
+
     while (KB_Poll(&kbdata))
     {
         KB_Interpret_Scancode(kbdata);
@@ -40,9 +46,15 @@ void VBlank()
 
     if ((is_KeyDown(KEY_RWIN) || is_KeyDown(KEY_F8)) &&
         (CurrentStateEnum != PS_Debug) && 
-        (!bShowHexView) && (!bShowFavView)) QMenu_Toggle();   // Global quick menu
+        (!bShowHexView) && (!bShowFavView)) 
+        {
+            QMenu_Toggle();   // Global quick menu
+        }
 
-    if (CurrentState->Input != NULL) CurrentState->Input(); // Current PRG
+    if (CurrentState->Input != NULL) 
+    {   
+        CurrentState->Input();
+    }
 
     InputTick();        // Pump IO system
     #ifdef ENABLE_CLOCK
@@ -52,11 +64,17 @@ void VBlank()
     CR_Blink();         // Cursor blink
 
     bWindowActive = (bShowQMenu || bShowHexView || bShowFavView);
+
+    #ifdef SHOW_FRAME_USAGE
+    PAL_setColor(0, 0);
+    #endif
 }
 
 void ChangeState(State new_state, u8 argc, char *argv[])
 {
     if (new_state == CurrentStateEnum) return;
+    
+    bStateChanged = TRUE;
 
     PrevState = CurrentState;
     PrevStateEnum = CurrentStateEnum;
@@ -64,8 +82,6 @@ void ChangeState(State new_state, u8 argc, char *argv[])
     CurrentState->Exit();
 
     SYS_disableInts();
-
-    InputTick();    // Flush input queue to prevent inputs "leaking" into new state
 
     switch (new_state)
     {
@@ -114,18 +130,26 @@ void ChangeState(State new_state, u8 argc, char *argv[])
 
     CurrentStateEnum = new_state;
 
-    TRM_SetStatusText(STATUS_TEXT);
+    TRM_SetStatusText(STATUS_TEXT_SHORT);
     TRM_ResetStatusText();
 
-    SYS_enableInts();
-
-    CurrentState->Enter(argc, argv);
-
-    ScreensaverInit();
     SetupQItemTags();
     PAL_setColor(4, sv_CursorCL);
 
     SYS_setHIntCallback(CurrentState->HBlank);
+
+    SYS_enableInts();
+
+    SYS_setVBlankCallback(NULL);
+    SC_RetValue = CurrentState->Enter(argc, argv);
+    ScreensaverInit();
+    SYS_setVBlankCallback(VBlank);
+
+    if (SC_RetValue == EXIT_FAILURE)
+    {
+        // Revert back to previous state
+        RevertState();
+    }
 }
 
 // Return to previous state
@@ -134,28 +158,26 @@ void RevertState()
     PRG_State *ShadowState = CurrentState;
     State ShadowStateEnum = CurrentStateEnum;
 
+    bStateChanged = TRUE;
+
     CurrentState->Exit();
 
     SYS_disableInts();
 
-    InputTick();    // Flush input queue to prevent inputs "leaking" into new state
+    TRM_SetStatusText(STATUS_TEXT_SHORT);
+    TRM_ResetStatusText();
 
     CurrentState = PrevState;
     CurrentStateEnum = PrevStateEnum;
-
-    TRM_SetStatusText(STATUS_TEXT);
-    TRM_ResetStatusText();
-
-    CurrentState->ReEnter();
-
-    ScreensaverInit();
-    SetupQItemTags();
-    PAL_setColor(4, sv_CursorCL);
-
-    SYS_setHIntCallback(CurrentState->HBlank);
-
     PrevState = ShadowState;
     PrevStateEnum = ShadowStateEnum;
+
+    SetupQItemTags();
+    PAL_setColor(4, sv_CursorCL);
+    SYS_setHIntCallback(CurrentState->HBlank);
+
+    CurrentState->ReEnter();
+    ScreensaverInit();
 
     SYS_enableInts();
 }
@@ -170,17 +192,37 @@ State getState()
     return CurrentStateEnum;
 }
 
+State getPrevState()
+{
+    return PrevStateEnum;
+}
+
 void ResetSystem(bool bHard)
 {
     CurrentState->Reset();
 }
 
+bool StateHasChanged()
+{
+    return bStateChanged;
+}
+
 void StateTick()
 {
+    #ifdef SHOW_FRAME_USAGE
+    PAL_setColor(0, 0xA00);
+    #endif
+
+    bStateChanged = FALSE;
+
     CurrentState->Run();
 
     if (bRLNetwork)
     {
         RLN_Update();
     }
+
+    #ifdef SHOW_FRAME_USAGE
+    PAL_setColor(0, 0x000);
+    #endif
 }

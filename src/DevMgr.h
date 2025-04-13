@@ -30,9 +30,9 @@
 #define ICO_JP_OK      0x1E // Joypad input device 'J'
 #define ICO_ID_ERROR   0x1D // Error with input device 'X'
 
-typedef enum e_port {DP_None = 0, DP_Port1 = 1, DP_Port2 = 2, DP_Port3 = 3} DevPort;
+typedef enum {DP_None = 0, DP_Port1 = 1, DP_Port2 = 2, DP_Port3 = 3} DevPort;
 
-typedef struct s_deviceid
+typedef struct
 {
     char *sName;    // Device name
     u8 Bitmask;     // Used bits        (Example; Used bits = b00000011)
@@ -40,7 +40,7 @@ typedef struct s_deviceid
     u8 Mode;        // 1=Parallel / 2=Serial / 3=Both
 } SM_DeviceId;
 
-typedef struct s_device
+typedef struct
 {
     vu8 *Ctrl;      // Control port
     vu8 *Data;      // Data port

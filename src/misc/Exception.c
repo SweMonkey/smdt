@@ -19,12 +19,13 @@ extern u16 srState;
 static inline void InitException()
 {
     SYS_setInterruptMaskLevel(7);
+    VDP_setEnable(TRUE);
 
     if (getState() != PS_Terminal) RevertState();
 
     Buffer_Flush(&StdoutBuffer);
 
-    TELNET_Init();
+    TELNET_Init(TF_Everything);
     vDoEcho = 0;
     vLineMode = LMSM_EDIT;
     vNewlineConv = 1;
@@ -125,11 +126,89 @@ void __attribute__ ((noinline)) int_zerodivide()
     WaitForInput();
 }
 
-void __attribute__ ((noinline)) int_default()
+void __attribute__ ((noinline)) int_error()
 {
     InitException();
 
-    TRM_SetStatusText("Unimplemented exception            ");
+    TRM_SetStatusText("Error exception                    ");
+
+    PrintPCSR();
+    PrintRegisters();
+    PrintStack();
+
+    WaitForInput();
+}
+
+void __attribute__ ((noinline)) int_trapv()
+{
+    InitException();
+
+    TRM_SetStatusText("TRAPV exception                    ");
+
+    PrintPCSR();
+    PrintRegisters();
+    PrintStack();
+
+    WaitForInput();
+}
+
+void __attribute__ ((noinline)) int_privviolation()
+{
+    InitException();
+
+    TRM_SetStatusText("Privilege violation exception      ");
+
+    PrintPCSR();
+    PrintRegisters();
+    PrintStack();
+
+    WaitForInput();
+}
+
+void __attribute__ ((noinline)) int_trace()
+{
+    InitException();
+
+    TRM_SetStatusText("Trace exception                    ");
+
+    PrintPCSR();
+    PrintRegisters();
+    PrintStack();
+
+    WaitForInput();
+}
+
+void __attribute__ ((noinline)) int_line1x1x()
+{
+    InitException();
+
+    TRM_SetStatusText("Line 1x1x emulator exception       ");
+
+    PrintPCSR();
+    PrintRegisters();
+    PrintStack();
+
+    WaitForInput();
+}
+
+void __attribute__ ((noinline)) int_buserror()
+{
+    InitException();
+
+    TRM_SetStatusText("Bus error exception                ");
+
+    PrintPCSR();
+    PrintRegisters();
+    PrintStack();
+
+    WaitForInput();
+}
+
+void __attribute__ ((noinline)) int_chkinst()
+{
+    InitException();
+
+    TRM_SetStatusText("ChkInst exception                  ");
 
     PrintPCSR();
     PrintRegisters();
@@ -140,16 +219,14 @@ void __attribute__ ((noinline)) int_default()
 
 void SetupExceptions()
 {
-    busErrorCB = int_default;
-
+    busErrorCB = int_buserror;
     addressErrorCB = int_addresserror;
     illegalInstCB = int_illegal;
     zeroDivideCB = int_zerodivide;
-
-    chkInstCB = int_default;
-    trapvInstCB = int_default;
-    privilegeViolationCB = int_default;
-    traceCB = int_default;
-    line1x1xCB = int_default;
-    errorExceptionCB = int_default;
+    errorExceptionCB = int_error;
+    trapvInstCB = int_trapv;
+    privilegeViolationCB = int_privviolation;
+    traceCB = int_trace;
+    line1x1xCB = int_line1x1x;
+    chkInstCB = int_chkinst;
 }

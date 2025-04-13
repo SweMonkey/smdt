@@ -160,7 +160,7 @@ void DetectDevices()
 
     if (bNoKeyboard)
     {
-        Stdout_Push("└[93mNo keyboard found.[0m\n");
+        Stdout_Push(" └[93mNo keyboard found.[0m\n");
         kprintf("No KB found - Press F1 to continue");
     }
 
@@ -197,7 +197,7 @@ void DetectDevices()
 
     if ((SCDver) || (strcmp(SEGASTR, "SEGA") == 0))
     {
-        printf("%s CD found.\n", bPALSystem ? "SEGA" : "MEGA");
+        printf(" %s CD found.\n", bPALSystem ? "SEGA" : "MEGA");
         bMegaCD = TRUE;
     }*/
 
@@ -211,10 +211,10 @@ void DetectDevices()
     SetDevicePort(&DRV_UART, sv_ListenPort);
     *((vu8*) DRV_UART.SCtrl) = 0x38;
     
+    Stdout_Push(" [97mChecking for network adapters...[0m\n");
+
     #ifndef EMU_BUILD
     u8 xpn_r = 0;
-
-    Stdout_Push("[97mChecking for network adapters...[0m\n");
 
     if (RLN_Initialize())   // Check if RetroLink network adapter is present
     {
@@ -227,7 +227,7 @@ void DetectDevices()
         NET_SetGetIPFunc(RLN_GetIP);
         NET_SetPingFunc(RLN_PingIP);
         
-        Stdout_Push("└[92mRLN: RetroLink found[0m\n");
+        Stdout_Push(" └[92mRLN: RetroLink found[0m\n");
     }
     else if ((xpn_r = XPN_Initialize())) // Check if xPort device is present
     {
@@ -246,10 +246,10 @@ void DetectDevices()
         switch (xpn_r)
         {
             case 1:
-                Stdout_Push("└[92mXPN: xPort module OK[0m\n");
+                Stdout_Push(" └[92mXPN: xPort module OK[0m\n");
             break;
             case 2:
-                Stdout_Push("└[91mXPN: Error[0m\n");
+                Stdout_Push(" └[91mXPN: Error[0m\n");
             break;
         
             default:
@@ -262,8 +262,8 @@ void DetectDevices()
         bRLNetwork = FALSE;
         bXPNetwork = FALSE;
 
-        Stdout_Push("├[93mNo network adapters found[0m\n");
-        Stdout_Push("└[97mListening on built in UART[0m\n");
+        Stdout_Push(" ├[93mNo network adapters found[0m\n");
+        Stdout_Push(" └[97mListening on built in UART[0m\n");
 
         TRM_SetStatusIcon(ICO_NET_ERROR, ICO_POS_1);
         TRM_SetStatusIcon(ICO_NET_ERROR, ICO_POS_2);

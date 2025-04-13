@@ -9,7 +9,7 @@
 #define TMB_TM_W (TMB_TILEMAP_WIDTH-1)           // VDP tilemap range - 63/127      - Do not modifiy this value
 #define TMB_TM_S (TMB_BUFFER_SIZE-1)             // Buffer size range - 2047/4095   - Do not modifiy this value
 
-typedef struct s_tmbuffer
+typedef struct
 {
     char Title[32];
     s16 sx, sy;         // Cursor x and y position

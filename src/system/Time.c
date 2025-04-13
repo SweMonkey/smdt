@@ -49,6 +49,8 @@ void TimeToStr_Full(SM_Time t, char *ret)
 {
     if (ret == NULL) return;
 
+    SystemTime = SecondsToDateTime(TimeSync);
+
     sprintf(ret, "%lu-%lu-%lu %02lu:%02u:%02u", t.day, t.month, t.year, t.hour, t.minute, t.second);
 }
 
@@ -56,12 +58,16 @@ void TimeToStr_Date(SM_Time t, char *ret)
 {
     if (ret == NULL) return;
 
+    SystemTime = SecondsToDateTime(TimeSync);
+
     sprintf(ret, "%lu-%lu-%lu", t.day, t.month, t.year);
 }
 
 void TimeToStr_Time(SM_Time t, char *ret)
 {
     if (ret == NULL) return;
+
+    SystemTime = SecondsToDateTime(TimeSync);
 
     sprintf(ret, "%02lu:%02u:%02u", t.hour, t.minute, t.second);
 }
@@ -75,7 +81,7 @@ void TickClock()
 
         //FrameTick++;    // Leap frame :^)
 
-        SystemTime = SecondsToDateTime(TimeSync);
+        //SystemTime = SecondsToDateTime(TimeSync);
     }
     
     FrameTick++;

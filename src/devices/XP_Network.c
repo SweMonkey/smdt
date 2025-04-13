@@ -45,7 +45,7 @@ u8 XPN_Initialize()
 
 void XPN_SendByte(u8 data) 
 {
-    NET_SendChar(data, TXF_NOBUFFER);
+    NET_SendChar(data);
 }
 
 bool XPN_ReadByte(u8 *data)

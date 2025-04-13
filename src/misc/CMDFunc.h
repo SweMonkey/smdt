@@ -15,7 +15,6 @@ extern SM_CMDList CMDList[];
 
 void CMD_LaunchTelnet(u8 argc, char *argv[]);
 void CMD_LaunchIRC(u8 argc, char *argv[]);
-void CMD_LaunchLinuxTTY(u8 argc, char *argv[]);
 void CMD_LaunchGopher(u8 argc, char *argv[]);
 void CMD_SetAttr(u8 argc, char *argv[]);
 void CMD_Echo(u8 argc, char *argv[]);

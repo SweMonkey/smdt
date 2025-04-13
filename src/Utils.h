@@ -4,11 +4,15 @@
 #include <genesis.h>
 
 // Title bar prefix
-#define STATUS_VER_STR "v0.31.4"
-#define STATUS_TEXT "SMDT v31"
+#define STATUS_VER_STR "v0.32.0"
+#define STATUS_TEXT "SMDT v32"
 #define STATUS_TEXT_SHORT "SMDT"
 
-// VRAM memory addresses for various graphics in tile units (/32)
+#define SMDT_VMAJOR_INT 0
+#define SMDT_VMINOR_INT 32
+#define SMDT_VREV_INT 0
+
+// VRAM memory addresses for various graphics, in tile units (/32)
 #define AVR_BGBLOCK 0       // $0000 - $01FF
 #define AVR_CURSOR  0x10    // $0200 - $02DF
 #define AVR_POINTER 0x17    // $02E0 - $02FF
@@ -18,7 +22,7 @@
 #define AVR_FONT1   0x240   // $4800 - $87FF
 #define AVR_UI      0x440   // $8800 - $9FFF
 
-// VRAM memory addresses for various tables
+// VRAM memory addresses for VDP tables
 #define AVR_HSCROLL 0xA000  // $A000 - $A3FF
 #define AVR_SAT     0xAC00  // $AC00 - $AFFF 
 #define AVR_WINDOW  0xB000  // $B000 - $BFFF
@@ -26,10 +30,10 @@
 #define AVR_PLANE_B 0xE000  // $E000 - $FFFF
 
 // Icon x position
-#define ICO_POS_0 36  // Main use: Input device icon
-#define ICO_POS_1 37  // Main use: Rx icon
-#define ICO_POS_2 38  // Main use: Tx icon
-#define ICO_POS_3 39  // Main use: None
+#define ICO_POS_0 36  // Input device icon
+#define ICO_POS_1 37  // Rx icon
+#define ICO_POS_2 38  // Tx icon
+#define ICO_POS_3 39  // None
 
 // Undefined icon/
 #define ICO_NONE  5
@@ -40,7 +44,7 @@
 #define SPRITE_ID_POINTER 2     // Mouse pointer
 
 // Check if a character is printable
-#define isPrintable(x) ((x != '\n')&&(x))
+#define isPrintable(x) (x>0x1F)//((x != '\n')&&(x))
 
 // Macro for setting up sprite attributes. n = sprite number between 0 and 79, v = value
 #define GetSpriteAVR(n)              (AVR_SAT + ((n)*8))
@@ -68,10 +72,13 @@
 //#define IRC_LOGGING 1 // Log IRC debug messages (1 = Unhandled CMD only, 2 = LOG EVERYTHING)
 //#define TRM_LOGGING   // Log terminal debug messages
 //#define IAC_LOGGING   // Log IAC data
-//#define ESC_LOGGING 2 // Log ESC data (1 = Log prioritised info, 2 = log misc errors and warnings, 3 = log spam)
+//#define ESC_LOGGING 3 // Log ESC data (1 = Log prioritised info, 2 = log misc errors and warnings, 3 = log spam, 4 = log everything spam)
+//#define OSC_LOGGING
 //#define UTF_LOGGING   // Log UTF-8 messages
 //#define KB_DEBUG      // Log keyboard debug messages
 //#define GOP_LOGGING
+//#define DEBUG_STREAM
+//#define SHOW_FRAME_USAGE
 #define ENABLE_CLOCK
 
 extern bool bPALSystem;
@@ -98,7 +105,6 @@ void itoa(s32 n, char s[]);
 u8 tolower(u8 c);
 char *strtok(char *s, char d);
 
-// Lower case string
 #define tolower_string(s) u16 _ti = 0;while(s[_ti]){s[_ti]=(char)tolower((u8)s[_ti]);_ti++;}
 
 char *strncat(char *to, const char *from, u16 num);
@@ -107,9 +113,9 @@ u16 printf(const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
 
 s32 memcmp(const void *s1, const void *s2, u32 n);
 
-u32 syscall(register vu32 n, register vu32 a, register vu32 b, register vu32 c, register vu32 d, register vu32 e, register vu32 f);
+u32 syscall(vu32 n, vu32 a, vu32 b, vu32 c, vu32 d, vu32 e, vu32 f);
 
-// Used by: LittleFS
+// Used by LittleFS
 #define true 1
 #define false 0
 typedef u32 size_t;

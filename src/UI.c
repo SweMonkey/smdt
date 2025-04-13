@@ -93,26 +93,26 @@ void UI_ApplyTheme()
             PAL_setColor(49, 0xEEE);    // Cursor outline
         break;
         case 4: // Aqua
-            PAL_setColor( 3, RGB24_TO_VDPCOLOR(0x406060));    // Window title background
-            PAL_setColor( 5, RGB24_TO_VDPCOLOR(0x204040));    // Icon background
+            PAL_setColor( 3, 0x664);    // Window title background
+            PAL_setColor( 5, 0x442);    // Icon background
 
-            PAL_setColor(19, RGB24_TO_VDPCOLOR(0x204040));    // Window inner BG
-            PAL_setColor(20, RGB24_TO_VDPCOLOR(0x406060));    // Window title BG
+            PAL_setColor(19, 0x442);    // Window inner BG
+            PAL_setColor(20, 0x664);    // Window title BG
 
-            PAL_setColor(21, RGB24_TO_VDPCOLOR(0x008080));    // Window shadow
-            PAL_setColor(22, RGB24_TO_VDPCOLOR(0x00C0C0));    // Window border
-            PAL_setColor(49, RGB24_TO_VDPCOLOR(0x008080));    // Cursor outline
+            PAL_setColor(21, 0x880);    // Window shadow
+            PAL_setColor(22, 0xCC0);    // Window border
+            PAL_setColor(49, 0x880);    // Cursor outline
         break;
         case 5: // Hot pink
-            PAL_setColor( 3, RGB24_TO_VDPCOLOR(0x604060));    // Window title background
-            PAL_setColor( 5, RGB24_TO_VDPCOLOR(0x402040));    // Icon background
+            PAL_setColor( 3, 0x646);    // Window title background
+            PAL_setColor( 5, 0x424);    // Icon background
 
-            PAL_setColor(19, RGB24_TO_VDPCOLOR(0x402040));    // Window inner BG
-            PAL_setColor(20, RGB24_TO_VDPCOLOR(0x604060));    // Window title BG
+            PAL_setColor(19, 0x424);    // Window inner BG
+            PAL_setColor(20, 0x646);    // Window title BG
 
-            PAL_setColor(21, RGB24_TO_VDPCOLOR(0x800080));    // Window shadow
-            PAL_setColor(22, RGB24_TO_VDPCOLOR(0xC000C0));    // Window border
-            PAL_setColor(49, RGB24_TO_VDPCOLOR(0xC000C0));    // Cursor outline
+            PAL_setColor(21, 0x808);    // Window shadow
+            PAL_setColor(22, 0xC0C);    // Window border
+            PAL_setColor(49, 0xC0C);    // Cursor outline
         break;
     
         default:
@@ -174,7 +174,7 @@ void UI_RepaintWindow()
     {
         if (Target->WinBuffer[y][x] == 0) continue;
 
-        TRM_DrawChar(Target->WinBuffer[y][x], x, y+1 - ((Target->Flags & UC_NOBORDER) ? 3 : 0), (Target->WinAttribute[y][x] & 0x3));
+        TRM_DrawChar(Target->WinBuffer[y][x], x, y+1 - ((Target->Flags & WF_NoBorder) ? 3 : 0), (Target->WinAttribute[y][x] & 0x3));
     }
     }
 }
@@ -190,7 +190,7 @@ void UI_SetWindowTitle(const char *title)
     memcpy(Target->Title, title, 34);
     Target->Title[34] = '\0';
 
-    if (!(Target->Flags & UC_NOBORDER))
+    if (!(Target->Flags & WF_NoBorder))
     {
         const char *c = Target->Title;
         while (*c) 
@@ -205,7 +205,7 @@ void UI_SetWindowTitle(const char *title)
 /// @param w Empty Window pointer to create
 /// @param title Window title
 /// @param flags Window flags; UC_NONE = No flags, UC_NOBORDER = Do not draw a window frame
-void UI_CreateWindow(SM_Window *w, const char *title, u8 flags)
+void UI_CreateWindow(SM_Window *w, const char *title, UI_WindowFlags flags)
 {
     if (w == NULL) return;
 
@@ -213,13 +213,13 @@ void UI_CreateWindow(SM_Window *w, const char *title, u8 flags)
 
     memset(w->WinAttribute, PAL1, 1200);
 
-    if (w->Flags & UC_NOBORDER) memset(w->WinBuffer, 0, 1200);   // prev: filled with 0
+    if (w->Flags & WF_NoBorder) memset(w->WinBuffer, 0, 1200);   // prev: filled with 0
     else memcpy(w->WinBuffer, Frame, 1200);
 
     memcpy(w->Title, title, 34);
     w->Title[34] = '\0';
 
-    if (!(w->Flags & UC_NOBORDER))
+    if (!(w->Flags & WF_NoBorder))
     {
         const char *c = w->Title;
         u8 x = 1;
@@ -507,7 +507,7 @@ void UI_DrawTextInput(u8 x, u8 y, u8 width, const char *caption, char str[], boo
 /// @param item_count Number of items in list
 /// @param selected_item Selected item in list
 /// @param flags ItemList flags (IL_None, IL_NoBorder)
-void UI_DrawItemListSelect(u8 x, u8 y, u8 width, u8 height, const char *caption, char *list[], u8 item_count, u8 selected_item, ItemListFlags flags)
+void UI_DrawItemListSelect(u8 x, u8 y, u8 width, u8 height, const char *caption, char *list[], u8 item_count, u8 selected_item, UI_ItemListFlags flags)
 {
     if (Target == NULL) return;
 
@@ -598,25 +598,25 @@ void UI_DrawColourPicker(u8 x, u8 y, u16 *rgb, u8 selected)
 /// @param y Y position
 /// @param model Type of confirm box; UC_MODEL_OK_CANCEL, UC_MODEL_YES_NO, UC_MODEL_APPLY_CANCEL
 /// @param selected Selected choice
-void UI_DrawConfirmBox(u8 x, u8 y, u8 model, u8 selected)
+void UI_DrawConfirmBox(u8 x, u8 y, UI_ConfirmModel model, u8 selected)
 {
     if (Target == NULL) return;
     
     switch (model)
     {
-        case UC_MODEL_OK_CANCEL:
+        case CM_Ok_Cancel:
             UI_DrawText(x    , y, (selected == 0 ? PAL0 : PAL1), " Ok ");
             UI_DrawText(x + 6, y, (selected == 1 ? PAL0 : PAL1), " Cancel ");
         break;
-        case UC_MODEL_YES_NO:
+        case CM_Yes_No:
             UI_DrawText(x    , y, (selected == 0 ? PAL0 : PAL1), " Yes ");
             UI_DrawText(x + 6, y, (selected == 1 ? PAL0 : PAL1), " No ");
         break;
-        case UC_MODEL_APPLY_CANCEL:
+        case CM_Apply_Cancel:
             UI_DrawText(x    , y, (selected == 0 ? PAL0 : PAL1), " Apply ");
             UI_DrawText(x + 8, y, (selected == 1 ? PAL0 : PAL1), " Cancel ");
         break;
-        case UC_MODEL_ADD_REMOVE:
+        case CM_Add_Remove:
             UI_DrawText(x    , y, (selected == 0 ? PAL0 : PAL1), " Add ");
             UI_DrawText(x + 8, y, (selected == 1 ? PAL0 : PAL1), " Remove ");
         break;
@@ -632,7 +632,7 @@ void UI_DrawConfirmBox(u8 x, u8 y, u8 model, u8 selected)
 /// @param num_tabs Number of tabs
 /// @param active_tab Active tab
 /// @param selected Selected tab
-void UI_DrawTabs(u8 x, u8 y, u8 w, u8 num_tabs, u8 active_tab, u8 selected, const char *tab_text[])
+void UI_DrawTabs(u8 x, u8 y, u8 w, u8 num_tabs, u8 active_tab, u8 selected, const char * const tab_text[])
 {
     if (Target == NULL) return;
 

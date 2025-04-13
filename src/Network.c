@@ -12,8 +12,8 @@ u32 TXBytes = 0;
 Buffer RxBuffer, TxBuffer;
 SM_Device DRV_UART;
 
-SM_File *rxbuf; // Rx buffer as an IO file
-SM_File *txbuf; // Tx buffer as an IO file
+SM_File *rxbuf; // RxBuffer as an IO file
+SM_File *txbuf; // TxBuffer as an IO file
 
 NET_Connect_CB *ConnectCB = NULL;
 NET_Disconnect_CB *DisconnectCB = NULL;
@@ -33,21 +33,12 @@ void NET_RxIRQ()
     //RXBytes++;
 }
 
-// Send byte to remote machine or buffer it depending on linemode
-void NET_SendChar(const u8 c, u8 flags)
+inline void NET_SendChar(const u8 c)
 {
     #ifdef EMU_BUILD
-    #warning EMU_BUILD active, key input from keyboard may not be recognized in terminal!
-    //return;   // Uncomment me if running on a bad emulator
+    return;
     #endif
-
-    if ((vLineMode & LMSM_EDIT) && ((flags & TXF_NOBUFFER) == 0))
-    {
-        Buffer_Push(&TxBuffer, c);
-        return;
-    }
-
-    TRM_SetStatusIcon(ICO_NET_SEND, ICO_POS_2);
+    //TRM_SetStatusIcon(ICO_NET_SEND, ICO_POS_2);
 
     if (bRLNetwork)
     {
@@ -55,56 +46,52 @@ void NET_SendChar(const u8 c, u8 flags)
     }
     else
     {
-        while (*(vu8*)DRV_UART.SCtrl & 1); // while Txd full = 1
-
-        *(vu8*)DRV_UART.TxData = c;
+        __asm__ __volatile__
+        (
+            "1:                         \n\t"
+            "btst #0, (%[serial])       \n\t"   // Test serial control register bit 0
+            "bne.s 1b                   \n\t"   // and wait until Tx is not full
+            "move.b %[c], -4(%[serial]) \n\t"   // Send byte 'c' to Tx register
+        : /* outputs */
+        : /* inputs */
+            [c] "d"(c), [serial] "a"((vu8*)DRV_UART.SCtrl)
+        : /* clobbered regs */
+        );
     }
 
     TXBytes++;
+    //TRM_SetStatusIcon(ICO_NET_IDLE_SEND, ICO_POS_2);
+}
 
-    TRM_SetStatusIcon(ICO_NET_IDLE_SEND, ICO_POS_2);
+inline void NET_BufferChar(const u8 c)
+{    
+    if ((vLineMode & LMSM_EDIT) == 0) NET_SendChar(c);
+    else Buffer_Push(&TxBuffer, c);
 }
 
 // Pop and transmit data in TxBuffer
-void NET_TransmitBuffer()
+inline void NET_TransmitBuffer()
 {
-    #ifdef EMU_BUILD
-    return;
-    #endif
+    u8 data;
 
     TRM_SetStatusIcon(ICO_NET_SEND, ICO_POS_2);
 
-    if (bRLNetwork)
-    {
-        u8 data;
-
-        while (Buffer_Pop(&TxBuffer, &data))
-        {
-            RLN_SendByte(data);
-
-            TXBytes++;
-        }
-    }
-    else
-    {
-        u8 data;
-
-        while (Buffer_Pop(&TxBuffer, &data))
-        {
-            while (*(vu8*)DRV_UART.SCtrl & 1); // while Txd full = 1
-
-            *(vu8*)DRV_UART.TxData = data;
-
-            TXBytes++;
-        }
-    }
-
+    while (Buffer_Pop(&TxBuffer, &data)) NET_SendChar(data);
+    
     TRM_SetStatusIcon(ICO_NET_IDLE_SEND, ICO_POS_2);
 }
 
-void NET_SendString(const char *str)
+inline void NET_SendString(const char *str)
 {
-    while (*str) NET_SendChar(*str++, TXF_NOBUFFER);
+    while (*str) NET_SendChar(*str++);
+}
+
+inline void NET_SendStringLen(const char *str, u16 len)
+{
+    for (u16 i = 0; i < len; i++)
+    {
+        NET_SendChar(str[i]);
+    }
 }
 
 
@@ -143,9 +130,9 @@ void NET_SetGetIPFunc(NET_GetIP_CB *cb)
     GetIPCB = cb;
 }
 
-bool NET_GetIP(char *str)
+u8 NET_GetIP(char *str)
 {
-    if (GetIPCB == NULL) return FALSE;
+    if (GetIPCB == NULL) return 1;
 
     return GetIPCB(str);
 }

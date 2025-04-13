@@ -6,25 +6,26 @@
 
 #define FILE_MAX_FNBUF 64
 
-typedef enum e_fmode 
+typedef enum 
 {
-    FM_RDONLY = LFS_O_RDONLY, 
-    FM_WRONLY = LFS_O_WRONLY, 
+    FM_RDONLY = LFS_O_RDONLY,
+    FM_WRONLY = LFS_O_WRONLY,
     FM_RDWR = LFS_O_WRONLY,
+    FM_IO = LFS_O_IO,
     FM_CREATE = LFS_O_CREAT,
     FM_EXCL = LFS_O_EXCL,
     FM_TRUNC = LFS_O_TRUNC,
     FM_APPEND = LFS_O_APPEND
 } FileMode;
 
-typedef enum e_forigin 
+typedef enum
 {
     SEEK_SET = LFS_SEEK_SET, 
     SEEK_CUR = LFS_SEEK_CUR, 
     SEEK_END = LFS_SEEK_END
 } FileOrigin;
 
-typedef struct s_file
+typedef struct
 {
     lfs_file_t f;
     u16 fd;

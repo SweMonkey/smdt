@@ -19,8 +19,8 @@ bool KB_Saturn_Init()
 
     if (DEV_GetData(DRV_KBSATURN, 0xF) != 1)
     {
-        kprintf("Unknown Saturn peripheral found (r = $%X)", DEV_GetData(DRV_KBSATURN, 0xF));
-        printf("└[93mUnknown Saturn peripheral found. r=$%X[0m\n", DEV_GetData(DRV_KBSATURN, 0xF));
+        kprintf(" Unknown Saturn peripheral found (r = $%X)", DEV_GetData(DRV_KBSATURN, 0xF));
+        printf(" └[93mUnknown Saturn peripheral found. r=$%X[0m\n", DEV_GetData(DRV_KBSATURN, 0xF));
 
         return 0;
     }
@@ -30,7 +30,7 @@ bool KB_Saturn_Init()
 
         KB_SetKeyboard(&KB_Saturn_Poll);
 
-        Stdout_Push("└[92mSaturn KB initialized[0m\n");
+        Stdout_Push(" └[92mSaturn KB initialized[0m\n");
     }
 
     return 1;
