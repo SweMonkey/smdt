@@ -900,12 +900,15 @@ void WINFN_FONT_TERM()
         break;
         case 2:
             sv_TerminalFont = 2;
+            sv_BoldFont = FALSE;
         break;
         case 3:
             sv_TerminalFont = 1;
+            sv_BoldFont = FALSE;
         break;
         case 4:
             sv_TerminalFont = 3;
+            sv_BoldFont = FALSE;
         break;
     
         default:
