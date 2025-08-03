@@ -5,16 +5,21 @@
 #include "Terminal.h"
 #include "Input.h"
 #include "Network.h"
+#include "WinMgr.h"
 #include "Utils.h"
 
 u8 sv_KeyLayout = 0;
 u8 vKB_BATStatus = 0;
-u8 bKB_ExtKey = FALSE;
-u8 bKB_Break = FALSE;
-u8 bKB_Shift = FALSE;
-u8 bKB_Alt = FALSE;
-u8 bKB_Ctrl = FALSE;
+u8 bKB_ExtKey   = FALSE;
+u8 bKB_Break    = FALSE;
+u8 bKB_Shift    = FALSE;
+u8 bKB_Alt      = FALSE;
+u8 bKB_Ctrl     = FALSE;
+u8 bKB_CapsLock = FALSE;
+u8 bKB_NumLock  = FALSE;
+u8 bKB_ScrLock  = FALSE;
 KB_Poll_CB *PollCB = NULL;
+KB_SetLED_CB *SetLEDCB = NULL;
 
 // https://www.win.tue.nl/~aeb/linux/kbd/scancodes-10.html#scancodesets
 // Using set 2
@@ -120,11 +125,19 @@ void KB_Init()
     bKB_Shift = FALSE;
     bKB_Alt = FALSE;
     bKB_Ctrl = FALSE;
+    bKB_CapsLock = FALSE;
+    bKB_NumLock  = TRUE;
+    bKB_ScrLock  = FALSE;
 }
 
-void KB_SetKeyboard(KB_Poll_CB *cb)
+void KB_SetPoll_Func(KB_Poll_CB *cb)
 {
     PollCB = cb;
+}
+
+void KB_SetLED_Func(KB_SetLED_CB *cb)
+{
+    SetLEDCB = cb;
 }
 
 bool KB_Poll(u8 *data)
@@ -132,6 +145,14 @@ bool KB_Poll(u8 *data)
     if (PollCB == NULL) return FALSE;
 
     return PollCB(data);
+}
+
+void KB_SetLED(u8 leds)
+{
+    if (SetLEDCB == NULL) return;
+
+    SetLEDCB(leds);
+    return;
 }
 
 void KB_Interpret_Scancode(u8 scancode)
@@ -145,13 +166,13 @@ void KB_Interpret_Scancode(u8 scancode)
         {
             case KEY_LSHIFT:
             case KEY_RSHIFT:
-                bKB_Shift = 0;
+                bKB_Shift = FALSE;
             break;
             case 0x11:  //KEY_RALT
-                bKB_Alt = 0;
+                bKB_Alt = FALSE;
             break;
             case KEY_LCONTROL:  // CTRL^ Sequence
-                bKB_Ctrl = 0;
+                bKB_Ctrl = FALSE;
             break;
             default:
             break;
@@ -191,6 +212,34 @@ void KB_Interpret_Scancode(u8 scancode)
             bKB_Ctrl = TRUE;
         return;
 
+        case KEY_SCROLLOCK:
+        {
+            set_KeyPress(((bKB_ExtKey?0x100:0) | scancode), KEYSTATE_DOWN);
+            bKB_ScrLock = !bKB_ScrLock;
+
+            u8 l = (bKB_CapsLock << 2) | (bKB_NumLock << 1) | (bKB_ScrLock);
+            KB_SetLED(l);
+            break;
+        }
+        case KEY_NUMLOCK:
+        {
+            set_KeyPress(((bKB_ExtKey?0x100:0) | scancode), KEYSTATE_DOWN);
+            bKB_NumLock = !bKB_NumLock;
+
+            u8 l = (bKB_CapsLock << 2) | (bKB_NumLock << 1) | (bKB_ScrLock);
+            KB_SetLED(l);
+            break;
+        }
+        case KEY_CAPSLOCK:
+        {
+            set_KeyPress(((bKB_ExtKey?0x100:0) | scancode), KEYSTATE_DOWN);
+            bKB_CapsLock = !bKB_CapsLock;
+
+            u8 l = (bKB_CapsLock << 2) | (bKB_NumLock << 1) | (bKB_ScrLock);
+            KB_SetLED(l);
+            break;
+        }
+
         default:
             set_KeyPress(((bKB_ExtKey?0x100:0) | scancode), KEYSTATE_DOWN);
         break;
@@ -215,7 +264,7 @@ void KB_Interpret_Scancode(u8 scancode)
     // Normal printing
     u8 mod = 0;
     if (bKB_Alt) mod = 2;
-    else if (bKB_Shift) mod = 1;
+    else if (bKB_Shift || bKB_CapsLock) mod = 1;
 
     u8 key = SCTablePtr[sv_KeyLayout][mod][scancode];
 
@@ -223,5 +272,9 @@ void KB_Interpret_Scancode(u8 scancode)
     {
         NET_BufferChar(key);                // Send key to TxBuffer
         if (!vDoEcho) TTY_PrintChar(key);   // Only print characters if ECHO is false
+    }
+    else if (isPrintable(key) && (WinMgr_GetCurrentWinID() == W_FavView))
+    {
+        Buffer_Push(&TxBuffer, key);
     }
 }

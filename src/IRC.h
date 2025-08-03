@@ -25,6 +25,7 @@ extern bool bPG_UpdateMessage;
 extern u8 NameOffset;
 
 u16 IRC_Init();
+void IRC_SetPalette();
 u16 IRC_Reset();
 void IRC_Exit();
 

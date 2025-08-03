@@ -44,6 +44,7 @@ u8 DevSeq = 0;                      // Number of devices
 bool bRLNetwork = FALSE;            // Use RetroLink cartridge instead of built-in UART
 bool bXPNetwork = FALSE;            // Use XPort network adapter
 bool bMegaCD = FALSE;               // Mega/Sega CD detected flag
+bool bVRAM_128KB = FALSE;
 DevPort sv_ListenPort = DP_Port2;   // Default UART port to listen on
 
 
@@ -160,8 +161,8 @@ void DetectDevices()
 
     if (bNoKeyboard)
     {
-        Stdout_Push(" └[93mNo keyboard found.[0m\n");
-        kprintf("No KB found - Press F1 to continue");
+        Stdout_Push(" [93mNo keyboard found.[0m\n");
+        kprintf("No keyboard found - Press F1 to continue");
     }
 
     // -- Joypad setup ---------------------------------
@@ -201,6 +202,25 @@ void DetectDevices()
         bMegaCD = TRUE;
     }*/
 
+    // -- Optional TeraDrive setup ---------------------
+    //u8 old_reg = VDP_getReg(1);
+    u32 rb = 0;
+
+    // Do VRAM check here
+    //VDP_setReg(1, 0x80 | old_reg);    // Enable 128 KB VRAM
+
+    if (rb == 0xDEADBEEF)
+    {
+        Stdout_Push(" [97m128 KB VRAM system[0m\n");
+        bVRAM_128KB = TRUE;
+    }
+    else
+    {
+        //VDP_setReg(1, old_reg);   // Reset 128 KB VRAM bit
+        Stdout_Push(" [97m64 KB VRAM system[0m\n");
+        bVRAM_128KB = FALSE;
+    }
+
     // -- UART setup -----------------------------------
     DRV_UART.Id.sName = "UART";
     DRV_UART.Id.Bitmask = 0x40; // 0x40 - Pin 7
@@ -227,7 +247,7 @@ void DetectDevices()
         NET_SetGetIPFunc(RLN_GetIP);
         NET_SetPingFunc(RLN_PingIP);
         
-        Stdout_Push(" └[92mRLN: RetroLink found[0m\n");
+        Stdout_Push(" [92mRLN: RetroLink found[0m\n");
     }
     else if ((xpn_r = XPN_Initialize())) // Check if xPort device is present
     {
@@ -246,10 +266,10 @@ void DetectDevices()
         switch (xpn_r)
         {
             case 1:
-                Stdout_Push(" └[92mXPN: xPort module OK[0m\n");
+                Stdout_Push(" [92mXPN: xPort module OK[0m\n");
             break;
             case 2:
-                Stdout_Push(" └[91mXPN: Error[0m\n");
+                Stdout_Push(" [91mXPN: Error[0m\n");
             break;
         
             default:
@@ -262,8 +282,8 @@ void DetectDevices()
         bRLNetwork = FALSE;
         bXPNetwork = FALSE;
 
-        Stdout_Push(" ├[93mNo network adapters found[0m\n");
-        Stdout_Push(" └[97mListening on built in UART[0m\n");
+        Stdout_Push(" [93mNo network adapters found[0m\n");
+        Stdout_Push(" [97mListening on built in UART[0m\n");
 
         TRM_SetStatusIcon(ICO_NET_ERROR, ICO_POS_1);
         TRM_SetStatusIcon(ICO_NET_ERROR, ICO_POS_2);
@@ -275,7 +295,7 @@ void DeviceManager_Init()
 {
     for (u8 s = 0; s < DEV_MAX; s++)
     {
-        DevList[s] = 0;
+        DevList[s] = NULL;
     }
 
     DevSeq = 0;

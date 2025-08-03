@@ -41,9 +41,10 @@ bool KB_PS2_Init(DevPort port)
         // Did we receive an echo back from the keyboard?
         if ((ret == 0xFE) || (ret == 0xEE)) // FE = Fail+Resend, EE = Successfull echo back
         {
-            printf(" └[92mFound PS/2 KB @ slot %u:%u ($%X)[0m\n", DRV_KBPS2.PAssign, s, ret);
+            printf(" [92mFound PS/2 keyboard @ %u:%u ($%X)[0m\n", DRV_KBPS2.PAssign, s, ret);
 
-            KB_SetKeyboard(&KB_PS2_Poll);
+            KB_SetPoll_Func(&KB_PS2_Poll);
+            KB_SetLED_Func(&KB_PS2_SetLED);
 
             return TRUE;
         }
@@ -194,12 +195,51 @@ u8 KB_PS2_SendCommand(u8 cmd)
 
     // Get response from keyboard
     u8 ret = 0;
+    waitMs(1);
     KB_PS2_Poll(&ret);  // This will also call KB_Lock() on exit
     return ret;
 
     Error:
     KB_Lock();
     return 0;
+}
+
+void KB_PS2_QueueCommand(u8 *bytes, u8 num)
+{
+    u8 i = 0;
+    u8 r = 0;
+    u8 tries = 0;
+
+    while (i < num)
+    {
+        r = KB_PS2_SendCommand(bytes[i]);
+
+        if (r == 0xFA)
+        {
+            i++;
+            tries = 0;
+        }
+        else if (r == 0xFE)
+        {
+            tries++;
+        }
+        else break;
+
+        if (tries > 10)
+        {
+            KB_PS2_SendCommand(0xEE);   // Dummy in case of kb being stuck waiting for a valid command
+            break;
+        }
+
+        waitMs(5);
+    }
+}
+
+void KB_PS2_SetLED(u8 leds)
+{
+    //u8 bytes[2] = {0xED, leds};
+    //KB_PS2_QueueCommand(bytes, 2);
+    return;
 }
 
 /*

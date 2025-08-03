@@ -247,6 +247,15 @@ char *strtok(char *s, char d)
     return result;
 }
 
+void smdt_halt()
+{
+    Stdout_Push("SMDT_HALT trap called!\n");
+    kprintf("SMDT_HALT trap called!");
+    Stdout_Flush();
+
+    while (1);    
+}
+
 struct iovec
 {
     void  *iov_base;    // Starting address
@@ -330,6 +339,7 @@ u32 syscall(vu32 n, vu32 a, vu32 b, vu32 c, vu32 d, vu32 e, vu32 f)
             Stdout_Push("Got caught in a trap! halting system!");
             Stdout_Flush();
     
+            //SYSCALL_RET(0);
             while (1);
         break;
     }
@@ -726,6 +736,30 @@ u16 printf(const char *fmt, ...)
     return i;
 }
 
+// memmove using bytes...
+void *memmove(void *dest, const void *src, u32 n)
+{
+    u8 *d = (u8*)dest;
+    const u8 *s = (u8*)src;
+
+    if (d == s || n == 0) return dest;
+
+    if (d < s) 
+    {
+        // Copy forward
+        while (n--) *d++ = *s++;
+    } 
+    else 
+    {
+        // Copy backward
+        d += n;
+        s += n;
+        while (n--) *--d = *--s;
+    }
+
+    return dest;
+}
+
 s32 memcmp(const void *s1, const void *s2, u32 n)
 {
     const u8 *p1 = s1, *p2 = s2;
@@ -775,4 +809,95 @@ const char *strchr(const char *str, int character)
     for (; *str != '\0'; ++str) if (*str == character) return (char*)str;
 
     return NULL;
+}
+
+
+s16 strncmp(const char *str1, const char *str2, u32 n)
+{
+    const u8 *p1 = (const u8*)str1;
+    const u8 *p2 = (const u8*)str2;
+    u8 c1, c2;
+
+    while (n--)
+    {
+        c1 = *p1++;
+        c2 = *p2++;
+
+        if (c1 != c2 || c1 == 0 || c2 == 0)
+            return c1 - c2;
+    }
+
+    return 0;
+}
+
+void *realloc(void *ptr, u16 old_size, u16 new_size)
+{
+    if (ptr == NULL) return malloc(new_size);
+
+    if (new_size == 0)
+    {
+        free(ptr);
+        return NULL;
+    }
+
+    void *new_ptr = malloc(new_size);
+    if (!new_ptr) return NULL;
+
+    u16 num = (old_size < new_size) ? old_size : new_size;
+    memcpy(new_ptr, ptr, num);
+
+    free(ptr);
+    return new_ptr;
+}
+
+
+// Color stuff
+s8 sv_CBrightness = 0;
+
+static u16 AdjustColor(u16 value)
+{
+    s8 r =  value       & 0xE;
+    s8 g = (value >> 4) & 0xE;
+    s8 b = (value >> 8) & 0xE;
+
+    if (sv_CBrightness > 0)
+    {
+        r = r > 0 ? r + sv_CBrightness : 0;
+        g = g > 0 ? g + sv_CBrightness : 0;
+        b = b > 0 ? b + sv_CBrightness : 0;
+
+        r = (r > 0xE) ? 0xE : r;
+        g = (g > 0xE) ? 0xE : g;
+        b = (b > 0xE) ? 0xE : b;
+    }
+    else if (sv_CBrightness < 0)
+    {
+        r += sv_CBrightness;
+        g += sv_CBrightness;
+        b += sv_CBrightness;
+
+        r = (r < 0) ? 0 : r & 0xE;
+        g = (g < 0) ? 0 : g & 0xE;
+        b = (b < 0) ? 0 : b & 0xE;
+    }
+    else return value;
+
+    return ((b << 8) | (g << 4) | r);
+}
+
+void SetColor(u16 index, u16 value)
+{
+    PAL_setColor(index, AdjustColor(value));
+}
+
+void SetPalette(u16 numPal, const u16 *pal, TransferMethod tm)
+{
+    u16 new_pal[16];
+
+    for (u8 i = 0; i < 16; i++)
+    {
+        new_pal[i] = AdjustColor(pal[i]);
+    }
+
+    PAL_setPalette(numPal, new_pal, tm);
 }

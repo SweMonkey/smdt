@@ -13,10 +13,6 @@ asm(".global gopherdump\ngopherdump:\n.incbin \"tmp/streams/rx_floodgap2.log\"")
 extern const unsigned char gopherdump[];
 #endif
 
-// gopherrendertest.txt
-// rx_gopher_floodgap.log
-// rx_floodgap2.log
-
 //#ifndef EMU_BUILD
 static u8 rxdata;
 static u8 rxdata1;
@@ -29,8 +25,6 @@ static u8 rxdata2;
 #define B_LINK_LEN 128
 #define SCR_UP 0
 #define SCR_DOWN 1
-
-static u8 bOnce = FALSE;
 
 static char *LineBuf = NULL;    // Line buffering string
 static u8 *PageBuffer = NULL;   // Page buffer, contains the entire received document
@@ -124,12 +118,21 @@ u16 Enter_Gopher(u8 argc, char *argv[])
     vLineMode = LMSM_EDIT;
     bDoCursorBlink = FALSE;
     sv_bWrapAround = FALSE;
-    C_XMAX = 127;//(sv_Font ? 254 : 126);
+    C_XMAX = 127;
     ScrHeight = C_SYSTEM_YMAX;
 
     Gopher_Init();
     Gopher_GetAddressFromStr(argv[1]);
     Gopher_GetPage();
+
+    /*
+    char addr[64];
+    snprintf(addr, 64, "%s:%s", gserv, gport);
+    
+    if (NET_Connect(addr))
+    {
+        //NET_SendString("/\r\n");
+    }*/
 
     return EXIT_SUCCESS;
 }
@@ -155,8 +158,9 @@ void Exit_Gopher()
     SetSprite_TILE(SPRITE_ID_CURSOR, LastCursor);
 
     //Stdout_Flush();
-    Buffer_Flush(&TxBuffer);
     NET_Disconnect();
+    Buffer_Flush(&TxBuffer);
+    Buffer_Flush(&RxBuffer);
 }
 
 void Reset_Gopher()
@@ -172,119 +176,111 @@ void Run_Gopher()
     {
         Gopher_BufferByte(rxdata);
 
-        if (bOnce)
-        {
-            TRM_SetStatusIcon(ICO_NET_RECV, ICO_POS_1);
-            bOnce = !bOnce;
-        }
-
         if ((rxdata == '.') && (rxdata1 == 0xA) && (rxdata2 == 0xD))
         {
             //kprintf("Final dot found @ %lu - data= '%c'", p, data);
             Gopher_PrintLine(0, ScrHeight);
             bPageDone = TRUE;
+            NET_Disconnect();
         }
 
         rxdata2 = rxdata1;
         rxdata1 = rxdata;
-    }
-
-    if (!bOnce)
-    {
-        TRM_SetStatusIcon(ICO_NET_IDLE_RECV, ICO_POS_1);
-        bOnce = !bOnce;
     }
     #endif
 }
 
 void Input_Gopher()
 {
-    if (!bWindowActive)
+    if (bWindowActive) return;
+
+    if (is_KeyDown(KEY_F5))
     {
-        if (is_KeyDown(KEY_F5))
-        {
-            Gopher_PrintLine(0, ScrHeight);
-        }
-        if (is_KeyDown(KEY_F6))
-        {
-            NET_SendString("/\r\n");
-        }
+        /* may cause lockup due to very unsafe code running on garbe
+        Gopher_PrintLine(0, ScrHeight);
+        bPageDone = TRUE;
+        NET_Disconnect();
+        */
+    }
+    if (is_KeyDown(KEY_F6))
+    {
+        NET_SendString("/\r\n");
+    }
 
-        if (is_KeyDown(KEY_PGUP))
-        {
-        }
-        if (is_KeyDown(KEY_PGDN))
-        {
-        }
+    if (is_KeyDown(KEY_PGUP))
+    {
+    }
+    if (is_KeyDown(KEY_PGDN))
+    {
+    }
 
-        if (is_KeyDown(KEY_UP))
+    if (is_KeyDown(KEY_UP))
+    {
+        if (PointerY > 0)
         {
-            if (PointerY > 0)
-            {
-                PointerY--;
-            }
-
-            if (PointerY_A > 0)
-            {
-                PointerY_A--;
-                SetSprite_Y(SPRITE_ID_POINTER, (PointerY_A*8)+142);
-            }
-            else 
-            {
-                Gopher_Scroll(SCR_UP);
-            }
-        }
-        if (is_KeyDown(KEY_DOWN))
-        {
-            if (PointerY < LFCount-2)
-            {
-                PointerY++;
-            }
-
-            if (PointerY_A < (C_SYSTEM_YMAX - 1)) // < 26
-            {
-                PointerY_A++;
-                SetSprite_Y(SPRITE_ID_POINTER, (PointerY_A*8)+142);
-            }
-            else 
-            {
-                Gopher_Scroll(SCR_DOWN);
-            }
-        }
-        if (is_KeyDown(KEY_LEFT))
-        {
-            if (PointerX >= 8)
-            {
-                PointerX -= 8;
-                SetSprite_X(SPRITE_ID_POINTER, PointerX+128);
-            }
-        }
-        if (is_KeyDown(KEY_RIGHT))
-        {
-            if (PointerX <= 304)
-            {
-                PointerX += 8;
-                SetSprite_X(SPRITE_ID_POINTER, PointerX+128);
-            }
+            PointerY--;
         }
 
-        if (is_KeyDown(KEY_RETURN))
+        if (PointerY_A > 0)
         {
-            u16 start = LFPos[PointerY];
-            u16 end = LFPos[PointerY+1]-1;
+            PointerY_A--;
+            SetSprite_Y(SPRITE_ID_POINTER, (PointerY_A*8)+142);
+        }
+        else 
+        {
+            Gopher_Scroll(SCR_UP);
+        }
+    }
+    if (is_KeyDown(KEY_DOWN))
+    {
+        if (PointerY < LFCount-2)
+        {
+            PointerY++;
+        }
 
-            memset(LineBuf, 0, B_LINEBUF_LEN);
-            memcpy(LineBuf, PageBuffer+start, end-start-1);
+        if (PointerY_A < (C_SYSTEM_YMAX - 1)) // < 26
+        {
+            PointerY_A++;
+            SetSprite_Y(SPRITE_ID_POINTER, (PointerY_A*8)+142);
+        }
+        else 
+        {
+            Gopher_Scroll(SCR_DOWN);
+        }
+    }
+    if (is_KeyDown(KEY_LEFT))
+    {
+        if (PointerX >= 8)
+        {
+            PointerX -= 8;
+            SetSprite_X(SPRITE_ID_POINTER, PointerX+128);
+        }
+    }
+    if (is_KeyDown(KEY_RIGHT))
+    {
+        if (PointerX <= 304)
+        {
+            PointerX += 8;
+            SetSprite_X(SPRITE_ID_POINTER, PointerX+128);
+        }
+    }
 
-            //kprintf("PointerY= %u -- PointerY_A= %u -- SY_A= %ld -- SY= %ld -- LFCount= %u", PointerY, PointerY_A, TTY_GetSY_A(), TTY_GetSY(), LFCount);
-            //kprintf("LineBuf= \"%s\"", LineBuf);
+    if (is_KeyDown(KEY_RETURN) && (bPageDone))
+    {
+        u16 start = LFPos[PointerY];
+        u16 end = LFPos[PointerY+1]-1;
 
-            if ((LineBuf[0] == '0') || (LineBuf[0] == '1') || (LineBuf[0] == '2') || (LineBuf[0] == '7'))
-            {
-                Gopher_GetAddress();
-                Gopher_Init();
-                Gopher_GetPage();
-            }
+        memset(LineBuf, 0, B_LINEBUF_LEN);
+        memcpy(LineBuf, PageBuffer+start, end-start-1);
+
+        //kprintf("PointerY= %u -- PointerY_A= %u -- SY_A= %ld -- SY= %ld -- LFCount= %u", PointerY, PointerY_A, TTY_GetSY_A(), TTY_GetSY(), LFCount);
+        //kprintf("LineBuf= \"%s\"", LineBuf);
+
+        if ((LineBuf[0] == '0') || (LineBuf[0] == '1') || (LineBuf[0] == '2') || (LineBuf[0] == '7'))
+        {
+            Gopher_GetAddress();
+            Gopher_Init();
+            Gopher_GetPage();
         }
     }
 }
@@ -368,10 +364,10 @@ void Gopher_GetPage()
     char link[B_LINK_LEN];
     snprintf(addr, 64, "%s:%s", gserv, gport);
     snprintf(link, B_LINK_LEN, "%s\r\n", glink);
-    //kprintf("Connect addr= \"%s\" -- link= \"%s\"", addr, link);
+    //kprintf("Connect addr= \"%s\" -- link= \"%s\"", "-", link);
 
-    NET_Connect(addr);
-    //if (NET_Connect(addr))
+    //NET_Connect(addr);
+    if (NET_Connect(addr))
     {
         snprintf(TitleBuf, 29, "%s %-21s", STATUS_TEXT_SHORT, gserv);   // %-27s ?
         TRM_SetStatusText(TitleBuf);
@@ -402,7 +398,8 @@ void Gopher_GetAddress()
     if (strlen(glink) == 0) {strcpy(glink, "/");}
     if (strlen(gport) == 0) {strcpy(gport, "70");}
 
-    /*kprintf("link= \"%s\"", glink);
+    /*kprintf("--- GetAddress ---");
+    kprintf("link= \"%s\"", glink);
     kprintf("serv= \"%s\"", gserv);
     kprintf("port= \"%s\"", gport);
     kprintf("full= \"%s:%s%s\"", gserv, gport, glink);*/
@@ -437,7 +434,8 @@ void Gopher_GetAddressFromStr(char *from)
 
     if (strlen(glink) == 0) {strcpy(glink, "/");}
 
-    /*kprintf("link= \"%s\"", glink);
+    /*kprintf("--- GetAddressFromStr ---");
+    kprintf("link= \"%s\"", glink);
     kprintf("serv= \"%s\"", gserv);
     kprintf("port= \"%s\"", gport);
     kprintf("full= \"%s:%s%s\" -- %c", gserv, gport, glink, from[it_serv]);*/
@@ -561,6 +559,6 @@ void Gopher_PrintChar(u8 c)
 
 const PRG_State GopherState = 
 {
-    Enter_Gopher, ReEnter_Gopher, Exit_Gopher, Reset_Gopher, Run_Gopher, Input_Gopher, NULL, NULL
+    Enter_Gopher, ReEnter_Gopher, Exit_Gopher, Reset_Gopher, Run_Gopher, Input_Gopher
 };
 

@@ -89,11 +89,8 @@ extern u8 sv_BoldFont;
 extern u8 EvenOdd;
 extern u8 sv_bHighCL;
 
-// Statistics
-extern u32 RXBytes;
-extern u32 TXBytes;
-
 void TTY_Init(TTY_InitFlags flags);
+void TTY_SetDarkColours();
 void TTY_ReloadPalette();
 void TTY_SetFontSize(u8 size);
 

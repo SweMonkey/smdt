@@ -16,6 +16,8 @@ SM_File *F_GetFreeFD()
 
     if (file != NULL) FD_Count++;
 
+    file->fname = NULL;
+
     return file;
 }
 
@@ -33,11 +35,20 @@ SM_File *F_Open(const char *filename, FileMode openmode)
 
     if (r)
     {
+        F_Close(file);  // Close file to avoid leaking memory...
         //printf("Error opening file \"%s\"\nError code $%lX (%ld)\n", filename, r, r);
         return NULL;
     }
 
-    //printf("Opened file \"%s\"\n", filename);
+    size_t len = strlen(filename);
+    file->fname = malloc(len + 1);
+    if (file->fname) 
+    {
+        strncpy(file->fname, filename, len);
+        file->fname[len] = '\0';
+    }
+
+    //kprintf("Opened file \"%s\"", filename);
 
     return file;
 }
@@ -49,13 +60,22 @@ u8 F_Close(SM_File *file)
         return -1; // EOF
     }
 
-    FS_Close(&file->f);
+    int r = FS_Close(&file->f, file->fname);
+
+    if (r)
+    {
+        //printf("Error closing file \"%s\"\nError code $%lX (%ld)\n", file->fname, r, r);
+    }
+
+    free(file->fname);
+    file->fname = NULL;
 
     free(file);
     file = NULL;
 
     FD_Count--;
 
+    //kprintf("Closed file");
     return 0;    
 }
 
@@ -72,7 +92,7 @@ u16 F_Read(void *dest, u32 size, u32 count, SM_File *file)
         }
         else 
         {
-            return FS_ReadFile(dest, size*count, &file->f);
+            return FS_ReadFile(dest, size*count, &file->f, file->fname);
         }
     }
 
@@ -92,7 +112,7 @@ u16 F_Write(void *src, u32 size, u32 count, SM_File *file)
         }
         else 
         {
-            return FS_WriteFile(src, size*count, &file->f);
+            return FS_WriteFile(src, size*count, &file->f, file->fname);
         }
     }
 
@@ -101,12 +121,12 @@ u16 F_Write(void *src, u32 size, u32 count, SM_File *file)
 
 s8 F_Seek(SM_File *file, s32 offset, FileOrigin origin)
 {
-    return FS_Seek(&file->f, offset, origin);
+    return FS_Seek(&file->f, offset, origin, file->fname);
 }
 
 u16 F_Tell(SM_File *file)
 {
-    return FS_Tell(&file->f);
+    return FS_Tell(&file->f, file->fname);
 }
 
 u16 vsnprintf(char *buf, u16 size, const char *fmt, va_list args);

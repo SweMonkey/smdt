@@ -28,6 +28,6 @@ void Input_Dummy()
 
 const PRG_State DummyState = 
 {
-    Enter_Dummy, ReEnter_Dummy, Exit_Dummy, Reset_Dummy, Run_Dummy, Input_Dummy, NULL, NULL
+    Enter_Dummy, ReEnter_Dummy, Exit_Dummy, Reset_Dummy, Run_Dummy, Input_Dummy
 };
 

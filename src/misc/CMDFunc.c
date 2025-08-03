@@ -6,7 +6,7 @@
 #include "Telnet.h"
 #include "Terminal.h"
 #include "ConfigFile.h"
-#include "HexView.h"
+#include "WinMgr.h"
 
 #include "devices/XP_Network.h"
 #include "devices/Keyboard_PS2.h"
@@ -55,6 +55,7 @@ SM_CMDList CMDList[] =
     {"hexview", CMD_HexView,        "<filename>"},
     {"uptime",  CMD_Uptime,         "- Show system uptime"},
     {"date",    CMD_Date,           "- Show/Set date and time"},
+    {"psgbeep", CMD_PSGBeep,        "- Play PSG beep"},
     {"about",   CMD_About,          "- About SMDT/Licenses"},
     {"help",    CMD_Help,           "- This command"},
     {0, 0, 0}  // List terminator
@@ -202,20 +203,28 @@ void CMD_KeyboardSend(u8 argc, char *argv[])
     {
         Stdout_Push("Send command to keyboard\n\nUsage:\n");
         Stdout_Push(argv[0]);
-        Stdout_Push(" <decimal number between 0 and 255>\n");
+        Stdout_Push(" <byte 1> <byte 2> <...>\n\n");
+        Stdout_Push("Byte= decimal number between 0 and 255\n");
         return;
     }
 
-    u8 kbcmd = atoi(argv[1]);
-    u8 ret = 0;
+    u8 kbcmd;
+    u8 ret;
 
-    sprintf(tmp, "Sending command $%X to keyboard...\n", kbcmd);
-    Stdout_Push(tmp);
-    
-    ret = KB_PS2_SendCommand(kbcmd);
-    
-    sprintf(tmp, "Recieved byte $%X from keyboard   \n", ret);
-    Stdout_Push(tmp);
+    for (u8 i = 1; i < argc; i++)
+    {
+        kbcmd = atoi(argv[i]);
+        ret = 0;
+
+        sprintf(tmp, "Sending command $%X to keyboard...\n", kbcmd);
+        Stdout_Push(tmp);
+        
+        ret = KB_PS2_SendCommand(kbcmd);
+        
+        sprintf(tmp, "Recieved byte $%X from keyboard   \n", ret);
+        Stdout_Push(tmp);
+        waitMs(2);
+    }
 }
 
 void CMD_Help(u8 argc, char *argv[])
@@ -432,6 +441,9 @@ void CMD_SetConn(u8 argc, char *argv[])
 void CMD_ClearScreen(u8 argc, char *argv[])
 {
     TTY_Init(TF_ClearScreen);
+
+    // Hack: Move the cursor up once because the shell always autoinserts a newline upon running a command, which we don't want when running this command
+    TTY_MoveCursor(TTY_CURSOR_UP, 1);
 }
 
 void CMD_SetVar(u8 argc, char *argv[])
@@ -542,21 +554,27 @@ void CMD_GetIP(u8 argc, char *argv[])
     if (ipstr)
     {
         memset(ipstr, 0, 32);
-        printf("Please wait...\n");
+        //printf("Please wait...\n");
 
         u8 r = NET_GetIP(ipstr);
 
-        if (r == 0)
+        switch (r)
         {
-            printf("IP: %s\n", ipstr);
-        }
-        else if (r == 1)
-        {
-            printf("Error: Generic error\n");
-        }
-        else if (r == 2)
-        {
-            printf("Error: Timed out\n");
+            case 0:
+                printf("IP: %s\n", ipstr);
+            break;
+
+            case 1:
+                printf("Error: Generic error\n");
+            break;
+
+            case 2:
+                printf("Error: Timed out\n");
+            break;
+        
+            default:
+                printf("Error: Unknown\n");
+            break;
         }
 
         free(ipstr);
@@ -637,11 +655,9 @@ void CMD_SaveCFG(u8 argc, char *argv[])
     CFG_SaveData();
 }
 
-/*asm(".global testhello\ntesthello:\n.incbin \"tmp/smdt_exec/projects/hello/hello.bin\"");
-extern const unsigned char testhello[];*/
 void CMD_Test(u8 argc, char *argv[])
 {
-    Stdout_Push("[91mWarning: The test command may cause side effects on SMDT operation.\nIt may outright crash your system depending on the parameters given![0m\n\n");
+    Stdout_Push("[91mWarning: The test command may cause side effects on SMDT operation.\nIt may outright crash your system depending on the parameters given![0m\n");
 
     /*if ((argc > 1) && (strcmp("-test1arg", argv[1]) == 0))
     {
@@ -653,347 +669,7 @@ void CMD_Test(u8 argc, char *argv[])
         return;
     }*/
 
-    /*if ((argc > 1) && (strcmp("-wb", argv[1]) == 0))
-    {
-        SM_File *f = F_Open("/hi.bin", FM_CREATE | FM_RDWR);
-
-        if (f != NULL)
-        {
-            F_Write(testhello, 7788, 1, f);
-            F_Close(f);
-        }
-        return;
-    }*/
-    
-    /*if ((argc > 2) && (strcmp("-f", argv[1]) == 0))
-    {
-        char buf[162] = "Hello World!\nThis is a long text file that just keeps dragging on and on and on...\nMaybe it will repeat forever? who knows, it shouldn't repeat... but it might";
-        SM_File *f = F_Open(argv[2], FM_WRONLY);
-
-        printf("Writing this:\n\n%s\n\nto file %s\n", buf, argv[2]);
-        F_Write(buf, 162, 1, f);
-
-        F_Close(f);
-        
-        f = F_Open(argv[2], FM_RDONLY);
-
-        memset(buf, 0, 162);
-        F_Read(buf, 162, 1, f);
-
-        printf("Reading back file %s:\n\n%s\n", argv[2], buf);
-
-        F_Close(f);
-
-        return;
-    }*/
-
-    /*if ((argc > 1) && (strcmp("t", argv[1]) == 0))
-    {
-        kprintf("--- Pushing t garbage ---");
-
-        Stdout_Push("[65;1\"p");
-        Stdout_Push("[!p");
-        Stdout_Push("[8;25;80t");
-        Stdout_Push("[?1047l");
-        Stdout_Push("[?1049l");
-        Stdout_Push("[?47l");
-        Stdout_Push("[?69l");
-        Stdout_Push("[4l");
-        Stdout_Push("[20l");
-        Stdout_Push("[?7h");
-        Stdout_Push("[?41l");
-        Stdout_Push("[>0;1T");
-        Stdout_Push("[>2;3t");
-        Stdout_Push("[2J");
-        Stdout_Push("[23;0t");
-        Stdout_Push("[23;0t");
-        Stdout_Push("[23;0t");
-        Stdout_Push("[23;0t");
-        Stdout_Push("[23;0t");
-        Stdout_Push("[3g");
-        Stdout_Push("[18t");
-    }
-
-    // DECERATests.test_DECERA_respectsOriginMode
-    if ((argc > 1) && (strcmp("t1", argv[1]) == 0))
-    {
-        Stdout_Push("[65;1\"p");
-        Stdout_Push("[!p");
-        Stdout_Push("[8;25;80t");
-        Stdout_Push("[?1047l");
-        Stdout_Push("[?1049l");
-        Stdout_Push("[?47l");
-        Stdout_Push("[?69l");
-        Stdout_Push("[4l");
-        Stdout_Push("[20l");
-        Stdout_Push("[?7h");
-        Stdout_Push("[?41l");
-        Stdout_Push("[>0;1T");
-        Stdout_Push("[>2;3t");
-        Stdout_Push("[2J");
-        Stdout_Push("[23;0t");
-        Stdout_Push("[23;0t");
-        Stdout_Push("[23;0t");
-        Stdout_Push("[23;0t");
-        Stdout_Push("[23;0t");
-        Stdout_Push("[3g");
-        Stdout_Push("[18t");
-        Stdout_Push("[1;1H");
-        Stdout_Push("[1;9H");
-        Stdout_Push("[1;17H");
-        Stdout_Push("[1;25H");
-        Stdout_Push("[1;33H");
-        Stdout_Push("[1;41H");
-        Stdout_Push("[1;49H");
-        Stdout_Push("[1;57H");
-        Stdout_Push("[1;65H");
-        Stdout_Push("[1;73H");
-        Stdout_Push("[1;1H");        
-
-        Stdout_Push("abcdefgh\n\r");
-        Stdout_Push("ijklmnop\n\r");
-        Stdout_Push("qrstuvwx\n\r");
-        Stdout_Push("yz012345\n\r");
-        Stdout_Push("ABCDEFGH\n\r");
-        Stdout_Push("IJKLMNOP\n\r");
-        Stdout_Push("QRSTUVWX\n\r");
-        Stdout_Push("YZ6789!@\n\r");
-
-        Stdout_Push("[1t");
-        Stdout_Push("]104;\\");
-        Stdout_Push("]10;#000\\");
-        Stdout_Push("]11;#ffffff\\");
-        Stdout_Push("[1;1H");
-        Stdout_Push("[?69h");
-        Stdout_Push("[2;9s");
-        Stdout_Push("[2;9r");
-        Stdout_Push("[?6h");
-        Stdout_Push("[1;1;3;3$z");
-        Stdout_Push("[?69l");
-        Stdout_Push("[r");
-        Stdout_Push("[?6l");
-        Stdout_Push("[212;0;1;1;1;1*y");
-
-        Stdout_Push("[10;1H");
-    }
-
-    if ((argc > 1) && (strcmp("fuck", argv[1]) == 0))
-    {
-        Stdout_Push("[1t");
-        Stdout_Push("]104;\\");
-        Stdout_Push("]10;#000\\");
-        Stdout_Push("]11;#ffffff\\");
-        Stdout_Push("[?85n");
-
-        Stdout_Push("[65;1\"p");
-        Stdout_Push("[!p");
-        Stdout_Push("[8;25;80t");
-        Stdout_Push("[?1047l");
-        Stdout_Push("[?1049l");
-        Stdout_Push("[?47l");
-        Stdout_Push("[?69l");
-        Stdout_Push("[4l");
-        Stdout_Push("[20l");
-        Stdout_Push("[?7h");
-        Stdout_Push("[?41l");
-        Stdout_Push("[>0;1T");
-        Stdout_Push("[>2;3t");
-        Stdout_Push("[2J");
-        Stdout_Push("[23;0t");
-        Stdout_Push("[23;0t");
-        Stdout_Push("[23;0t");
-        Stdout_Push("[23;0t");
-        Stdout_Push("[23;0t");
-        Stdout_Push("[3g");
-        Stdout_Push("[18t");
-        Stdout_Push("[65;1\"p");
-        Stdout_Push("[!p");
-        Stdout_Push("[8;25;80t");
-        Stdout_Push("[?1047l");
-        Stdout_Push("[?1049l");
-        Stdout_Push("[?47l");
-        Stdout_Push("[?69l");
-        Stdout_Push("[4l");
-        Stdout_Push("[20l");
-        Stdout_Push("[?7h");
-        Stdout_Push("[?41l");
-        Stdout_Push("[>0;1T");
-        Stdout_Push("[>2;3t");
-        Stdout_Push("[2J");
-        Stdout_Push("[23;0t");
-        Stdout_Push("[23;0t");
-        Stdout_Push("[23;0t");
-        Stdout_Push("[23;0t");
-        Stdout_Push("[23;0t");
-        Stdout_Push("[3g");
-        Stdout_Push("[18t");
-        Stdout_Push("[1;1H");
-        Stdout_Push("H");
-        Stdout_Push("[1;9H");
-        Stdout_Push("H");
-        Stdout_Push("[1;17H");
-        Stdout_Push("H");
-        Stdout_Push("[1;25H");
-        Stdout_Push("H");
-        Stdout_Push("[1;33H");
-        Stdout_Push("H");
-        Stdout_Push("[1;41H");
-        Stdout_Push("H");
-        Stdout_Push("[1;49H");
-        Stdout_Push("H");
-        Stdout_Push("[1;57H");
-        Stdout_Push("H");
-        Stdout_Push("[1;65H");
-        Stdout_Push("H");
-        Stdout_Push("[1;73H");
-        Stdout_Push("H");
-        Stdout_Push("[1;1H");
-    }
-
-    if ((argc > 1) && (strcmp("xz", argv[1]) == 0))
-    {
-        Stdout_Push("[37;1;1;8;8$x");
-        Stdout_Push("[1;1;3;3$z");
-    }
-
-    if ((argc > 1) && (strcmp("z", argv[1]) == 0))
-    {
-        //Stdout_Push("[$z");
-        Stdout_Push("[3;1;1t");
-    }
-
-    if ((argc > 1) && (strcmp("title", argv[1]) == 0))
-    {
-        Stdout_Push("]0;smd@m68k:~\7");
-    }
-
-    if ((argc > 1) && (strcmp("st", argv[1]) == 0))
-    {
-        Stdout_Push("]10;#000\\");
-        Stdout_Push("]11;#ffffff\\");
-
-        Stdout_Push("]11;#ffffff\\_xyz\\A");
-    }
-
-    if ((argc > 1) && (strcmp("y", argv[1]) == 0))
-    {
-        //Stdout_Push("[2J");
-
-        / *Stdout_Push("[1;1HABC");
-        Stdout_Push("[2;1HDEF");
-        Stdout_Push("[3;1HGHI");
-        Stdout_Push("[0;0;1;1;3;3*y");        
-        
-        Stdout_Push("[1;10HAAA");
-        Stdout_Push("[2;10HAAB");
-        Stdout_Push("[3;10HAAC");
-        Stdout_Push("[0;0;1;10;3;12*y");
-
-        Stdout_Push("[0;0;10;10;12;12*y");* /
-
-        // ANSIRCTests.test_SaveRestoreCursor_ResetsOriginMode
-        Stdout_Push("[65;1\"p");
-        Stdout_Push("[!p");
-        Stdout_Push("[8;25;80t");
-        Stdout_Push("[?1047l");
-        Stdout_Push("[?1049l");
-        Stdout_Push("[?47l");
-        Stdout_Push("[?69l");
-        Stdout_Push("[4l");
-        Stdout_Push("[20l");
-        Stdout_Push("[?7h");
-        Stdout_Push("[?41l");
-        Stdout_Push("[>0;1T");
-        Stdout_Push("[>2;3t");
-        Stdout_Push("[2J");
-        Stdout_Push("[23;0t");
-        Stdout_Push("[23;0t");
-        Stdout_Push("[23;0t");
-        Stdout_Push("[23;0t");
-        Stdout_Push("[23;0t");
-        Stdout_Push("[3g");
-        Stdout_Push("[18t");
-        Stdout_Push("[1;1H");
-        Stdout_Push("H");
-        Stdout_Push("[1;9H");
-        Stdout_Push("H");
-        Stdout_Push("[1;17H");
-        Stdout_Push("H");
-        Stdout_Push("[1;25H");
-        Stdout_Push("H");
-        Stdout_Push("[1;33H");
-        Stdout_Push("H");
-        Stdout_Push("[1;41H");
-        Stdout_Push("H");
-        Stdout_Push("[1;49H");
-        Stdout_Push("H");
-        Stdout_Push("[1;57H");
-        Stdout_Push("H");
-        Stdout_Push("[1;65H");
-        Stdout_Push("H");
-        Stdout_Push("[1;73H");
-        Stdout_Push("H");
-        Stdout_Push("[1;1H");
-        Stdout_Push("[1t");
-        Stdout_Push("]104;.\\");
-        Stdout_Push("]10;#000\\");
-        Stdout_Push("]11;#ffffff\\");
-        Stdout_Push("[6;5H");
-        Stdout_Push("[s");
-        Stdout_Push("[5;7r");
-        Stdout_Push("[?69h");
-        Stdout_Push("[5;7s");
-        Stdout_Push("[?6h");
-        Stdout_Push("[u");
-        Stdout_Push("[1;1HX");
-        Stdout_Push("[?69l");
-        Stdout_Push("[r");
-        Stdout_Push("[?6l");
-        Stdout_Push("[4;0;1;1;1;1*y");
-    }
-
-    if ((argc > 1) && (strcmp("uni", argv[1]) == 0))
-    {
-        kprintf("--- Pushing UTF-8 ---");
-
-        Stdout_PushByte(0x1B);
-        Stdout_PushByte(0x5B);
-        Stdout_PushByte(0x33);
-        Stdout_PushByte(0x34);
-        Stdout_PushByte(0x6D);
-        Stdout_PushByte(0xF4);
-        Stdout_PushByte(0x1B);
-        Stdout_PushByte(0x5B);
-        Stdout_PushByte(0x30);
-        Stdout_PushByte(0x6D);
-        Stdout_PushByte(0xFA);
-        Stdout_PushByte(0xFA);
-        Stdout_PushByte(0xFA);
-        Stdout_PushByte(0xB3);
-        Stdout_PushByte(0x1B);
-        Stdout_PushByte(0x5B);
-        Stdout_PushByte(0x30);
-        Stdout_PushByte(0x6D);
-
-        return;
-    }
-
-    if ((argc > 1) && (strcmp("attr_rgb", argv[1]) == 0))
-    {
-        printf("Attempt at fake RGB24...\n");
-        printf("[38;2;255;0;0mR [38;2;0;255;0mG [38;2;0;0;255mB  [38;2;255;255;0mRG [38;2;255;0;255mRB [38;2;0;255;255mGB [38;2;255;255;255mRGB\n[0m");
-        printf("[38;2;125;0;0mR [38;2;0;125;0mG [38;2;0;0;125mB  [38;2;125;125;0mRG [38;2;125;0;125mRB [38;2;0;125;125mGB [38;2;125;125;125mRGB\n[0m");
-        return;
-    }
-
-    if ((argc > 1) && (strcmp("p", argv[1]) == 0))
-    {
-        printf("DECSCL; [65;1\"p \n");
-        printf("DECSTR; [!p \n");
-        return;
-    }*/
-
-    if ((argc > 1) && (strcmp("force_xport", argv[1]) == 0))
+    if ((argc > 1) && (strcmp("-force_xport", argv[1]) == 0))
     {
         DRV_UART.Id.sName = "xPort UART";
 
@@ -1010,13 +686,13 @@ void CMD_Test(u8 argc, char *argv[])
         NET_SetPingFunc(XPN_PingIP);
     }
     
-    if ((argc > 1) && (strcmp("illegal", argv[1]) == 0))
+    if ((argc > 1) && (strcmp("-illegal", argv[1]) == 0))
     {
         asm("illegal");
         return;
     }
-   
-    if ((argc > 1) && (strcmp("lbrk", argv[1]) == 0))
+
+    if ((argc > 1) && (strcmp("-lbrk", argv[1]) == 0))
     {
         printf("Testing linebreak/wraparound...\n");
 
@@ -1027,7 +703,7 @@ void CMD_Test(u8 argc, char *argv[])
         return;
     }
 
-    if ((argc > 1) && (strcmp("fprintf", argv[1]) == 0))
+    if ((argc > 1) && (strcmp("-fprintf", argv[1]) == 0))
     {
         F_Printf(stdout, "Hello, is this thing on? %s\n", "maybe...");
         return;
@@ -1250,6 +926,10 @@ Stdout_Push("\n\
 [97m█[37m█\
 [0m\n\r");
 
+    Stdout_Push("\n\
+[30m█[31m█[32m█[33m█[34m█[35m█[36m█[37m█\
+[90m█[91m█[92m█[93m█[94m█[95m█[96m█[97m█[0m\n\r");
+
         return;
     }
 }
@@ -1328,7 +1008,17 @@ void CMD_Ping(u8 argc, char *argv[])
         return;
     }
 
-    NET_PingIP(argv[1]);
+    u8 r = NET_PingIP(argv[1]);
+
+    switch (r)
+    {
+        case 1:
+            Stdout_Push("Ping response timeout!\n");
+        break;
+    
+        default:
+        break;
+    }
 }
 
 void CMD_Run(u8 argc, char *argv[])
@@ -1345,30 +1035,19 @@ void CMD_Run(u8 argc, char *argv[])
 
     if (proc == NULL) return;
 
-    /*asm("movem.l %d0-%d7/%a0-%a6, -(%sp)");
-    asm("move.w #0x0400, %sr");
-    asm ("move.l %0, %/a5" :: "r" (proc) : "a5");
-    asm("jsr (%a5)");
-    asm("movem.l (%sp)+,%d0-%d7/%a0-%a6");*/
+    //kprintf("Jumping to user code at %p\n", proc);
 
-    __asm__ __volatile__
-    (
+    __asm__ __volatile__ (
         "movem.l %%d0-%%d7/%%a0-%%a6, -(%%sp)   \n\t"
-        "move.w #0x0400, %%sr                   \n\t"
-        "move.l %[proc], %%a5                   \n\t"
-        "jsr (%%a5)                             \n\t"
-        /*"move #666, %%d0                        \n\t"*/
-        /*"trap #0                                \n\t"*/
-        "movem.l (%%sp)+,%%d0-%%d7/%%a0-%%a6    \n\t"
-    : /* outputs */
-    : /* inputs */
-        [proc] "a"(proc)
-    : /* clobbered regs */
-        "%d0", "%a5"
+        "move.l %[pc], -(%%sp)                  \n\t" // push PC
+        "move.w #0x0400, -(%%sp)                \n\t" // push SR
+        "rte                                    \n\t"
+        :
+        : [pc] "a"(proc)
+        : "%d0", "%a0"
     );
 
-    kprintf("Returned from oblivion...");
-    Stdout_Push("Returned from oblivion...\n");
+    return;
 }
 
 void CMD_ChangeDir(u8 argc, char *argv[])
@@ -1382,9 +1061,7 @@ void CMD_ListDir(u8 argc, char *argv[])
 {
     if (argc > 1)
     {
-        char tmp[64];
-        sprintf(tmp, "%s", argv[1]);
-        FS_ListDir(tmp);
+        FS_ListDir(argv[1]);
     }
     else 
     {
@@ -1442,6 +1119,8 @@ void CMD_CopyFile(u8 argc, char *argv[])
     if (argc < 3) return;
 
     char *fn_buf1, *fn_buf2;
+    SM_File *f1 = NULL;
+    SM_File *f2 = NULL;
 
     fn_buf1 = malloc(FILE_MAX_FNBUF);
     fn_buf2 = malloc(FILE_MAX_FNBUF);
@@ -1449,19 +1128,19 @@ void CMD_CopyFile(u8 argc, char *argv[])
     FS_ResolvePath(argv[1], fn_buf1);
     FS_ResolvePath(argv[2], fn_buf2);
     
-    SM_File *f1 = F_Open(fn_buf1, FM_RDONLY);
+    f1 = F_Open(fn_buf1, FM_RDONLY);
 
     if (f1 == NULL)
     {
-        printf("File \"%s\" does not exist\n", fn_buf1);
+        printf("File \"%s\" does not exist\n", argv[1]);
         goto OnExit;
     }
 
-    SM_File *f2 = F_Open(fn_buf2, FM_CREATE | FM_WRONLY);
+    f2 = F_Open(fn_buf2, FM_CREATE | FM_WRONLY);
 
     if (f2 == NULL)
     {
-        printf("Failed to create file \"%s\"\n", fn_buf2);
+        printf("Failed to create file \"%s\"\n", argv[2]);
         goto OnExit;
     }
 
@@ -1479,11 +1158,11 @@ void CMD_CopyFile(u8 argc, char *argv[])
     }
 
     OnExit:
+    F_Close(f1);
+    F_Close(f2);
     free(buf);
     free(fn_buf1);
     free(fn_buf2);
-    F_Close(f1);
-    F_Close(f2);
     return;
 }
 
@@ -1577,7 +1256,8 @@ void CMD_HexView(u8 argc, char *argv[])
         return;
     }
 
-    HexView_Open(argv[1]);
+    char *fn[] = {argv[1]};
+    WinMgr_Open(W_HexView, 1, fn);
 }
 
 void CMD_Attr(u8 argc, char *argv[])
@@ -1596,9 +1276,12 @@ void CMD_ListBlock(u8 argc, char *argv[])
 
 void CMD_Uptime(u8 argc, char *argv[])
 {
-    SM_Time t = SecondsToDateTime(SystemUptime);
+    SM_Time t;
+    
+    SecondsToDateTime(&t, SystemUptime);
+    SecondsToDateTime(&SystemTime, GetTimeSync());
 
-    printf("%02lu:%02u:%02u up %lu days, %lu:%02u\n", SystemTime.hour, SystemTime.minute, SystemTime.second, t.day-1, t.hour, t.minute);
+    printf("%02u:%02u:%02u up %u days, %u:%02u\n", SystemTime.hour, SystemTime.minute, SystemTime.second, t.day-1, t.hour, t.minute);
 }
 
 void CMD_Date(u8 argc, char *argv[])
@@ -1627,20 +1310,23 @@ void CMD_Date(u8 argc, char *argv[])
     }
     else if ((argc > 1) && (strcmp("-help", argv[1]) == 0))
     {
-
         Stdout_Push("Show/Set date and time\n\nUsage:\n\
 date -sync  - Synchronize date & time\n\
 date -help  - This screen\n\
 date        - Show date and time\n");
     }
-    else printf("%lu-%lu-%lu %02lu:%02u:%02u\n", SystemTime.day, SystemTime.month, SystemTime.year, SystemTime.hour, SystemTime.minute, SystemTime.second);
+    else 
+    {
+        SecondsToDateTime(&SystemTime, GetTimeSync());
+        printf("%u-%u-%u %02u:%02u:%02u\n", SystemTime.day, SystemTime.month, SystemTime.year, SystemTime.hour, SystemTime.minute, SystemTime.second);
+    }
 }
 
 void CMD_About(u8 argc, char *argv[])
 {
     if (sv_Font)
     {
-        Stdout_Push("\n SMDT - a dumb project created by smds\n");
+        Stdout_Push(" SMDT - a dumb project created by smds\n");
         Stdout_Push(" Copyright (c) 2025 smds\n");
         Stdout_Push(" See SMDT github for more info:\n");
         Stdout_Push(" [36mgithub.com/SweMonkey/smdt[0m\n\n");
@@ -1673,5 +1359,33 @@ void CMD_About(u8 argc, char *argv[])
         Stdout_Push("Copyright (c) 2017, Arm Limited. -\n - All rights reserved\n");
         Stdout_Push("See littleFS github for more info:\n");
         Stdout_Push("[36mgithub.com/littlefs-project/littlefs[0m\n");
+    }
+}
+
+void CMD_PSGBeep(u8 argc, char *argv[])
+{    
+    if (argc > 3)
+    {
+        // argv1 = Frequency
+        // argv2 = Volume
+        // argv3 = Time in ms
+
+        u32 time = atoi32(argv[1]);
+            time = time > 60000 ? 60000 : time;
+        u8 vol = atoi(argv[2]);
+           vol = vol > 0xF ? 0xF : vol;
+        u16 freq = atoi16(argv[3]);
+            freq = freq > 0xFFF ? 0xFFF : freq;
+
+        PSG_setFrequency(0, freq);
+        PSG_setEnvelope(0, vol);
+        waitMs(time);
+        PSG_setEnvelope(0, PSG_ENVELOPE_MIN);
+        waitMs(20);
+    }
+    else
+    {
+        Stdout_Push("PSG Beep\n\nUsage:\n\
+psgbeep <Time in ms><Volume><Frequency>\n");
     }
 }

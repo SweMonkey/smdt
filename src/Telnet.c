@@ -4,6 +4,7 @@
 #include "Network.h"
 #include "Cursor.h"
 #include "DevMgr.h"
+#include "WinMgr.h"
 #include "system/Stdout.h"
 
 // https://vt100.net/docs/vt100-ug/chapter3.html
@@ -123,7 +124,7 @@ static u8 XTCHECKSUM = 1;
 // Escapes [
 static u8 ESC_Seq = 0;
 static u8 ESC_Type = 0;
-static u8 ESC_Param[8] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
+static u8 ESC_Param[10] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
 static u16 ESC_Param16 = 0xFFFF;
 static u8 ESC_ParamSeq = 0;
 static char ESC_Buffer[4] = {'\0','\0','\0','\0'};
@@ -205,11 +206,6 @@ static const u8 CharMap1[256] =
     0xF0, 0xF1, 0xF2, 0xF3, 0xF4, 0xF5, 0xF6, 0xF7, 0xF8, 0xF9, 0xFA, 0xFB, 0xFC, 0xFD, 0xFE, 0xFF  // F0-FF
 };*/
 
-// External focus symbols (Used to report focus status)
-extern bool bShowHexView;
-extern bool bShowFavView;
-extern bool bShowQMenu;
-
 
 void TELNET_Init(TTY_InitFlags tty_flags)
 {
@@ -228,6 +224,8 @@ void TELNET_Init(TTY_InitFlags tty_flags)
     ESC_Param[5] = 0xFF;
     ESC_Param[6] = 0xFF;
     ESC_Param[7] = 0xFF;
+    ESC_Param[8] = 0xFF;
+    ESC_Param[9] = 0xFF;
     ESC_Param16 = 0xFFFF;
     ESC_ParamSeq = 0;
     ESC_Buffer[0] = '\0';
@@ -573,7 +571,7 @@ static void DoEscape(u8 byte)
                 {
                     if (ESC_ParamSeq == 0) ESC_Param16 = atoi16(ESC_Buffer);
 
-                    if (ESC_ParamSeq >= 8) return;
+                    if (ESC_ParamSeq >= 10) return;
 
                     ESC_Param[ESC_ParamSeq++] = atoi(ESC_Buffer);
                     //kprintf("ESC_ParamSeq[%u] = %u (%s)", ESC_ParamSeq-1, ESC_Param[ESC_ParamSeq-1], ESC_Buffer);
@@ -1086,21 +1084,23 @@ static void DoEscape(u8 byte)
                 {
                     ESC_Param[ESC_ParamSeq++] = atoi(ESC_Buffer);
                     u8 rgb;
+                    u8 base = 0;
 
-                    switch (ESC_Param[1])
+                    DoSecondSet:                    
+                    switch (ESC_Param[base+1])
                     {
                         case 5:     // 0-7: standard colors (as in ESC [ 30–37 m) and 8-15: high intensity colors (as in ESC [ 90–97 m)
-                            if (ESC_Param[0] == 38)
+                            if (ESC_Param[base+0] == 38)
                             {
-                                if (ESC_Param[2] <= 15) TTY_SetAttribute(ESC_Param[2] + (ESC_Param[2] <= 7 ? 30 : 90));
+                                if (ESC_Param[base+2] <= 15) TTY_SetAttribute(ESC_Param[base+2] + (ESC_Param[base+2] <= 7 ? 30 : 90));
                                 #ifdef ESC_LOGGING
                                 else
                                     kprintf("Attempted to set attribute colour > 15");
                                 #endif
                             }
-                            else if (ESC_Param[0] == 48)
+                            else if (ESC_Param[base+0] == 48)
                             {
-                                if (ESC_Param[2] <= 15) TTY_SetAttribute(ESC_Param[2] + (ESC_Param[2] <= 7 ? 40 : 100));
+                                if (ESC_Param[base+2] <= 15) TTY_SetAttribute(ESC_Param[base+2] + (ESC_Param[base+2] <= 7 ? 40 : 100));
                                 #ifdef ESC_LOGGING
                                 else
                                     kprintf("Attempted to set attribute colour > 15");
@@ -1109,22 +1109,22 @@ static void DoEscape(u8 byte)
                         break;
 
                         case 2:     // RGB24 logic
-                            rgb = (((ESC_Param[4] + ESC_Param[3] + ESC_Param[2]) >= 256) ? (ESC_Param[0] == 38 ? 90 : 100) : (ESC_Param[0] == 38 ? 30 : 40)) +  // Attempt to find out if this colour is bright enough to warrant using the upper 8 colours
-                                 ((((ESC_Param[4] & 0xC0) != 0) << 2) | // B
-                                  (((ESC_Param[3] & 0xC0) != 0) << 1) | // G
-                                   ((ESC_Param[2] & 0xC0) != 0));       // R
+                            rgb = (((ESC_Param[base+4] + ESC_Param[base+3] + ESC_Param[base+2]) >= 256) ? (ESC_Param[base+0] == 38 ? 90 : 100) : (ESC_Param[base+0] == 38 ? 30 : 40)) +  // Attempt to find out if this colour is bright enough to warrant using the upper 8 colours
+                                 ((((ESC_Param[base+4] & 0xC0) != 0) << 2) | // B
+                                  (((ESC_Param[base+3] & 0xC0) != 0) << 1) | // G
+                                   ((ESC_Param[base+2] & 0xC0) != 0));       // R
 
                             TTY_SetAttribute(rgb);
 
-                            #ifdef ESC_LOGGING
-                            //kprintf("Attempting to set truncated RGB colour %u (R: %u  -- G: %u -- B: %u)", rgb, ESC_Param[2], ESC_Param[3], ESC_Param[4]);
+                            #if ESC_LOGGING >= 4
+                            kprintf("Attempting to set truncated RGB colour %u (R: %u  -- G: %u -- B: %u)", rgb, ESC_Param[base+2], ESC_Param[base+3], ESC_Param[base+4]);
                             #endif
                         break;
                     
                         default:
                             for (int i = 0; i < 4; i++)
                             {
-                                if (ESC_Param[i] != 255) TTY_SetAttribute(ESC_Param[i]);
+                                if (ESC_Param[base+i] != 255) TTY_SetAttribute(ESC_Param[base+i]);
                             }
                         break;
                     }
@@ -1132,6 +1132,12 @@ static void DoEscape(u8 byte)
                     #ifdef ESC_LOGGING
                     //kprintf("TTY_SetAttribute: 0:<%u> 1:<%u> 2:<%u> 3:<%u> 4:<%u>  at $%lX", ESC_Param[0], ESC_Param[1], ESC_Param[2], ESC_Param[3], ESC_Param[4], RXBytes);
                     #endif
+                    
+                    if ((ESC_ParamSeq == 10) && (base != 5))
+                    {
+                        base = 5;
+                        goto DoSecondSet;
+                    }
 
                     goto EndEscape;
                 }
@@ -1188,7 +1194,8 @@ static void DoEscape(u8 byte)
                     else if (ESC_Buffer[1] == '"')
                     {
                         u8 level = ESC_Param[0];
-                        u8 bit7 = ESC_Buffer[0] - 48;
+                        // Not used, uncomment when its needed: 
+                        // u8 bit7 = ESC_Buffer[0] - 48;
 
                         if (level < 61) 
                         {
@@ -1209,7 +1216,8 @@ static void DoEscape(u8 byte)
                     // Request Mode (RQM)
                     else if (ESC_Buffer[1] == '$')
                     {
-                        u8 data_end = ESC_Buffer[0] - 48;
+                        // Not used, uncomment when its needed: 
+                        // u8 data_end = ESC_Buffer[0] - 48;
                         
                         #ifdef ESC_LOGGING
                         kprintf("[93mRequest Mode (RQM): %u[0m", data_end);
@@ -2664,7 +2672,7 @@ static void DoEscape(u8 byte)
                         // When the terminal looses focus emit: ESC [ O
                         // vte: Sends current focus state on mode activation.
 
-                        if ((!bShowHexView) && (!bShowFavView) && (!bShowQMenu) && (!vMinimized)) NET_SendString("[I");
+                        if (!WinMgr_isWindowOpen() && !vMinimized) NET_SendString("[I");
                         else NET_SendString("[O");
                     break;
 
@@ -3136,6 +3144,8 @@ static void DoEscape(u8 byte)
         ESC_Param[5] = 0xFF;
         ESC_Param[6] = 0xFF;
         ESC_Param[7] = 0xFF;
+        ESC_Param[8] = 0xFF;
+        ESC_Param[9] = 0xFF;
         ESC_Param16 = 0xFFFF;
         ESC_ParamSeq = 0;
 

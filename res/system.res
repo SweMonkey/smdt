@@ -34,3 +34,6 @@ TILESET GFX_SCRSAV "screensaverball.png" BEST NONE
 
 # Font glyphs for IRC typing input
 TILESET GFX_IRC_TYPE "irc_type.png" BEST NONE
+
+# ROM Disk
+BIN ROM_DISK "rom.dsk" 2 1 0 NONE

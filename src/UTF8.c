@@ -301,7 +301,7 @@ u8 const * const UTF_TablePtr_2seq[] =
 
 u8 const * const UTF_TablePtr_E0[256] =
 {
-    //        0            1            2            3            4            5            6            7            8            9            A            B            C            D            E            F
+    //      0               1               2               3               4               5               6               7               8               9               A               B               C               D               E               F
     UTFTB_E0[0x0E], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], // 0x00-0x0F
     UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], // 0x10-0x1F
     UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], UTFTB_E0[0x0A], // 0x20-0x2F
@@ -381,7 +381,7 @@ void DoUTF8(u8 byte)
 
                 for (u8 b = 0; b < UTF_Seq; b++)
                 {
-                    NextByte = (NextByte != NC_UTF8 ? NextByte : NC_SkipUTF);   //(NextByte == NC_Escape ? NC_Escape : NC_SkipUTF);
+                    NextByte = (NextByte != NC_UTF8 ? NextByte : NC_SkipUTF);
                     TELNET_ParseRX(UTF_Buffer[b]);
     
                     #ifdef UTF_LOGGING

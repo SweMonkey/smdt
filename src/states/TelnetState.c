@@ -6,6 +6,7 @@
 #include "Utils.h"
 #include "Network.h"
 #include "Cursor.h"             // bDoCursorBlink
+#include "Keyboard.h"           // bKB_ScrLock
 #include "devices/RL_Network.h"
 #include "system/Stdout.h"
 
@@ -14,7 +15,6 @@
 #endif
 
 static u8 rxdata;
-//static u8 bOnce = FALSE;
 u8 sv_TelnetFont = FONT_4x8_8;
 
 
@@ -54,8 +54,9 @@ void Exit_Telnet()
     bDoCursorBlink = TRUE;
 
     Stdout_Flush();
-    Buffer_Flush(&TxBuffer);
     NET_Disconnect();
+    Buffer_Flush(&TxBuffer);
+    Buffer_Flush(&RxBuffer);
 
     Telnet_Quit();
 }
@@ -68,22 +69,16 @@ void Reset_Telnet()
 
 void Run_Telnet()
 {
+    u16 it = 0;
+    
+    if (bKB_ScrLock) return;
+
     while (Buffer_Pop(&RxBuffer, &rxdata))
     {
-        /*if (bOnce)
-        {
-            TRM_SetStatusIcon(ICO_NET_RECV, ICO_POS_1);
-            bOnce = !bOnce;
-        }*/
-
         TELNET_ParseRX(rxdata);
-    }
 
-    /*if (!bOnce)
-    {
-        TRM_SetStatusIcon(ICO_NET_IDLE_RECV, ICO_POS_1);
-        bOnce = !bOnce;
-    }*/
+        if (it++ > 8) break;
+    }
 }
 
 void Input_Telnet()
@@ -320,6 +315,6 @@ void Input_Telnet()
 
 const PRG_State TelnetState = 
 {
-    Enter_Telnet, ReEnter_Telnet, Exit_Telnet, Reset_Telnet, Run_Telnet, Input_Telnet, NULL, NULL
+    Enter_Telnet, ReEnter_Telnet, Exit_Telnet, Reset_Telnet, Run_Telnet, Input_Telnet
 };
 

@@ -4556,6 +4556,13 @@ static int lfs_mount_(lfs_t *lfs, const struct lfs_config *cfg) {
     lfs->gstate.tag += !lfs_tag_isvalid(lfs->gstate.tag);
     lfs->gdisk = lfs->gstate;
 
+    // SMDT fix - Exodus emulator issue with SRAM? 
+    // lfs->block_count ends up being 0 and lfs->seed % lfs->block_count down below causes div0 exception.
+    if (lfs->block_count == 0){
+        err = LFS_ERR_IO;
+        goto cleanup;
+    }
+
     // setup free lookahead, to distribute allocations uniformly across
     // boots, we start the allocator at a random location
     lfs->lookahead.start = lfs->seed % lfs->block_count;

@@ -30,7 +30,15 @@
 #define ICO_JP_OK      0x1E // Joypad input device 'J'
 #define ICO_ID_ERROR   0x1D // Error with input device 'X'
 
-typedef enum {DP_None = 0, DP_Port1 = 1, DP_Port2 = 2, DP_Port3 = 3} DevPort;
+typedef enum 
+{
+    DP_None  = 0, 
+    DP_Port1 = 1, 
+    DP_Port2 = 2, 
+    DP_Port3 = 3, 
+    DP_CART  = 4, 
+    DP_EXP   = 5
+} DevPort;
 
 typedef struct
 {
@@ -71,6 +79,7 @@ extern DevPort sv_ListenPort;   // Default UART port to listen on
 extern bool bRLNetwork;
 extern bool bXPNetwork;
 extern bool bMegaCD;
+extern bool bVRAM_128KB;
 
 void SetDevicePort(SM_Device *d, DevPort p);
 void DeviceManager_Init();

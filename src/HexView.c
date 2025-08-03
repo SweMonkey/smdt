@@ -3,9 +3,9 @@
 #include "UI.h"
 #include "Network.h"
 #include "Utils.h"
+#include "WinMgr.h"
 #include "system/Stdout.h"
 
-bool bShowHexView = FALSE;
 static u16 FileOffset = 0;
 static s16 ScrollY = 0;
 static SM_Window *HexWindow = NULL;
@@ -14,6 +14,7 @@ static u16 bufsize = 0;
 static char WinTitle[38];
 static bool bIOFILE = FALSE;
 static u8 NumLines = 23;
+static u16 ScrollMax = 0;
 
 
 static void DrawDataLine(u8 Line)
@@ -43,8 +44,7 @@ static void DrawDataLine(u8 Line)
 
 static void UpdateView()
 {
-    u16 p = ScrollY << 3;
-    FileOffset = p;
+    FileOffset = ScrollY;
 
     UI_Begin(HexWindow);
 
@@ -56,38 +56,36 @@ static void UpdateView()
 
     UI_DrawVLine(4, 0, 23);
     UI_DrawVLine(28, 0, 23);
-    UI_DrawVScrollbar(37, 0, 23, 0, (bufsize-1)-0xB8+64, p);   // 0xFFF = Buffer size - 0xB8 = amount of data on a single screen + 64 to make sure slider doesn't go over down arrow
+    UI_DrawVScrollbar(37, 0, 23, 0, ScrollMax, ScrollY>>3);
 
     UI_End();
 }
 
 void HexView_Input()
 {
-    if (!bShowHexView || (HexWindow == NULL)) return;
-
     if (is_KeyDown(KEY_UP))
     {
-        if (ScrollY > 0) 
+        if (ScrollY > 7) 
         {
-            ScrollY--;
+            ScrollY -= 8;
             UpdateView();
         }
     }
 
     if (is_KeyDown(KEY_DOWN))
     {
-        if (ScrollY < ((bufsize/8)-23)) 
+        if (ScrollY < (bufsize-184))
         {
-            ScrollY++;
+            ScrollY += 8;
             UpdateView();
         }
     }
 
     if (is_KeyDown(KEY_LEFT))
     {
-        if (ScrollY > 7) 
+        if (ScrollY > 183) 
         {
-            ScrollY -= 8;
+            ScrollY -= 184;
             UpdateView();
         }
         else if (ScrollY > 0)
@@ -99,21 +97,25 @@ void HexView_Input()
 
     if (is_KeyDown(KEY_RIGHT))
     {
-        if (ScrollY < ((bufsize/8)-31))
+        if (ScrollY < (bufsize-368))
         {
-            ScrollY += 8;
+            ScrollY += 184;
             UpdateView();
         }
-        else if (ScrollY < ((bufsize/8)-23))
+        else if (ScrollY < (bufsize-184))
         {
-            ScrollY += ((bufsize/8)-23)-ScrollY;
+            ScrollY += (bufsize-184)-ScrollY;
+
+            u8 rem = ScrollY % 8;
+            if (rem != 0) ScrollY += 8-rem;
+
             UpdateView();
         }
     }
 
     if (is_KeyDown(KEY_ESCAPE))
     {
-        HexView_Close();
+        WinMgr_Close(W_HexView);
     }
 
     return;
@@ -136,14 +138,14 @@ static void DrawHexView()
     UpdateView();
 }
 
-void HexView_Open(const char *filename)
+u16 HexView_Open(const char *filename)
 {
     char fn_buf[FILE_MAX_FNBUF];
     FS_ResolvePath(filename, fn_buf);
     bIOFILE = FALSE;
 
     // Open file, take special care of IO files
-    if (strcmp(fn_buf, "/system/rxbuffer.io") == 0)
+    if (strcmp(fn_buf, "/sram/system/rxbuffer.io") == 0)
     {
         strcpy(WinTitle, "HexView - Rx Buffer");
         
@@ -151,7 +153,7 @@ void HexView_Open(const char *filename)
         bufsize = BUFFER_LEN;
         bIOFILE = TRUE;
     }
-    else if (strcmp(fn_buf, "/system/txbuffer.io") == 0)
+    else if (strcmp(fn_buf, "/sram/system/txbuffer.io") == 0)
     {
         strcpy(WinTitle, "HexView - Tx Buffer");
         
@@ -159,7 +161,7 @@ void HexView_Open(const char *filename)
         bufsize = BUFFER_LEN;
         bIOFILE = TRUE;
     }
-    else if (strcmp(fn_buf, "/system/stdout.io") == 0)
+    else if (strcmp(fn_buf, "/sram/system/stdout.io") == 0)
     {
         strcpy(WinTitle, "HexView - Stdout");
         
@@ -173,7 +175,7 @@ void HexView_Open(const char *filename)
         if (f == NULL) 
         {
             printf("Failed to open file \"%s\"\n", filename);
-            return;
+            return 1;
         }
 
         F_Seek(f, 0, SEEK_END);
@@ -182,9 +184,9 @@ void HexView_Open(const char *filename)
         bufptr = (char*)malloc(bufsize+1);    
         if (bufptr == NULL)
         {
-            printf("Failed to allocate buffer\n");
+            printf("Failed to allocate buffer (Out of memory)\n");
             F_Close(f);
-            return;
+            return 1;
         }
 
         memset(bufptr, 0, bufsize);
@@ -202,7 +204,14 @@ void HexView_Open(const char *filename)
     if (HexWindow == NULL)
     {
         Stdout_Push("[91mFailed to allocate memory;\nCan't create HexWindow[0m\n");
-        return;
+        
+        if (bIOFILE == FALSE)
+        {
+            free(bufptr);
+            bufptr = NULL;
+        }
+
+        return 1;
     }
 
     // Determine number of lines that will be needed if file is smaller than 192 bytes
@@ -210,13 +219,18 @@ void HexView_Open(const char *filename)
     {
         NumLines  = bufsize / 8;
         NumLines += (bufsize % 8 ? 1 : 0);
+        ScrollMax = 0;
     }
-    else NumLines = 23;
+    else 
+    {
+        NumLines = 23;
+        ScrollMax = ((bufsize)-0xB8) >> 3;  // 0xB8 = amount of data on a single screen
+    }
 
     // Redraw hex viewer window and present it
     DrawHexView();
 
-    bShowHexView = TRUE;
+    return 0;
 }
 
 void HexView_Close()
@@ -244,5 +258,4 @@ void HexView_Close()
     }
 
     bufsize = 0;
-    bShowHexView = FALSE;
 }

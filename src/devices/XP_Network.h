@@ -22,6 +22,6 @@ bool XPN_Connect(char *str);
 void XPN_Disconnect();
 
 u8 XPN_GetIP(char *ret);
-void XPN_PingIP(char *ip);
+u8 XPN_PingIP(char *ip);
 
 #endif // XP_NETWORK_H_INCLUDED

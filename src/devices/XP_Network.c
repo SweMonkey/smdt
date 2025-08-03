@@ -145,11 +145,11 @@ bool XPN_Connect(char *str)
     u32 timeout = 0;
     u8 byte = 0;
 
-    XPN_FlushBuffers();  
+    XPN_FlushBuffers();
 
     XPN_SendByte('C');
     XPN_SendMessage(str);
-    XPN_SendByte(0x0A);
+    XPN_SendByte('\n');
 
     waitMs(sv_DelayTime);
 
@@ -242,12 +242,13 @@ u8 XPN_GetIP(char *ret)
 
 // Ping IP Address
 // Only accepts an IP address to ping
-void XPN_PingIP(char *ip)
+u8 XPN_PingIP(char *ip)
 {
     u32 timeout = 0;
     u16 ping_counter = 0;
     u16 byte_count = 0;
     u8 byte = 0;
+    u8 r = 0;
 
     XPN_EnterMonitorMode();
 
@@ -276,11 +277,13 @@ void XPN_PingIP(char *ip)
                 // Flush stdout after pushing byte
                 Stdout_Flush();
             }
+
+            timeout = 0;
         }
 
         if (timeout++ >= sv_ReadTimeout)
         {
-            Stdout_Push("Ping response timeout!\n");
+            r = 1;
             break;
         }
     }
@@ -290,5 +293,5 @@ void XPN_PingIP(char *ip)
     waitMs(sv_DelayTime);
     XPN_ExitMonitorMode();
 
-    return;
+    return r;
 }

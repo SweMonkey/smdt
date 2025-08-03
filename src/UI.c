@@ -49,70 +49,76 @@ void UI_ApplyTheme()
     switch (sv_ThemeUI)
     {
         case 0: // Dark blue
-            PAL_setColor( 3, 0x444);    // Window title background
-            PAL_setColor( 5, 0x222);    // Icon background
+            SetColor( 2, 0xEEE);    // Window title FG (+Selected text colour)
+            SetColor( 3, 0xA40);    // Window title background
+            SetColor( 5, 0x222);    // Icon background
 
-            PAL_setColor(19, 0x222);    // Window inner BG
-            PAL_setColor(20, 0x444);    // Window title BG
+            SetColor(19, 0x222);    // Window inner BG
+            SetColor(20, 0xA40);    // Window title BG
 
-            PAL_setColor(21, 0xA40);    // Window shadow
-            PAL_setColor(22, 0xE80);    // Window border
-            PAL_setColor(49, 0xE80);    // Cursor outline
+            SetColor(21, 0x820);    // Window shadow
+            SetColor(22, 0xE80);    // Window border
+            SetColor(49, 0xE80);    // Cursor outline
         break;
         case 1: // Dark lime
-            PAL_setColor( 3, 0x444);    // Window title background
-            PAL_setColor( 5, 0x222);    // Icon background
+            SetColor( 2, 0x000);    // Window title FG (+Selected text colour)
+            SetColor( 3, 0x084);    // Window title background
+            SetColor( 5, 0x222);    // Icon background
             
-            PAL_setColor(19, 0x222);    // Window inner BG
-            PAL_setColor(20, 0x444);    // Window title BG
+            SetColor(19, 0x222);    // Window inner BG
+            SetColor(20, 0x084);    // Window title BG
 
-            PAL_setColor(21, 0x0A4);    // Window shadow
-            PAL_setColor(22, 0x0E8);    // Window border
-            PAL_setColor(49, 0x0E8);    // Cursor outline
+            SetColor(21, 0x062);    // Window shadow
+            SetColor(22, 0x0C8);    // Window border
+            SetColor(49, 0x0C8);    // Cursor outline
         break;
         case 2: // Dark amber
-            PAL_setColor( 3, 0x444);    // Window title background
-            PAL_setColor( 5, 0x222);    // Icon background
+            SetColor( 2, 0xEEE);    // Window title FG (+Selected text colour)
+            SetColor( 3, 0x048);    // Window title background
+            SetColor( 5, 0x222);    // Icon background
             
-            PAL_setColor(19, 0x222);    // Window inner BG
-            PAL_setColor(20, 0x444);    // Window title BG
+            SetColor(19, 0x222);    // Window inner BG
+            SetColor(20, 0x048);    // Window title BG
 
-            PAL_setColor(21, 0x04A);    // Window shadow
-            PAL_setColor(22, 0x08E);    // Window border
-            PAL_setColor(49, 0x08E);    // Cursor outline
+            SetColor(21, 0x028);    // Window shadow
+            SetColor(22, 0x08E);    // Window border
+            SetColor(49, 0x08E);    // Cursor outline
         break;
         case 3: // High contrast
-            PAL_setColor( 3, 0x444);    // Window title background
-            PAL_setColor( 5, 0x222);    // Icon background
+            SetColor( 2, 0xEEE);    // Window title FG (+Selected text colour)
+            SetColor( 3, 0x444);    // Window title background
+            SetColor( 5, 0x000);    // Icon background
             
-            PAL_setColor(19, 0x222);    // Window inner BG
-            PAL_setColor(20, 0x444);    // Window title BG
+            SetColor(19, 0x000);    // Window inner BG
+            SetColor(20, 0x444);    // Window title BG
 
-            PAL_setColor(21, 0x000);    // Window shadow
-            PAL_setColor(22, 0xEEE);    // Window border
-            PAL_setColor(49, 0xEEE);    // Cursor outline
+            SetColor(21, 0x000);    // Window shadow
+            SetColor(22, 0xEEE);    // Window border
+            SetColor(49, 0xEEE);    // Cursor outline
         break;
         case 4: // Aqua
-            PAL_setColor( 3, 0x664);    // Window title background
-            PAL_setColor( 5, 0x442);    // Icon background
+            SetColor( 2, 0xEEE);    // Window title FG (+Selected text colour)
+            SetColor( 3, 0x664);    // Window title background
+            SetColor( 5, 0x442);    // Icon background
 
-            PAL_setColor(19, 0x442);    // Window inner BG
-            PAL_setColor(20, 0x664);    // Window title BG
+            SetColor(19, 0x442);    // Window inner BG
+            SetColor(20, 0x664);    // Window title BG
 
-            PAL_setColor(21, 0x880);    // Window shadow
-            PAL_setColor(22, 0xCC0);    // Window border
-            PAL_setColor(49, 0x880);    // Cursor outline
+            SetColor(21, 0x660);    // Window shadow
+            SetColor(22, 0xCC0);    // Window border
+            SetColor(49, 0x880);    // Cursor outline
         break;
         case 5: // Hot pink
-            PAL_setColor( 3, 0x646);    // Window title background
-            PAL_setColor( 5, 0x424);    // Icon background
+            SetColor( 2, 0xEEE);    // Window title FG (+Selected text colour)
+            SetColor( 3, 0x646);    // Window title background
+            SetColor( 5, 0x424);    // Icon background
 
-            PAL_setColor(19, 0x424);    // Window inner BG
-            PAL_setColor(20, 0x646);    // Window title BG
+            SetColor(19, 0x424);    // Window inner BG
+            SetColor(20, 0x646);    // Window title BG
 
-            PAL_setColor(21, 0x808);    // Window shadow
-            PAL_setColor(22, 0xC0C);    // Window border
-            PAL_setColor(49, 0xC0C);    // Cursor outline
+            SetColor(21, 0x606);    // Window shadow
+            SetColor(22, 0xC0C);    // Window border
+            SetColor(49, 0xC0C);    // Cursor outline
         break;
     
         default:
@@ -258,9 +264,9 @@ void UI_ClearRect(u8 x, u8 y, u8 width, u8 height)
 {
     if (Target == NULL) return;
 
-    for (u8 _y = 0; _y < height; _y++)  // -5
+    for (u8 _y = 0; _y < height; _y++)
     {
-    for (u8 _x = 0; _x < width; _x++)   // -2
+    for (u8 _x = 0; _x < width; _x++)
     {
         Target->WinBuffer[_y+y+3][_x+x+1] = 0x20;
         Target->WinAttribute[_y+y+3][_x+x+1] = PAL1;
@@ -376,6 +382,38 @@ void UI_DrawPanel(u8 x, u8 y, u8 width, u8 height)
     UI_ClearRect(x+1, y+1, width-2, height-2);
 }
 
+/// @brief Draw groupbox
+/// @param x X position
+/// @param y Y position
+/// @param width Width of groupbox
+/// @param height Height of groupbox
+/// @param caption Groupbox caption
+void UI_DrawGroupBox(u8 x, u8 y, u8 width, u8 height, const char *caption)
+{
+    if (Target == NULL) return;
+
+    for (u8 i = 0; i < width-2; i++)
+    {
+        Target->WinBuffer[y+3][x+2+i] = 0xD0;
+        Target->WinBuffer[y+3+height-1][x+2+i] = 0xD0;
+    }
+
+    for (u8 i = 0; i < height-2; i++)
+    {
+        Target->WinBuffer[y+4+i][x+1] = 0xCF;
+        Target->WinBuffer[y+4+i][x+1+width-1] = 0xCF;
+    }
+
+    Target->WinBuffer[y+3][x+1] = 0xD3;
+    Target->WinBuffer[y+3][x+1+width-1] = 0xD4;
+    Target->WinBuffer[y+3+height-1][x+1] = 0xD1;
+    Target->WinBuffer[y+3+height-1][x+1+width-1] = 0xD2;
+
+    UI_DrawText(x+1, y, PAL1, caption);
+
+    UI_ClearRect(x+1, y+1, width-2, height-2);
+}
+
 /// @brief Draw floating window
 /// @param x X position
 /// @param y Y position
@@ -389,6 +427,17 @@ void UI_DrawWindow(u8 x, u8 y, u8 width, u8 height, bool bChild, const char *tit
 
     u8 m = (bChild ? 64 : 0);
 
+    // Reset tiles and attributes manually for the entire rect covered by the window (using UI_ClearRect won't work since attributes will be offset)
+    for (u8 ay = 0; ay < height; ay++)
+    {
+    for (u8 ax = 0; ax < width; ax++)
+    {
+        Target->WinBuffer[y+ay+3][x+ax+1] = 0x20;   // 0xCA ?
+        Target->WinAttribute[y+ay+3][x+ax+1] = PAL1;
+    }
+    }
+
+    // Horizontal lines
     for (u8 i = 0; i < width-2; i++)
     {
         Target->WinBuffer[y+3][x+2+i] = 0xC1 - m;
@@ -404,6 +453,7 @@ void UI_DrawWindow(u8 x, u8 y, u8 width, u8 height, bool bChild, const char *tit
     Target->WinBuffer[y+5][x+1] = 0xC6 - m;
     Target->WinBuffer[y+5][x+1+width-1] = 0xC8 - m;
 
+    // Vertical lines
     for (u8 i = 0; i < height-4; i++)
     {
         Target->WinBuffer[y+6+i][x+1] = 0xC9 - m;
@@ -415,8 +465,6 @@ void UI_DrawWindow(u8 x, u8 y, u8 width, u8 height, bool bChild, const char *tit
 
     Target->WinBuffer[y+3+height-1][x+1] = 0xCC - m;
     Target->WinBuffer[y+3+height-1][x+1+width-1] = 0xCE - m;
-
-    UI_FillRect(x+2, y+6, width-2, height-5, 0xCA);
 
     const char *c = title;
     u8 tx = 0;
@@ -437,17 +485,38 @@ void UI_DrawWindow(u8 x, u8 y, u8 width, u8 height, bool bChild, const char *tit
 void UI_DrawVScrollbar(u8 x, u8 y, u8 height, u16 min, u16 max, u16 pos)
 {
     if (Target == NULL) return;
+    if (max <= min) return;
 
-    fix32 pfd = fix32Div(FIX32(pos), FIX32((max-min)));
-    fix32 pfm = fix32Mul(pfd, FIX32(height-y));
-    u8 pos_ = fix32ToInt(pfm);
+    y += 3;
 
-    UI_ClearRect(x, y+1, 1, height-2);
+    u8 scrollArea = height-2;
+    if (scrollArea < 1) return;
 
-    Target->WinBuffer[y+3][x+1] = 0xBD;         // Up arrow
-    Target->WinBuffer[y+height+2][x+1] = 0xBE;  // Down arrow
-    Target->WinBuffer[y+pos_+4][x+1] = 0xBF;    // Slider
+    UI_ClearRect(x, y-3, 1, height);
+
+    Target->WinBuffer[y][x+1] = 0xBD;           // Up arrow
+    Target->WinBuffer[y+height-1][x+1] = 0xBE;  // Down arrow
+
+    if (pos < min) pos = min;
+    if (pos > max) pos = max;
+
+    u16 range = max - min;
+
+    // Max slider height
+    u8 sliderHeight = scrollArea * scrollArea / (range + scrollArea);
+    if (sliderHeight < 1) sliderHeight = 1;
+    if (sliderHeight > scrollArea) sliderHeight = scrollArea;
+
+    // Slider position
+    u8 travelArea = scrollArea - sliderHeight;
+    u8 sliderPos = (u32)(pos - min) * travelArea / range;
+
+    for (u8 i = 0; i < sliderHeight; i++)
+    {
+        Target->WinBuffer[y + 1 + sliderPos + i][x + 1] = 0xBF;
+    }
 }
+
 
 /// @brief Draw an item list widget
 /// @param x X position
@@ -492,9 +561,23 @@ void UI_DrawTextInput(u8 x, u8 y, u8 width, const char *caption, char str[], boo
     UI_DrawPanel(x, y, width, 3);
     UI_DrawText(x+1, y, PAL1, caption);
 
-    UI_DrawText(x+1, y+1, PAL1, str);
+    size_t len = strlen(str);
+    u8 nwidth = width-3;
 
-    if (bShowCaret) Target->WinBuffer[y+4][x+2+strlen(str)] = 0x7C;
+    // Point to the start of the last `width` characters, or start of str if shorter
+    const char *visibleStr = str;
+    if (len > nwidth) 
+    {
+        visibleStr = str + (len - nwidth);
+    }
+
+    UI_DrawText(x+1, y+1, PAL1, visibleStr);
+
+    if (bShowCaret) 
+    {
+        size_t caretPos = len < nwidth ? len : nwidth;
+        Target->WinBuffer[y+4][x+2+caretPos] = 0x7C;
+    }
 }
 
 /// @brief Draw item list with selector
@@ -516,6 +599,7 @@ void UI_DrawItemListSelect(u8 x, u8 y, u8 width, u8 height, const char *caption,
     u8 x_ = x;
     u8 y_ = y+2;
     u8 w_ = width;
+    char tmp[40];
 
     if (flags & IL_NoBorder)
     {
@@ -535,21 +619,21 @@ void UI_DrawItemListSelect(u8 x, u8 y, u8 width, u8 height, const char *caption,
         UI_DrawText(x_+1, y_, PAL1, caption);
     }
 
-    s16 pos = (((s8)selected_item) - (max_visible-1));
+    s16 pos = (s8)selected_item;
     pos = pos < 0 ? 0 : pos;
-    //kprintf("max_vis: %u - pos: %u - items-max: %u - item: \"%s\"", max_visible, pos, (item_count-max_visible), list[selected_item]);
-
-    char tmp[40];
 
     if (item_count > max_visible)
     {
-        UI_DrawVScrollbar(x_+w_, y_, height, 0, (item_count-(max_visible-1)), pos);//item_count, selected_item+1);//
+        UI_DrawVScrollbar(x_+w_, y_, height, 0, item_count-1, pos);
     }
+
+    pos -= (max_visible-1);
+    pos = pos < 0 ? 0 : pos;
 
     for (u16 i = 0; i < (item_count < max_visible ? item_count : max_visible); i++)
     {
         u8 n = i+pos;
-        snprintf(tmp, 38, "%-38s", list[n]);
+        snprintf(tmp, width+1, "%-*s", width-1, list[n]);
         
         if (selected_item == n) UI_DrawText(x_, y_+i, PAL0, tmp);
         else UI_DrawText(x_, y_+i, PAL1, tmp);
@@ -590,7 +674,7 @@ void UI_DrawColourPicker(u8 x, u8 y, u16 *rgb, u8 selected)
 
     Target->WinBuffer[y+4][x+18] = 0xAB;    // Center
 
-    PAL_setColor(23, *rgb);
+    SetColor(23, *rgb);
 }
 
 /// @brief Draw a confirmation selector box
@@ -636,11 +720,6 @@ void UI_DrawTabs(u8 x, u8 y, u8 w, u8 num_tabs, u8 active_tab, u8 selected, cons
 {
     if (Target == NULL) return;
 
-    /*const char *tab_text[5] =
-    {
-        "Tab 1", "Tab 2", "Tab 3", "Tab 4", "Tab 5"
-    };*/
-
     u8 c;       // Down counter
     u8 len;     // Current tab title strlen
     u8 o = 0;   // Offset
@@ -679,4 +758,25 @@ void UI_DrawTabs(u8 x, u8 y, u8 w, u8 num_tabs, u8 active_tab, u8 selected, cons
 
     if (x ==  0) Target->WinBuffer[y+4][0]    = 0xA2;   // Point where the left window border meets the tab bar
     if (w >= 38) Target->WinBuffer[y+4][x+39] = 0xA1;   // Point where the right window border meets the tab bar
+}
+
+/// @brief Draw a horizontal progress bar
+/// @param x X position
+/// @param y Y position
+/// @param max Max value of progress bar
+/// @param value Current value of progress bar
+void UI_DrawHProgressBar(u8 x, u8 y, u8 max, u8 value)
+{
+    if (Target == NULL) return;
+
+    u8 max_v = max == 0 ? 1 : max;
+    
+    u8  c = 15;
+    f32 v = fix32Div(FIX32(value), FIX32(max_v));
+        v = fix32Mul(v, FIX32(16));
+    u8  r = fix32ToInt(v);
+
+    UI_DrawText(x, y, PAL1, "[               ]");
+
+    while (c--) Target->WinBuffer[y+3][x+2+c] = (c >= r ? ' ' : 0xAA);
 }

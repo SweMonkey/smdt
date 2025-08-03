@@ -4,13 +4,11 @@
 #include "Input.h"
 #include "../res/system.h"
 #include "Utils.h"
-#include "HexView.h"    // bShowHexView
-#include "FavView.h"    // bShowFavView
-#include "QMenu.h"      // bShowQMenu
 #include "UI.h"         // UI_ApplyTheme
 #include "Network.h"
 #include "Terminal.h"
 #include "Telnet.h"
+#include "WinMgr.h"
 
 #include "misc/ConfigFile.h"
 #include "misc/Exception.h"
@@ -26,6 +24,8 @@ int main(bool hardReset)
     SYS_disableInts();
 
     SetupExceptions();
+
+    sv_CBrightness = 0; // Set full brightness during boot
 
     PAL_setPalette(PAL0, palette_black, DMA);
     PAL_setPalette(PAL1, palette_black, DMA);
@@ -75,12 +75,12 @@ int main(bool hardReset)
     PSG_setEnvelope(0, PSG_ENVELOPE_MIN);
     
     // Setup initial colour values needed for boot
-    PAL_setColor(17, 0x000);    // Window text BG Normal / Terminal text BG
-    PAL_setColor(20, 0x444);    // Window title BG
-    PAL_setColor(50, 0x000);    // Window text FG Inverted
-    PAL_setColor(51, 0xEEE);    // Window text BG Inverted
-    PAL_setColor(54, 0x444);    // Screensaver colour 0
-    PAL_setColor(55, 0xEEE);    // Screensaver colour 1
+    SetColor(17, 0x000);    // Window text BG Normal / Terminal text BG
+    SetColor(20, 0x444);    // Window title BG
+    SetColor(50, 0x000);    // Window text FG Inverted
+    SetColor(51, 0xEEE);    // Window text BG Inverted
+    SetColor(54, 0x444);    // Screensaver colour 0
+    SetColor(55, 0xEEE);    // Screensaver colour 1
 
     // Reset window plane to be fully transparent
     TRM_ClearArea(0, 0, 40, (bPALSystem ? 30 : 28), PAL1, TRM_CLEAR_BG);
@@ -98,14 +98,17 @@ int main(bool hardReset)
 
     // Initialize terminal for boot output text
     sv_Font = FONT_8x8_16;
+    //sv_BoldFont = TRUE;
     TELNET_Init(TF_Everything);
     vNewlineConv = 1;
     bAutoFlushStdout = TRUE;
+    SetColor(4, 0);    // Set cursor colour back to black to hide it
     
     VDP_setEnable(TRUE);
  
     Stdout_Push(" [97mInitializing system...[0m\n");
 
+    WinMgr_Init();
     Input_Init();
 
     TRM_SetStatusIcon(ICO_ID_UNKNOWN,    ICO_POS_0);
@@ -113,32 +116,28 @@ int main(bool hardReset)
     TRM_SetStatusIcon(ICO_NET_IDLE_SEND, ICO_POS_2);
     TRM_SetStatusIcon(ICO_NONE,          ICO_POS_3);
 
-    Stdout_Push(" [97mMounting filesystem...[0m\n");
+    Stdout_Push(" [97mMounting filesystems...[0m\n");
     FS_Init();
 
-    Stdout_Push(" [97mLoading config...[0m\n");
+    Stdout_Push(" [97mLoading system configuration...[0m\n");
     if (CFG_LoadData()) 
     {
-        Stdout_Push(" └[91mFailed to load config file![0m\n");
+        Stdout_Push(" [91mFailed to load config file![0m\n");
         CFG_SaveData();
     }
-    else Stdout_Push(" └[92mSuccessfully loaded config file[0m\n");
-        
-    VDP_setReg(0xB, 0x8);               // Enable VDP ext interrupt (Enable: 8 - Disable: 0)
-    SYS_setInterruptMaskLevel(0);       // Enable all interrupts
+    else Stdout_Push(" [92mSuccessfully loaded config file[0m\n");
+
     SYS_setExtIntCallback(NET_RxIRQ);   // Set external IRQ callback
 
     // Enable interrupts during driver init, certain devices will need ExtIRQ working for detection
+    VDP_setReg(0xB, 0x8);               // Enable VDP ext interrupt (Enable: 8 - Disable: 0)
     SYS_enableInts();
+    SYS_setInterruptMaskLevel(0);       // Enable all interrupts
 
     Stdout_Push(" [97mConfiguring devices...[0m\n");
     DeviceManager_Init();
 
     SYS_disableInts();
-    
-    bShowHexView = FALSE;
-    bShowFavView = FALSE;
-    bShowQMenu = FALSE;
 
     #if (HALT_Z80_ON_IO != 0)
     Stdout_Push("\n [91mWarning: HALT_Z80_ON_IO is enabled");
@@ -172,15 +171,11 @@ int main(bool hardReset)
     #endif
 
     // Setup icon and default window colours
-    PAL_setColor( 1, 0x00E);    // Icon Red
-    PAL_setColor( 2, 0xEEE);    // Window title FG
-    PAL_setColor( 3, 0x444);    // Window title BG
-    PAL_setColor( 4, 0x0E0);    // Cursor
-    PAL_setColor( 5, 0x222);    // Icon BG
-    PAL_setColor( 6, 0xEEE);    // Icon Normal
-    PAL_setColor( 7, 0x0C0);    // Icon Green (Previously in slot 3)
-    PAL_setColor(18, 0xEEE);    // Window text FG Normal - This is set to black during boot, revert it back
-    PAL_setColor(19, 0x222);    // Window inner BG       - This is set to black during boot, revert it back
+    SetColor( 1, 0x00E);    // Icon Red
+    SetColor( 4, 0x0E0);    // Cursor                - This is set to black during boot, revert it back (Not really necessary since starting a terminal will init this itself...)
+    SetColor( 6, 0xEEE);    // Icon Normal
+    SetColor( 7, 0x0C0);    // Icon Green (Previously in slot 3)
+    SetColor(18, 0xEEE);    // Window text FG Normal - This is set to black during boot, revert it back
     UI_ApplyTheme();
 
     // Set VBlank IRQ callback - Do not set it earlier in boot process!
@@ -188,7 +183,6 @@ int main(bool hardReset)
     
     //ChangeState(PS_Debug, 0, NULL);
     //ChangeState(PS_Telnet, 0, NULL);
-    //ChangeState(PS_Entry, 0, NULL);
     //ChangeState(PS_IRC, 0, NULL);
     //ChangeState(PS_Gopher, 0, NULL);
     ChangeState(PS_Terminal, 0, NULL);

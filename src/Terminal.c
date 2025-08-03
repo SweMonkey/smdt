@@ -48,17 +48,45 @@ u16 sv_CFG0CL = 0x0AE;  // Custom text colour for 4x8 font
 u16 sv_CFG1CL = 0x046;  // Custom text antialiasing colour for 4x8 font
 u8 sv_bHighCL = TRUE;   // Use the upper 8 colours instead when using sv_Font=1
 
+// Normal 4x8 and 8x8 font colours
 static const u16 pColors[16] =
 {
     0x222, 0x00c, 0x0c0, 0x0cc, 0xc00, 0xc0c, 0xcc0, 0xccc,   // Normal
     0x444, 0x66e, 0x6e6, 0x6ee, 0xe64, 0xe6e, 0xee6, 0xeee,   // Highlighted
 };
 
+// Inverted black/white 8x8 font colours
+static const u16 pInvColors[16] =
+{
+    0xccc, 0x00a, 0x0a0, 0x0aa, 0xa00, 0xa0a, 0xaa0, 0x000,   // Normal
+    0xeee, 0x44c, 0x4c4, 0x4cc, 0xc42, 0xc4c, 0xcc4, 0x222,   // Highlighted
+};
+
+// Normal 4x8 font antialias colours
 static const u16 pColorsHalf[16] =
 {
     0x000, 0x006, 0x060, 0x066, 0x600, 0x606, 0x660, 0x666,   // Shadowed (For AA)
     0x222, 0x337, 0x373, 0x377, 0x732, 0x737, 0x773, 0x777,   // Shadowed (For AA)
 };
+
+// Inverted light mode colours for 4x8 font
+/*static const u16 pInvColors4[16] =
+{
+    0x111, 0x006, 0x060, 0x066, 0x600, 0x606, 0x660, 0x666,   // Normal
+    0x222, 0x228, 0x282, 0x288, 0x821, 0x828, 0x882, 0x888,   // Highlighted
+};*/
+
+// Inverted light mode antialias colours for 4x8 font
+static const u16 pInvColorsDouble[16] =
+{
+    0xccc, 0x00c, 0x0c0, 0x0cc, 0xc00, 0xc0c, 0xcc0, 0x444,   // Shadowed (For AA)
+    0xeee, 0x66e, 0x6e6, 0x6ee, 0xe64, 0xe6e, 0xee6, 0x666,   // Shadowed (For AA)
+};
+/*static const u16 pInvColorsHalf[16] =
+{
+    0x000, 0x002, 0x020, 0x022, 0x200, 0x202, 0x220, 0x222,   // Shadowed (For AA)
+    0x000, 0x337, 0x373, 0x377, 0x732, 0x737, 0x773, 0x444,   // Shadowed (For AA)
+};*/
 
 // Palette and font lookup table
 static const u16 PF_Table[16] = 
@@ -155,103 +183,176 @@ void TTY_Init(TTY_InitFlags flags)
     TTY_MoveCursor(TTY_CURSOR_DUMMY);
 }
 
-void TTY_ReloadPalette()
+void TTY_SetDarkColours()
 {
-    if (sv_Font == FONT_4x8_16)   // 4x8
+    if (sv_Font == FONT_4x8_1)   // 4x8 AA
+    {
+        SetColor(46, sv_CFG0CL);    // FG colour
+        SetColor(47, sv_CFG1CL);    // AA colour
+    }
+    else if (sv_Font)
     {
         // Font glyph set 0 (Colours 0-3)
-        PAL_setColor(0x0A, pColorsHalf[0]);
-        PAL_setColor(0x0B, pColors[0]);
+        SetColor(0x0A, pInvColorsDouble[0]);
+        SetColor(0x0B, pInvColors[0]);
 
-        PAL_setColor(0x1A, pColorsHalf[1]);
-        PAL_setColor(0x1B, pColors[1]);
+        SetColor(0x1A, pInvColorsDouble[1]);
+        SetColor(0x1B, pInvColors[1]);
 
-        PAL_setColor(0x2A, pColorsHalf[2]);
-        PAL_setColor(0x2B, pColors[2]);
+        SetColor(0x2A, pInvColorsDouble[2]);
+        SetColor(0x2B, pInvColors[2]);
 
-        PAL_setColor(0x3A, pColorsHalf[3]);
-        PAL_setColor(0x3B, pColors[3]);
+        SetColor(0x3A, pInvColorsDouble[3]);
+        SetColor(0x3B, pInvColors[3]);
 
         // Font glyph set 1 (Colours 4-7)
-        PAL_setColor(0x08, pColorsHalf[4]);
-        PAL_setColor(0x09, pColors[4]);
+        SetColor(0x08, pInvColorsDouble[4]);
+        SetColor(0x09, pInvColors[4]);
 
-        PAL_setColor(0x18, pColorsHalf[5]);
-        PAL_setColor(0x19, pColors[5]);
+        SetColor(0x18, pInvColorsDouble[5]);
+        SetColor(0x19, pInvColors[5]);
 
-        PAL_setColor(0x28, pColorsHalf[6]);
-        PAL_setColor(0x29, pColors[6]);
+        SetColor(0x28, pInvColorsDouble[6]);
+        SetColor(0x29, pInvColors[6]);
 
-        PAL_setColor(0x38, pColorsHalf[7]);
-        PAL_setColor(0x39, pColors[7]);
+        SetColor(0x38, pInvColorsDouble[7]);
+        SetColor(0x39, pInvColors[7]);
 
         // Font glyph set 2 (Colours 12-15)
-        PAL_setColor(0x0C, pColorsHalf[8]);
-        PAL_setColor(0x0D, pColors[8]);
+        SetColor(0x0C, pInvColorsDouble[8]);
+        SetColor(0x0D, pInvColors[8]);
 
-        PAL_setColor(0x1C, pColorsHalf[9]);
-        PAL_setColor(0x1D, pColors[9]);
+        SetColor(0x1C, pInvColorsDouble[9]);
+        SetColor(0x1D, pInvColors[9]);
 
-        PAL_setColor(0x2C, pColorsHalf[10]);
-        PAL_setColor(0x2D, pColors[10]);
+        SetColor(0x2C, pInvColorsDouble[10]);
+        SetColor(0x2D, pInvColors[10]);
 
-        PAL_setColor(0x3C, pColorsHalf[11]);
-        PAL_setColor(0x3D, pColors[11]);
+        SetColor(0x3C, pInvColorsDouble[11]);
+        SetColor(0x3D, pInvColors[11]);
 
         // Font glyph set 3 (Colours 8-11)
-        PAL_setColor(0x0E, pColorsHalf[12]);
-        PAL_setColor(0x0F, pColors[12]);
+        SetColor(0x0E, pInvColorsDouble[12]);
+        SetColor(0x0F, pInvColors[12]);
 
-        PAL_setColor(0x1E, pColorsHalf[13]);
-        PAL_setColor(0x1F, pColors[13]);
+        SetColor(0x1E, pInvColorsDouble[13]);
+        SetColor(0x1F, pInvColors[13]);
 
-        PAL_setColor(0x2E, pColorsHalf[14]);
-        PAL_setColor(0x2F, pColors[14]);
+        SetColor(0x2E, pInvColorsDouble[14]);
+        SetColor(0x2F, pInvColors[14]);
 
-        PAL_setColor(0x3E, pColorsHalf[15]);
-        PAL_setColor(0x3F, pColors[15]);
+        SetColor(0x3E, pInvColorsDouble[15]);
+        SetColor(0x3F, pInvColors[15]);
+    }
+    else
+    {
+        SetPalette(PAL2, pInvColors, DMA);
+        DMA_waitCompletion();
+    }
+}
+
+void TTY_ReloadPalette()
+{
+    if (sv_CBGCL == 0xAAA)  // Special case (Light mode)
+    {
+        TTY_SetDarkColours();
+    }
+    else if (sv_Font == FONT_4x8_16)   // 4x8
+    {
+        // Font glyph set 0 (Colours 0-3)
+        SetColor(0x0A, pColorsHalf[0]);
+        SetColor(0x0B, pColors[0]);
+
+        SetColor(0x1A, pColorsHalf[1]);
+        SetColor(0x1B, pColors[1]);
+
+        SetColor(0x2A, pColorsHalf[2]);
+        SetColor(0x2B, pColors[2]);
+
+        SetColor(0x3A, pColorsHalf[3]);
+        SetColor(0x3B, pColors[3]);
+
+        // Font glyph set 1 (Colours 4-7)
+        SetColor(0x08, pColorsHalf[4]);
+        SetColor(0x09, pColors[4]);
+
+        SetColor(0x18, pColorsHalf[5]);
+        SetColor(0x19, pColors[5]);
+
+        SetColor(0x28, pColorsHalf[6]);
+        SetColor(0x29, pColors[6]);
+
+        SetColor(0x38, pColorsHalf[7]);
+        SetColor(0x39, pColors[7]);
+
+        // Font glyph set 2 (Colours 12-15)
+        SetColor(0x0C, pColorsHalf[8]);
+        SetColor(0x0D, pColors[8]);
+
+        SetColor(0x1C, pColorsHalf[9]);
+        SetColor(0x1D, pColors[9]);
+
+        SetColor(0x2C, pColorsHalf[10]);
+        SetColor(0x2D, pColors[10]);
+
+        SetColor(0x3C, pColorsHalf[11]);
+        SetColor(0x3D, pColors[11]);
+
+        // Font glyph set 3 (Colours 8-11)
+        SetColor(0x0E, pColorsHalf[12]);
+        SetColor(0x0F, pColors[12]);
+
+        SetColor(0x1E, pColorsHalf[13]);
+        SetColor(0x1F, pColors[13]);
+
+        SetColor(0x2E, pColorsHalf[14]);
+        SetColor(0x2F, pColors[14]);
+
+        SetColor(0x3E, pColorsHalf[15]);
+        SetColor(0x3F, pColors[15]);
     }
     else if (sv_Font == FONT_4x8_8)   // 4x8
     {
         // Font glyph set 0 (Colours 0-3)
-        PAL_setColor(0x0C, pColorsHalf[0]);
-        PAL_setColor(0x0D, pColors[(sv_bHighCL ?  8 : 8)]);    // Always use the bright colour here
+        SetColor(0x0C, pColorsHalf[0]);
+        SetColor(0x0D, pColors[(sv_bHighCL ?  8 : 8)]);    // Always use the bright colour here
 
-        PAL_setColor(0x1C, pColorsHalf[1]);
-        PAL_setColor(0x1D, pColors[(sv_bHighCL ?  9 : 1)]);
+        SetColor(0x1C, pColorsHalf[1]);
+        SetColor(0x1D, pColors[(sv_bHighCL ?  9 : 1)]);
 
-        PAL_setColor(0x2C, pColorsHalf[2]);
-        PAL_setColor(0x2D, pColors[(sv_bHighCL ? 10 : 2)]);
+        SetColor(0x2C, pColorsHalf[2]);
+        SetColor(0x2D, pColors[(sv_bHighCL ? 10 : 2)]);
 
-        PAL_setColor(0x3C, pColorsHalf[3]);
-        PAL_setColor(0x3D, pColors[(sv_bHighCL ? 11 : 3)]);
+        SetColor(0x3C, pColorsHalf[3]);
+        SetColor(0x3D, pColors[(sv_bHighCL ? 11 : 3)]);
 
         // Font glyph set 1 (Colours 4-7)
-        PAL_setColor(0x0E, pColorsHalf[4]);
-        PAL_setColor(0x0F, pColors[(sv_bHighCL ? 12 : 4)]);
+        SetColor(0x0E, pColorsHalf[4]);
+        SetColor(0x0F, pColors[(sv_bHighCL ? 12 : 4)]);
 
-        PAL_setColor(0x1E, pColorsHalf[5]);
-        PAL_setColor(0x1F, pColors[(sv_bHighCL ? 13 : 5)]);
+        SetColor(0x1E, pColorsHalf[5]);
+        SetColor(0x1F, pColors[(sv_bHighCL ? 13 : 5)]);
 
-        PAL_setColor(0x2E, pColorsHalf[6]);
-        PAL_setColor(0x2F, pColors[(sv_bHighCL ? 14 : 6)]);
+        SetColor(0x2E, pColorsHalf[6]);
+        SetColor(0x2F, pColors[(sv_bHighCL ? 14 : 6)]);
 
-        PAL_setColor(0x3E, pColorsHalf[7]);
-        PAL_setColor(0x3F, pColors[(sv_bHighCL ? 15 : 7)]);
+        SetColor(0x3E, pColorsHalf[7]);
+        SetColor(0x3F, pColors[(sv_bHighCL ? 15 : 7)]);
     }
     else if (sv_Font == FONT_4x8_1)   // 4x8 AA
     {
-        PAL_setColor(47, sv_CFG0CL);    // FG colour
-        PAL_setColor(46, sv_CFG1CL);    // AA colour
+        SetColor(47, sv_CFG0CL);    // FG colour
+        SetColor(46, sv_CFG1CL);    // AA colour
     }
     else        // 8x8
     {
-        PAL_setPalette(PAL2, pColors, DMA);
+        SetPalette(PAL2, pColors, DMA);
+        DMA_waitCompletion();
     }
     
-    PAL_setColor( 0, sv_CBGCL); // VDP BG Colour
-    PAL_setColor(17, sv_CBGCL); // Window text BG Normal / Terminal text BG
-    PAL_setColor(50, sv_CBGCL); // Window text FG Inverted
+    SetColor( 0, sv_CBGCL); // VDP BG Colour
+    SetColor(17, sv_CBGCL); // Window text BG Normal / Terminal text BG
+    SetColor(50, sv_CBGCL); // Window text FG Inverted
 }
 
 // Todo: Clean up plane A/B when switching

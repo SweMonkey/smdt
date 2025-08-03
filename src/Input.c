@@ -2,6 +2,7 @@
 #include "Keyboard.h"
 #include "Utils.h"
 #include "Screensaver.h"
+#include "WinMgr.h"
 
 #define KM_SZ 0x1FF
 
@@ -69,9 +70,7 @@ inline void set_KeyPress(u16 key, u8 KeyState)
 
 inline void InputTick()
 {
-    QMenu_Input();
-    HexView_Input();
-    FavView_Input();
+    WinMgr_Input();
 
     memset(KeyMap, KEYSTATE_NONE, KM_SZ);
 }

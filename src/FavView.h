@@ -3,9 +3,8 @@
 
 #include <genesis.h>
 
-extern bool bShowFavView;
-
 void FavView_Input();
-void FavView_Toggle();
+u16 FavView_Open();
+void FavView_Close();
 
 #endif // FAVVIEW_H_INCLUDED

@@ -1,6 +1,4 @@
 #include "QMenu.h"
-#include "HexView.h"
-#include "FavView.h"
 #include "Terminal.h"
 #include "Input.h"
 #include "StateCtrl.h"
@@ -11,6 +9,7 @@
 #include "Screensaver.h"    // sv_bScreensaver
 #include "UI.h"             // UI_ApplyTheme
 #include "IRC.h"            // IRC_SetFontSize
+#include "WinMgr.h"
 
 #include "misc/ConfigFile.h"
 
@@ -42,7 +41,27 @@ void WINFN_StartMenu();
 void WINFN_WrapAtScreenEdge();
 void WINFN_ShowJQMsg();
 void WINFN_CharSet();
+void WINFN_Brightness();
 
+void PrintCWD();
+
+static const u8 QFrame[5][24] = 
+{
+    {0xC0, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC2},
+    {0xC3, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC5},
+    {0xC6, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC8},
+    {0xC9, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCB},
+    {0xCC, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCE},
+};
+
+static u8 SelectedIdx = 0;
+static u8 MenuIdx = 0;
+static const u8 MenuPosX = 1, MenuPosY = 0;
+u8 sv_QBGCL  = 0;    // Selected BG colour entry in quick menu
+u8 sv_QFGCL  = 2;    // Selected FG colour entry in quick menu
+u8 sv_QCURCL = 0;    // Selected cursor colour entry in quick menu
+
+extern u8 sv_EnableUTF8;
 extern u8 sv_IRCFont;
 extern u8 sv_TelnetFont;
 extern u8 sv_TerminalFont;
@@ -81,7 +100,7 @@ static struct s_menu
     NULL, WINFN_Reset, NULL,
     "System",
     {255, 255, 255, 255},
-    {"Return to terminal",
+    {"Return to shell",
      "Hard reset",
      "Soft reset",
      "Save config"}
@@ -154,15 +173,16 @@ static struct s_menu
      "P3:1= <?>"}
 },
 {//8
-    4,
+    5,
     0, 255, 0,
     NULL, NULL, NULL,
     "Colours",
-    {17, 18, 24, 26},
+    {17, 18, 24, 26, 35},
     {"BG Colour",
      "4x8 Mono colour",
      "4x8 8 colour set",
-     "Cursor colour"}
+     "Cursor colour",
+     "Brightness"}
 },
 {//9
     5,
@@ -209,16 +229,17 @@ static struct s_menu
      "SV (Swedish)"}
 },
 {//13
-    5,
+    6,
     0, 255, 0,
     NULL, WINFN_DEBUGSEL, NULL,
     "Debug",
-    {15, 23, 255, 255, 255},
+    {15, 23, 255, 255, 255, 255},
     {"TX/RX stats",
      "RX Buffer stats",
      "HexView - RX",
      "HexView - TX",
-     "HexView - Stdout"}
+     "HexView - Stdout",
+     "System Info"}
 },
 {//14
     2,
@@ -250,14 +271,13 @@ static struct s_menu
      "Port 3"}
 },
 {//17
-    4,
+    3,
     0, 255, 0,
     NULL, WINFN_BGColor, NULL,
     "BG Colour",
-    {254, 254, 254, 254},
+    {254, 254, 254},
     {"Black",
-     "White",
-     "Light BG+Dark FG",
+     "Light mode",
      "Random"}
 },
 {//18
@@ -431,31 +451,23 @@ static struct s_menu
     {254, 254},
     {"CP437",
      "UTF-8"}
+},
+{//35
+    5,
+    0, 255, 0,
+    NULL, WINFN_Brightness, NULL,
+    "Brightness",
+    {254, 254, 254, 254, 254},
+    {"115%",
+     "100%",
+     "85%",
+     "70%",
+     "55%"}
 }};
-
-static const u8 QFrame[5][24] = 
-{
-    {0xC0, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC1, 0xC2},
-    {0xC3, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC4, 0xC5},
-    {0xC6, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC7, 0xC8},
-    {0xC9, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCA, 0xCB},
-    {0xCC, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCE},
-};
-
-static u8 SelectedIdx = 0;
-static u8 MenuIdx = 0;
-static const u8 MenuPosX = 1, MenuPosY = 0;
-bool bShowQMenu = FALSE;
-u8 sv_QBGCL  = 0;    // Selected BG colour entry in quick menu
-u8 sv_QFGCL  = 2;    // Selected FG colour entry in quick menu
-u8 sv_QCURCL = 0;    // Selected cursor colour entry in quick menu
-extern u8 sv_EnableUTF8;
 
 
 void QMenu_Input()
 {
-    if (!bShowQMenu) return;
-
     if (is_KeyDown(KEY_RETURN))
     {
         EnterMenu();
@@ -592,6 +604,29 @@ void SetupQItemTags()
         MainMenu[19].tagged_entry = 255;
         break;
     }
+
+    switch (sv_CBrightness)
+    {
+        case 2:
+        MainMenu[35].tagged_entry = 0;
+        break;
+        case 0:
+        MainMenu[35].tagged_entry = 1;
+        break;
+        case -2:
+        MainMenu[35].tagged_entry = 2;
+        break;
+        case -4:
+        MainMenu[35].tagged_entry = 3;
+        break;
+        case -6:
+        MainMenu[35].tagged_entry = 4;
+        break;
+
+        default:
+        MainMenu[35].tagged_entry = 255;
+        break;
+    }
 }
 
 void DrawMenu(u8 idx)
@@ -661,7 +696,7 @@ void ExitMenu()
     VoidCallback *func = MainMenu[MenuIdx].exit_function;
     if (func != NULL) func();
 
-    if (MainMenu[MenuIdx].prev_menu == MenuIdx) QMenu_Toggle();   // prev_menu == MenuIdx is only true when at the root menu, therefor close the window if trying to back out
+    if (MainMenu[MenuIdx].prev_menu == MenuIdx) WinMgr_Close(W_QMenu);   // prev_menu == MenuIdx is only true when at the root menu, therefor close the window if trying to back out
     else DrawMenu(MainMenu[MenuIdx].prev_menu);
 }
 
@@ -679,21 +714,19 @@ void DownMenu()
     TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+4+SelectedIdx, PAL0);
 }
 
-void QMenu_Toggle()
+u16 QMenu_Open()
 {
-    if (bShowQMenu)
-    {
-        TRM_ResetWinParam();
-    }
-    else
-    {
-        TRM_SetWinHeight(10);
-        TRM_ClearArea(0, 1, 24, 29, PAL1, TRM_CLEAR_BG);
-                
-        DrawMenu(0);
-    }
+    TRM_SetWinHeight(10);
+    TRM_ClearArea(0, 1, 24, 29, PAL1, TRM_CLEAR_BG);
+            
+    DrawMenu(0);
 
-    bShowQMenu = !bShowQMenu;
+    return 0;
+}
+
+void QMenu_Close()
+{
+    TRM_ResetWinParam();
 }
 
 void ChangeText(u8 menu_idx, u8 entry_idx, const char *new_text)
@@ -706,7 +739,7 @@ void ChangeText(u8 menu_idx, u8 entry_idx, const char *new_text)
 
 void WINFN_Reset()
 {
-    QMenu_Toggle();
+    WinMgr_Close(W_QMenu);
 
     switch (SelectedIdx)
     {
@@ -743,50 +776,27 @@ void WINFN_BGColor()
     {
         case 0:
             sv_CBGCL = 0;
+            TTY_ReloadPalette();
         break;
         case 1:
-            sv_CBGCL = 0xEEE;
+            sv_CBGCL = 0xAAA;
+            TTY_SetDarkColours();
         break;
         case 2:
-            sv_CBGCL = 0xAAA;
-
-            PAL_setColor(0x0D, 0x000);
-            PAL_setColor(0x0C, 0x000);
-
-            PAL_setColor(0x1D, 0x006);
-            PAL_setColor(0x1C, 0x004);
-
-            PAL_setColor(0x2D, 0x060);
-            PAL_setColor(0x2C, 0x040);
-
-            PAL_setColor(0x3D, 0x066);
-            PAL_setColor(0x3C, 0x044);
-
-            PAL_setColor(0x0F, 0x600);
-            PAL_setColor(0x0E, 0x400);
-
-            PAL_setColor(0x1F, 0x606);
-            PAL_setColor(0x1E, 0x404);
-
-            PAL_setColor(0x2F, 0x660);
-            PAL_setColor(0x2E, 0x440);
-
-            PAL_setColor(0x3F, 0x666);
-            PAL_setColor(0x3E, 0x444);
-        break;
-        case 3:
-            sv_CBGCL = random();
+            sv_CBGCL = random() & 0x666;
+            TTY_ReloadPalette();
         break;
     
         default:
             sv_CBGCL = 0;
+            TTY_ReloadPalette();
         break;
     }
     
     sv_QBGCL = SelectedIdx;
-    PAL_setColor( 0, sv_CBGCL);
-    PAL_setColor(17, sv_CBGCL);
-    PAL_setColor(50, sv_CBGCL);
+    SetColor( 0, sv_CBGCL);
+    SetColor(17, sv_CBGCL);
+    SetColor(50, sv_CBGCL);
 }
 
 void WINFN_FGColor()
@@ -833,13 +843,13 @@ void WINFN_FGColor()
 
     if (getState() == PS_IRC)
     {
-        PAL_setColor(14, sv_CFG1CL);
-        PAL_setColor(15, sv_CFG0CL);
+        SetColor(14, sv_CFG1CL);
+        SetColor(15, sv_CFG0CL);
     }
     else
     {
-        PAL_setColor(46, sv_CFG1CL);
-        PAL_setColor(47, sv_CFG0CL);
+        SetColor(46, sv_CFG1CL);
+        SetColor(47, sv_CFG0CL);
     }
 }
 
@@ -906,7 +916,7 @@ void WINFN_FONT_TERM()
     {
         TTY_SetFontSize(sv_TerminalFont);
         TTY_Init(TF_ClearScreen | TF_ResetPalette);
-        printf("%s> ", FS_GetCWD());
+        PrintCWD();
     }
 }
 
@@ -1011,17 +1021,38 @@ void WINFN_DEBUGSEL()
     switch (SelectedIdx)
     {
         case 2:
-            QMenu_Toggle();
-            HexView_Open("/system/rxbuffer.io");
-        break;
+        {
+            char *fn[] = {"/sram/system/rxbuffer.io"};
+
+            WinMgr_Close(W_QMenu);
+            WinMgr_Open(W_HexView, 1, fn);
+            break;
+        }
+
         case 3:
-            QMenu_Toggle();
-            HexView_Open("/system/txbuffer.io");
-        break;
+        {
+            char *fn[] = {"/sram/system/txbuffer.io"};
+
+            WinMgr_Close(W_QMenu);
+            WinMgr_Open(W_HexView, 1, fn);
+            break;
+        }
+
         case 4:
-            QMenu_Toggle();
-            HexView_Open("/system/stdout.io");
-        break;
+        {
+            char *fn[] = {"/sram/system/stdout.io"};
+
+            WinMgr_Close(W_QMenu);
+            WinMgr_Open(W_HexView, 1, fn);
+            break;
+        }
+
+        case 5:
+        {
+            WinMgr_Close(W_QMenu);
+            WinMgr_Open(W_InfoView, 0, NULL);
+            break;
+        }
     
         default:
         break;
@@ -1177,7 +1208,7 @@ void WINFN_CURSOR_CL()
     }
     
     sv_QCURCL = SelectedIdx;
-    PAL_setColor(4, sv_CursorCL);
+    SetColor(4, sv_CursorCL);
 }
 
 void WINFN_UITHEME()
@@ -1196,8 +1227,8 @@ void WINFN_StartMenu()
     switch (SelectedIdx)
     {
         case 3:
-            QMenu_Toggle();
-            FavView_Toggle();
+            WinMgr_Close(W_QMenu);
+            WinMgr_Open(W_FavView, 0, NULL);
         break;
     
         default:
@@ -1236,4 +1267,38 @@ void WINFN_ShowJQMsg()
 void WINFN_CharSet()
 {
     sv_EnableUTF8 = SelectedIdx;
+}
+
+void WINFN_Brightness()
+{
+    switch (SelectedIdx)
+    {
+        case 0: sv_CBrightness = 2; break;
+        case 1: sv_CBrightness = 0; break;
+        case 2: sv_CBrightness = -2; break;
+        case 3: sv_CBrightness = -4; break;
+        case 4: sv_CBrightness = -6; break;
+    
+        default: sv_CBrightness = 0; break;
+    }
+    
+    if (getState() == PS_IRC)
+    {
+        IRC_SetPalette();
+    }
+    else
+    {
+        TTY_ReloadPalette();
+    }
+
+    SetColor( 0, sv_CBGCL);
+    SetColor( 1, 0x00E);
+    SetColor( 4, 0x0E0);
+    SetColor( 6, 0xEEE);
+    SetColor( 7, 0x0C0);
+    SetColor(17, sv_CBGCL);
+    SetColor(18, 0xEEE);
+    SetColor(50, sv_CBGCL);
+    
+    UI_ApplyTheme();
 }

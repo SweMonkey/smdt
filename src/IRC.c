@@ -6,7 +6,6 @@
 #include "Network.h"
 #include "Cursor.h"
 #include "StateCtrl.h"
-#include "Telnet.h"         // LMSM_EDIT
 #include "../res/system.h"
 
 #include "system/Stdout.h"
@@ -84,20 +83,35 @@ u16 IRC_Init()
     return IRC_Reset();
 }
 
-u16 IRC_Reset()
+void IRC_SetPalette()
 {
     if (sv_Font) 
     {
-        PAL_setColor(14, sv_CFG1CL);    // Nick name colour - AA
-        PAL_setColor(15, sv_CFG0CL);    // Nick name colour
-        PAL_setColor(46, 0x666);        // Text colour - AA
-        PAL_setColor(47, 0xEEE);        // Text colour
+        if (sv_CBGCL == 0xAAA)  // Special case (Light mode)
+        {
+            SetColor(14, sv_CFG1CL & 0xAAA);    // Nick name colour - AA
+            SetColor(15, sv_CFG0CL & 0x666);    // Nick name colour
+            SetColor(46, 0x444);        // Text colour - AA
+            SetColor(47, 0x222);        // Text colour
+        }
+        else
+        {
+            SetColor(14, sv_CFG1CL);    // Nick name colour - AA
+            SetColor(15, sv_CFG0CL);    // Nick name colour
+            SetColor(46, 0x666);        // Text colour - AA
+            SetColor(47, 0xEEE);        // Text colour
+        }
     }
     else
     {
-        PAL_setPalette(PAL2, pColors, DMA);
+        SetPalette(PAL2, pColors, DMA);
         DMA_waitCompletion();
     }
+}
+
+u16 IRC_Reset()
+{
+    IRC_SetPalette();
 
     memset(v_UsernameReset, 0, 32);
     strcpy(v_UsernameReset, sv_Username);
@@ -106,7 +120,7 @@ u16 IRC_Reset()
 
     // Variable overrides
     vDoEcho = 1;
-    vLineMode = LMSM_EDIT;
+
     bFirstRun = TRUE;
     NickReRegisterCount = 0;
     NameOffset = 0;
@@ -487,18 +501,17 @@ void IRC_DoCommand()
     }
     else if (strcmp(LineBuf->command, "JOIN") == 0)
     {
-        if (sv_ShowJoinQuitMsg == 0) return;
-
         // Extract nickname from <nick>!<<hostname>
         u16 end = 1;
         while ((LineBuf->prefix[end++] != '!') && (end < B_SUBPREFIX_LEN));
         strncpy(subprefix, LineBuf->prefix, end-1);
 
-        if (strcmp(subprefix, v_UsernameReset) != 0)
+        if ((strcmp(subprefix, v_UsernameReset) != 0) && (sv_ShowJoinQuitMsg != 0))
         {
             snprintf(PrintBuf, B_PRINTSTR_LEN, "%s has joined this channel\n", LineBuf->prefix);
-            strncpy(ChanBuf, LineBuf->param[0], 40);
         }
+
+        strncpy(ChanBuf, LineBuf->param[0], 40);
     }
     else if (strcmp(LineBuf->command, "QUIT") == 0)  // Todo: figure out which channel this user is in
     {
@@ -648,9 +661,10 @@ void IRC_DoCommand()
             }
             case 333:
             {
-                SM_Time t = SecondsToDateTime(atoi32(LineBuf->param[3]));
                 char buf[40];
-                TimeToStr_Full(t, buf);
+                SM_Time t;
+                SecondsToDateTime(&t, atoi32(LineBuf->param[3]));
+                TimeToStr_Full(&t, buf);
 
                 snprintf(PrintBuf, B_PRINTSTR_LEN, "*** The topic was set by %s on %s.\n", LineBuf->param[2], buf);
                 strncpy(ChanBuf, LineBuf->param[1], 40); 
@@ -671,17 +685,11 @@ void IRC_DoCommand()
                         // Find the end of a nick or break on CR
                         while (LineBuf->param[3][end++] != ' ')
                         {
-                            if (LineBuf->param[3][end] == 0xD)
-                            {
-                                break;
-                            }
+                            if (LineBuf->param[3][end] == 0xD) break;
                         }
 
                         // Detect end of line space (not a valid nick)
-                        if (strcmp(LineBuf->param[3]+start, " ") == 0)
-                        {
-                            break;
-                        }
+                        if (strcmp(LineBuf->param[3]+start, " ") == 0) break;
                         
                         // Cap nick length
                         len = (end-start-1) > (IRC_MAX_USERNAME_LEN-1) ? (IRC_MAX_USERNAME_LEN-1) : (end-start-1);
@@ -690,10 +698,9 @@ void IRC_DoCommand()
                         strncpy(PG_UserList[UserIterator], LineBuf->param[3]+start, len);   // Copy new user nick to userlist
 
                         start = end;
+                        UserIterator++;
 
                         if (end >= IRC_MAX_USERLIST) break;
-
-                        UserIterator++;
                     }
                 }
 
@@ -799,11 +806,11 @@ void IRC_DoCommand()
         }
         else if (strcmp(PG_Buffer[ch]->Title, PG_EMPTYNAME) == 0) // Or see if there is an empty page
         {
-            char TitleBuf[32];
+            char TitleBuf[40];
             strncpy(PG_Buffer[ch]->Title, ChanBuf, 32);
             TMB_SetActiveBuffer(PG_Buffer[ch]);
 
-            snprintf(TitleBuf, 29, "%s %-*s", STATUS_TEXT_SHORT, 27-IRC_MAX_CHANNELS, PG_Buffer[PG_CurrentIdx]->Title);
+            snprintf(TitleBuf, 35-IRC_MAX_CHANNELS, "%s %-*s", STATUS_TEXT_SHORT, 35-IRC_MAX_CHANNELS, PG_Buffer[PG_CurrentIdx]->Title); // 27-
             TRM_SetStatusText(TitleBuf);
 
             if (PG_CurrentIdx != ch) 
@@ -820,7 +827,7 @@ void IRC_DoCommand()
         }
     }
 
-    IRC_PrintString(PrintBuf);
+    if (strlen(PrintBuf)) IRC_PrintString(PrintBuf);
 
     TMB_SetColorFG(15);
 }

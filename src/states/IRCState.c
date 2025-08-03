@@ -7,6 +7,7 @@
 #include "UI.h"
 #include "Network.h"
 #include "Screensaver.h"
+#include "WinMgr.h"
 
 #include "devices/RL_Network.h"
 #include "misc/ConfigFile.h"
@@ -26,15 +27,15 @@
     THIS SEQUENCE OF EVENTS CANNOT BE EMULATED BY REPLAYING A LOGGED STREAM!
 */
 
-static u8 bOnce = FALSE;
 static u8 rxdata;
 static SM_Window *UserWin = NULL;
 static u16 UserListScroll = 0;
 static u8 KBTxData[40];            // Buffer for the last 40 typed characters from the keyboard
-u8 sv_IRCFont = FONT_4x8_1;
+static u16 EpochSave;
+static u16 BufferLastNum = 65535;
 
-extern bool bShowFavView;
-extern bool bShowHexView;
+u8 sv_IRCFont = FONT_4x8_1;
+extern u16 sv_EpochStart;
 
 void IRC_PrintChar(u8 c);
 
@@ -42,6 +43,7 @@ void IRC_PrintChar(u8 c);
 u16 Enter_IRC(u8 argc, char *argv[])
 {
     sv_Font = sv_IRCFont;
+    EpochSave = sv_EpochStart;
 
     if (IRC_Init() == EXIT_FAILURE) return EXIT_FAILURE;
 
@@ -79,6 +81,9 @@ u16 Enter_IRC(u8 argc, char *argv[])
     Buffer_Flush(&TxBuffer);
     Buffer_Flush(&RxBuffer);
 
+    // IRC afaik uses epoch 1970, make sure it is set to that and revert it back to user configured value at exit
+    sv_EpochStart = 1970;
+
     if (argc > 1)
     {
         if (NET_Connect(argv[1]) == FALSE) 
@@ -98,9 +103,13 @@ void Exit_IRC()
 {
     char TitleBuf[40];
 
+    // Revert epoch back to user configured value
+    sv_EpochStart = EpochSave;
+
     IRC_Exit();
 
     Buffer_Flush(&TxBuffer);
+    Buffer_Flush(&RxBuffer);
     
     sprintf(TitleBuf, "%s - Disconnecting...     ", STATUS_TEXT_SHORT);
     TRM_SetStatusText(TitleBuf);
@@ -129,32 +138,23 @@ void Run_IRC()
     while (Buffer_Pop(&RxBuffer, &rxdata))
     {
         IRC_ParseRX(rxdata);
-
-        if (bOnce)
-        {
-            TRM_SetStatusIcon(ICO_NET_RECV, ICO_POS_1);
-            bOnce = !bOnce;
-        }
-    }
-    #endif
-
-    
-    #ifndef EMU_BUILD
-    if (!bOnce)
-    {
-        TRM_SetStatusIcon(ICO_NET_IDLE_RECV, ICO_POS_1);
-        bOnce = !bOnce;
     }
     #endif
 
     TMB_UploadBuffer(PG_Buffer[PG_CurrentIdx]);
 
-    Buffer_PeekLast(&TxBuffer, 38, KBTxData);
-    PrintTextLine(KBTxData);
+    u16 num = Buffer_GetNum(&TxBuffer);
+    if (BufferLastNum != num)
+    {
+        Buffer_PeekLast(&TxBuffer, 38, KBTxData);
+        PrintTextLine(KBTxData);
+
+        BufferLastNum = num;
+    }
 
     if (bPG_UpdateUserlist)
     {
-        if (UI_GetVisible(UserWin) && !(bShowHexView || bShowFavView))
+        if (UI_GetVisible(UserWin) && !WinMgr_isWindowOpen())
         {
             if (PG_UserNum > 0)
             {
@@ -181,7 +181,7 @@ void Run_IRC()
         }
     }
     
-    if (bShowHexView || bShowFavView)
+    if (WinMgr_isWindowOpen())
     {
         // Do redraw because a window has been opened since last time
         bPG_UpdateUserlist = 2;
@@ -195,7 +195,9 @@ void Run_IRC()
         TRM_DrawChar('4', (35-IRC_MAX_CHANNELS)+3, 0, PG_CurrentIdx == 3 ? PAL0 : (bPG_HasNewMessages[3] ? PAL3 : PAL1) );  // 32
         TRM_DrawChar('5', (35-IRC_MAX_CHANNELS)+4, 0, PG_CurrentIdx == 4 ? PAL0 : (bPG_HasNewMessages[4] ? PAL3 : PAL1) );  // 33
 
-        if (IRC_MAX_CHANNELS == 6) TRM_DrawChar('6', (35-IRC_MAX_CHANNELS)+5, 0, PG_CurrentIdx == 5 ? PAL0 : (bPG_HasNewMessages[5] ? PAL3 : PAL1) );  // 34
+        #if IRC_MAX_CHANNELS == 6
+        TRM_DrawChar('6', (35-IRC_MAX_CHANNELS)+5, 0, PG_CurrentIdx == 5 ? PAL0 : (bPG_HasNewMessages[5] ? PAL3 : PAL1) );  // 34
+        #endif
 
         bPG_UpdateMessage = FALSE;
     }
@@ -205,16 +207,16 @@ void ChangePage(u8 num)
 {
     if (num >= IRC_MAX_CHANNELS) return;
 
-    char TitleBuf[32];
+    char TitleBuf[40];
     PG_CurrentIdx = num;
 
     if (strcmp(PG_Buffer[PG_CurrentIdx]->Title, PG_EMPTYNAME) == 0)
     {
-        snprintf(TitleBuf, 30, "%s %s (%u)                              ", STATUS_TEXT_SHORT, PG_Buffer[PG_CurrentIdx]->Title, num+1);
+        snprintf(TitleBuf, 31, "%s %s (%u)                              ", STATUS_TEXT_SHORT, PG_Buffer[PG_CurrentIdx]->Title, num+1);
     }
     else
     {
-        snprintf(TitleBuf, 29, "%s %-*s", STATUS_TEXT_SHORT, 27-IRC_MAX_CHANNELS, PG_Buffer[PG_CurrentIdx]->Title);
+        snprintf(TitleBuf, 35-IRC_MAX_CHANNELS, "%s %-*s", STATUS_TEXT_SHORT, 35-IRC_MAX_CHANNELS, PG_Buffer[PG_CurrentIdx]->Title);
     }
 
     bPG_HasNewMessages[num] = FALSE;
@@ -248,25 +250,44 @@ u8 ParseTx()
         char command[16];
         char param[64];
         u16 end_c = 1;
-        u16 end_p = 1;
-        while (inbuf[end_c++] != ' ');
-        strncpy(command, (char*)inbuf+1, end_c-2);
+        u16 end_p = 0;
 
-        end_p = end_c;
+        memset(command, 0, sizeof(command));
+        memset(param, 0, sizeof(param));
 
-        while (inbuf[end_p++] != 0);
-        strncpy(param, (char*)inbuf+end_c, end_p-2);
+        while (inbuf[end_c] != ' ' && end_c < sizeof(command)){ end_c++; }
+        if (end_c > 0) memcpy(command, inbuf+1, end_c-1);
+
+        end_c += 1;
+        end_p  = end_c;
+
+        while (inbuf[end_p] != '\0' && (u32)(end_p - end_c) < sizeof(param)){ end_p++; }
+        if (end_p > end_c) memcpy(param, inbuf+end_c, end_p - end_c);
+
+        param[end_p - end_c] = '\0';    // Just in case
 
         // do tolower() on command string here
         tolower_string(command);
 
-        if (strcmp(command, "privmsg") == 0)
+        if ((strcmp(command, "privmsg") == 0) || (strcmp(command, "msg") == 0))
         {
             u8 tmbbuf[300] = {0};
             u8 last_pg = PG_CurrentIdx;
+
             end_p = end_c;
-            while (inbuf[end_c++] != ' ');
-            strncpy(command, (char*)inbuf+end_p, end_c-end_p-1);
+
+            while (inbuf[end_c] != ' ' && end_c < sizeof(command)){ end_c++; }
+            if (end_c > 0) memcpy(command, inbuf+end_p, end_c - end_p);
+
+            command[end_c-end_p] = '\0';    // command array may have leftovers from earlier, make sure to terminate it...
+
+            end_c++;    // Skip space between <nick> and <message>
+
+            // Try to catch empty messages...
+            if ((strlen(command) == 0) || (strlen((char*)inbuf+end_c) == 0) || (end_c > 256) )
+            {
+                return 1;
+            }
 
             sprintf((char*)outbuf, "PRIVMSG %s :%s\n", command, (char*)inbuf+end_c);
             sprintf((char*)tmbbuf, "\5%s: \4%s\n", v_UsernameReset, (char*)inbuf+end_c);
@@ -286,7 +307,7 @@ u8 ParseTx()
                     strncpy(PG_Buffer[ch]->Title, command, 32);
                     TMB_SetActiveBuffer(PG_Buffer[ch]);
 
-                    snprintf(TitleBuf, 40, "%s %-*s", STATUS_TEXT_SHORT, 27-IRC_MAX_CHANNELS, PG_Buffer[PG_CurrentIdx]->Title);
+                    snprintf(TitleBuf, 35-IRC_MAX_CHANNELS, "%s %-*s", STATUS_TEXT_SHORT, 35-IRC_MAX_CHANNELS, PG_Buffer[PG_CurrentIdx]->Title);
                     TRM_SetStatusText(TitleBuf);
                     bPG_UpdateMessage = TRUE;
                     break;
@@ -379,9 +400,10 @@ u8 ParseTx()
 
             CFG_SaveData();
         }
-        else
+        else    // Send as command /<user_input>
         {
-            return 1;
+            if (strlen(param) > 0) sprintf((char*)outbuf, "%s %s\n", command, param);
+            else sprintf((char*)outbuf, "%s\n", command);
         }
     }
     else // Else send as message
@@ -438,7 +460,7 @@ void Input_IRC()
         }
     }
 
-    if (is_KeyDown(KEY_KP4_LEFT))
+    if (is_KeyDown(KEY_KP1_END))
     {
         if (!sv_Font)
         {
@@ -454,7 +476,7 @@ void Input_IRC()
         }
     }
 
-    if (is_KeyDown(KEY_KP6_RIGHT))
+    if (is_KeyDown(KEY_KP3_PGDN))
     {
         if (!sv_Font)
         {
@@ -529,45 +551,43 @@ void Input_IRC()
         char req[40];
         u16 i = 0;
 
+        PG_UserNum = 0;
         UserListScroll = 0;
         memset(req, 0, 40);
 
         TRM_ClearArea(26, 1, 14, 25, PAL1, TRM_CLEAR_BG); // Clear area where the user list window will be drawn
 
-        //if (PG_CurrentIdx != 0)
+        UI_ToggleVisible(UserWin);
+
+        if (UserWin->bVisible && (PG_Buffer[PG_CurrentIdx]->Title[0] == '#'))
         {
-            UI_ToggleVisible(UserWin);
+            TRM_SetWinParam(FALSE, TRUE, 13, 1);
 
-            if (UserWin->bVisible)
+            #ifndef EMU_BUILD
+            snprintf(req, 40, "NAMES %s\n", PG_Buffer[PG_CurrentIdx]->Title);
+
+            Buffer_Flush(&TxBuffer);
+
+            while (i < strlen(req))
             {
-                TRM_SetWinParam(FALSE, TRUE, 13, 1);
-
-                #ifndef EMU_BUILD
-                snprintf(req, 40, "NAMES %s\n", PG_Buffer[PG_CurrentIdx]->Title);
-
-                Buffer_Flush(&TxBuffer);
-
-                while (i < strlen(req))
-                {
-                    Buffer_Push(&TxBuffer, req[i]);
-                    i++;
-                }
-
-                NET_TransmitBuffer();
-                #endif
-
-                bPG_UpdateUserlist = 2;
+                Buffer_Push(&TxBuffer, req[i]);
+                i++;
             }
-            else 
-            {
-                TRM_SetWinParam(FALSE, TRUE, 20, 1);
-            }
+
+            NET_TransmitBuffer();
+            #endif
+
+            bPG_UpdateUserlist = 2;
+        }
+        else 
+        {
+            TRM_SetWinParam(FALSE, TRUE, 20, 1);
         }
     }
 }
 
 const PRG_State IRCState = 
 {
-    Enter_IRC, ReEnter_IRC, Exit_IRC, Reset_IRC, Run_IRC, Input_IRC, NULL, NULL
+    Enter_IRC, ReEnter_IRC, Exit_IRC, Reset_IRC, Run_IRC, Input_IRC
 };
 

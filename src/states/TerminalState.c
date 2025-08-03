@@ -13,26 +13,80 @@
 #include "system/Filesystem.h"
 
 #define INPUT_SIZE 128
-#define INPUT_SIZE_ARGV 64
+#define INPUT_SIZE_ARGV 32
 
 u8 sv_TerminalFont = FONT_4x8_16;
+u8 ClockLastTime = 60;
 static char TimeString[9];
-static s32 LastTime = 666;
-static bool bRunCMD = FALSE;
+static bool bRunningCMD = FALSE;
 
 static char LastCommand[2][INPUT_SIZE] = {'\0'};
 static u8 LCPos = 0;   // Last command position
 
+char *argv[INPUT_SIZE_ARGV]; // Argument list
+int argc = 0;                // Argument count
 
-u8 ParseInputString()
+
+static void ClearArgv()
+{
+    for (u8 a = 0; a < INPUT_SIZE_ARGV; a++)
+    {
+        free(argv[a]);
+        argv[a] = NULL;
+    }
+    argc = 0;
+}
+
+void PrintCWD()
+{
+    printf("%s> ", FS_GetCWD());
+    Stdout_Flush();
+}
+
+static void RunCommand()
+{
+    u16 l = 0;      // List position
+
+    // Iterate argv0 through the command list and call bound function
+    while (CMDList[l].id != 0)
+    {
+        if (strcmp(argv[0], CMDList[l].id) == 0)
+        {
+            bRunningCMD = TRUE;
+            CMDList[l].fptr(argc, argv);
+            bRunningCMD = FALSE;
+            Stdout_Flush();
+            goto Exit;
+        }
+
+        l++;
+    }
+
+    // Or let the user know that the command was not found
+    if (strlen(argv[0]) > 0)
+    {
+        printf("Command \"[36m%s[0m\" not found...\n", argv[0]);
+    }
+
+    Exit:
+
+    if (isCurrentState(PS_Terminal) && StateHasChanged() == FALSE)
+    {
+        Stdout_PushByte('\n');
+        PrintCWD();
+    }
+
+    Stdout_Flush();
+    ClearArgv();
+    MEM_pack();
+    return;
+}
+
+static u8 ParseInputString()
 {
     u8 inbuf[INPUT_SIZE] = {0};     // Input buffer string
-    char *argv[INPUT_SIZE_ARGV];    // Argument list
-    int argc = 0;   // Argument count
     u8 data;        // Byte buffer
     u16 i = 0;      // Buffer iterator
-    u16 l = 0;      // List position
-    u8 ret = 0;
 
     memset(inbuf, 0, INPUT_SIZE);
 
@@ -71,47 +125,14 @@ u8 ParseInputString()
     // Filter out Ctrl^ sequences
     if (argv[0][0] < ' ')
     {
-        ret = 0;
-        goto Exit;
+        ClearArgv();
+        return 1;
     }
 
-    // Iterate argv0 through the command list and call bound function
-    while (CMDList[l].id != 0)
-    {
-        if (strcmp(argv[0], CMDList[l].id) == 0)
-        {
-            Stdout_Flush();
-            bRunCMD = TRUE;
-
-            CMDList[l].fptr(argc, argv);
-
-            ret = 1;
-            goto Exit;
-        }
-
-        l++;
-    }
-
-    // Or let the user know that the command was not found
-    if (strlen(argv[0]) > 0)
-    {
-        printf("Command \"[36m%s[0m\" not found...\n", argv[0]);
-        ret = 1;
-        goto Exit;
-    }
-
-    Exit:
-    for (u8 a = 0; a < argc; a++)
-    {
-        free(argv[a]);
-        argv[a] = NULL;
-    }
-    MEM_pack();
-    bRunCMD = FALSE;
-    return ret;
+    return 0;
 }
 
-u8 DoBackspace()
+static u8 DoBackspace()
 {
     if (Buffer_IsEmpty(&TxBuffer)) return 0;
 
@@ -131,34 +152,44 @@ u8 DoBackspace()
     return 1;
 }
 
-void SetupTerminal()
+static void DrawClockUpdate()
+{
+    TimeToStr_TimeNoSec(&SystemTime, TimeString);
+    TRM_DrawText(TimeString, 30, 0, PAL1);
+    ClockLastTime = SystemTime.minute;
+}
+
+static void SetupTerminal()
 {
     TTY_SetFontSize(sv_TerminalFont);
     TELNET_Init(TF_Everything);
 
-    // Variable overrides
+    // Variable overrides (TTY/Telnet)
     vDoEcho = 0;
     vLineMode = LMSM_EDIT;
     vNewlineConv = 1;
     sv_bWrapAround = TRUE;
 
+    // Shell
+    bRunningCMD = FALSE;
+
     //DoTimeSync(sv_TimeServer);
+    DrawClockUpdate();
 
     Buffer_Flush(&TxBuffer);
-
+    Buffer_Flush(&RxBuffer);
+    ClearArgv();
     MEM_pack();
 }
 
 u16 Enter_Terminal(u8 argc, char *argv[])
 {
     SetupTerminal();
-    Stdout_Push("SMDT Command Interpreter v0.2\n");
-    printf("Type \"[32mhelp[0m\" for available commands%s", sv_Font?" - ":"\n");
+    Stdout_Push("SMDT Command Shell v0.3\n");
+    printf("Type [32mhelp[0m for available commands%s", sv_Font?" - ":"\n");
     Stdout_Push("Press [32mF8[0m for quick menu\n\n");
 
-    printf("%s> ", FS_GetCWD());
-
-    Stdout_Flush();
+    PrintCWD();
 
     return EXIT_SUCCESS;
 }
@@ -166,9 +197,7 @@ u16 Enter_Terminal(u8 argc, char *argv[])
 void ReEnter_Terminal()
 {
     SetupTerminal();
-    Stdout_Flush();
-
-    printf("%s> ", FS_GetCWD());
+    PrintCWD();
 }
 
 void Exit_Terminal()
@@ -183,21 +212,22 @@ void Reset_Terminal()
 
 void Run_Terminal()
 {
-    if (bRunCMD == FALSE) Stdout_Flush();
+    if ((argc > 0) && (bRunningCMD == FALSE))
+    {
+        RunCommand();
+    }
 
     #ifdef ENABLE_CLOCK
-    if (LastTime != SystemUptime)
+    if (ClockLastTime != SystemTime.minute)
     {
-        TimeToStr_Time(SystemTime, TimeString);
-        TRM_DrawText(TimeString, 27, 0, PAL1);
-        LastTime = SystemUptime;
+        DrawClockUpdate();
     }
     #endif
 }
 
 void Input_Terminal()
 {
-    if (bWindowActive) return;
+    if (bWindowActive || bRunningCMD) return;
 
     if (is_KeyDown(KEY_UP))
     {
@@ -211,6 +241,8 @@ void Input_Terminal()
         }
 
         if ((LCPos == 0) && (strlen(LastCommand[1]) > 0)) LCPos = 1;
+
+        Stdout_Flush();
     }
 
     if (is_KeyDown(KEY_DOWN))
@@ -225,10 +257,25 @@ void Input_Terminal()
 
             for (u16 i = 0; i < strlen(LastCommand[LCPos]); i++) Buffer_Push(&TxBuffer, LastCommand[LCPos][i]);
         }
+
+        Stdout_Flush();
     }
 
     if (is_KeyDown(KEY_DELETE))
     {
+    }
+
+    if (is_KeyDown(KEY_BACKSPACE))
+    {
+        DoBackspace();
+    }
+
+    // ^C special case
+    if (is_KeyDown(KEY_C) && bKB_Ctrl)
+    {
+        printf("\n%s> ", FS_GetCWD());
+        Stdout_Flush();
+        Buffer_Flush0(&TxBuffer);
     }
 
     // Temp - cant type ^[ in emulator
@@ -240,40 +287,16 @@ void Input_Terminal()
 
     if (is_KeyDown(KEY_RETURN) || is_KeyDown(KEY_KP_RETURN))
     {
-        Stdout_Push("\n\r");
-
-        if (ParseInputString())
+        printf("\n\r");
+        if (ParseInputString() == 1)
         {
-            Stdout_Flush();     // Flush stdout before printing the newline below, otherwise it might get caught up in the "More" prompt
-            
-            if (isCurrentState(PS_Terminal) && StateHasChanged() == FALSE) 
-            {
-                Stdout_Push("\n\r");
-            }
+            PrintCWD();
         }
-
-        if (isCurrentState(PS_Terminal) && StateHasChanged() == FALSE)
-        {
-            printf("%s> ", FS_GetCWD());
-        }
-    }
-
-    if (is_KeyDown(KEY_BACKSPACE))
-    {
-        DoBackspace();
-    }
-
-    // ^C special case
-    if (is_KeyDown(KEY_C) && bKB_Ctrl)
-    {
         Stdout_Flush();
-        printf("\n%s> ", FS_GetCWD());
-        Buffer_Flush0(&TxBuffer);
     }
 }
 
 const PRG_State TerminalState = 
 {
-    Enter_Terminal, ReEnter_Terminal, Exit_Terminal, Reset_Terminal, Run_Terminal, Input_Terminal, NULL, NULL
+    Enter_Terminal, ReEnter_Terminal, Exit_Terminal, Reset_Terminal, Run_Terminal, Input_Terminal
 };
-

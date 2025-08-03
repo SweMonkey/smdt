@@ -15,22 +15,24 @@ bool KB_Saturn_Init()
     DRV_KBSATURN.Id.Mode = DEVMODE_PARALLEL;
 
     DEV_SetCtrl(DRV_KBSATURN, 0x60);
-    DEV_SetData(DRV_KBSATURN, 0x60);    // Write $20 to data port, if read back of bits 3-0 is $1 then the device is a keyboard
+    DEV_SetData(DRV_KBSATURN, 0x60);    // We must write $60 to the data port before we write $20 below, otherwise the check below will fail
+    DEV_SetData(DRV_KBSATURN, 0x20);    // Write $20 to the data port to query if this is a keyboard
 
+    // if read back of bits 3-0 is NOT $1 then the device is NOT a keyboard
     if (DEV_GetData(DRV_KBSATURN, 0xF) != 1)
     {
         kprintf(" Unknown Saturn peripheral found (r = $%X)", DEV_GetData(DRV_KBSATURN, 0xF));
-        printf(" └[93mUnknown Saturn peripheral found. r=$%X[0m\n", DEV_GetData(DRV_KBSATURN, 0xF));
+        printf(" [93mUnknown Saturn peripheral found. r=$%X[0m\n", DEV_GetData(DRV_KBSATURN, 0xF));
 
+        DEV_SetData(DRV_KBSATURN, 0x60);
         return 0;
     }
     else
-    {        
+    {
         DEV_SetData(DRV_KBSATURN, 0x60);
-
-        KB_SetKeyboard(&KB_Saturn_Poll);
-
-        Stdout_Push(" └[92mSaturn KB initialized[0m\n");
+        KB_SetPoll_Func(&KB_Saturn_Poll);
+        KB_SetLED_Func(&KB_Saturn_SetLED);
+        Stdout_Push(" [92mSaturn keyboard initialized[0m\n");
     }
 
     return 1;
@@ -76,6 +78,14 @@ bool KB_Saturn_Poll(u8 *data)
 
     // End transmission
     DEV_SetData(DRV_KBSATURN, 0x60);
+
+    // Check packet validity...
+    if (((nibble[0] != 3) || (nibble[1] != 4)) ||   // Check if we got a valid packet
+        ((nibble[7] & 9) == 0))                     // Make sure this is either a Make or Break code
+    {
+        *data = 0;
+        return FALSE;
+    }
 
     bKB_Break = nibble[7] & 1;
     *data = (nibble[8] << 4) | nibble[9];
@@ -182,4 +192,9 @@ bool KB_Saturn_Poll(u8 *data)
     if (*data == 0) return FALSE;
 
     return TRUE;
+}
+
+void KB_Saturn_SetLED(u8 leds)
+{
+    // TODO
 }

@@ -68,7 +68,7 @@ void CFG_SaveData()
 
     Offset = 0;
     
-    SM_File *f = F_Open("/system/smdt_cfg.bin", FM_CREATE | FM_WRONLY);
+    SM_File *f = F_Open("/sram/system/smdt_cfg.bin", FM_CREATE | FM_WRONLY);
 
     if (f == NULL) return;
 
@@ -194,7 +194,7 @@ u8 CFG_LoadData()
     u16 version;
     Offset = 0;
 
-    SM_File *f = F_Open("/system/smdt_cfg.bin", FM_RDONLY);
+    SM_File *f = F_Open("/sram/system/smdt_cfg.bin", FM_RDONLY);
     if (f == NULL) return 1;
 
     F_Seek(f, 0, SEEK_END);

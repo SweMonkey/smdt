@@ -66,4 +66,4 @@ void RLN_Update(void);
 u8 RLN_GetIP(char *ret);
 void RLN_PrintIP(int x, int y);
 void RLN_PrintMAC(int x, int y);
-void RLN_PingIP(char *ip);
+u8 RLN_PingIP(char *ip);

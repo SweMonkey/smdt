@@ -16,6 +16,7 @@ bool Buffer_IsFull(Buffer *b);
 bool Buffer_IsEmpty(Buffer *b);
 u16 Buffer_GetNum(Buffer *b);
 bool Buffer_Push(Buffer *b, u8 data);
+bool Buffer_PushString(Buffer *b, const char *str);
 bool Buffer_Pop(Buffer *b, u8 *data);
 bool Buffer_ReversePop(Buffer *b);
 

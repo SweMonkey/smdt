@@ -198,7 +198,8 @@ void *ELF_LoadProc(const char *fn)
     proc_space = (void*)0xFF9600;
     ram_space  = (void*)0xFFD600;
 
-    kprintf("proc_space was allocated at %p", proc_space);
+    /*kprintf("proc_space was allocated at %p", proc_space);
+    kprintf("ram_space was allocated at %p", ram_space);
 
     if (proc_space == NULL)
     {
@@ -210,7 +211,7 @@ void *ELF_LoadProc(const char *fn)
     {
         kprintf("Failed to allocate ram_space");
         printf("Failed to allocate ram_space\n");
-    }
+    }*/
 
     memset(proc_space, 0, 0x4000);
     memset(ram_space, 0, 0x2000);

@@ -5,9 +5,9 @@ const ROMHeader rom_header =
 {
     "SEGA MEGA DRIVE ",                                 // System type
     "(C)DECEPTSOFT'25",                                 // Copyright/Release date
-    "SMD Terminal Emulator                           ", // Domestic title
-    "SMD Terminal Emulator                           ", // Overseas title
-    "GM DSTC2017-32",                                   // Serial number
+    "SMDT                                            ", // Domestic title
+    "SMDT                                            ", // Overseas title
+    "GM DSTC2017-33",                                   // Serial number
     0x000,                                              // Checksum
     "JKRD            ",                                 // Device support
     0x00000000,                                         // ROM start address
@@ -19,6 +19,6 @@ const ROMHeader rom_header =
     0x00200001,                                         // SRAM start address
     0x0021FFFF,                                         // SRAM end address
     "            ",                                     // Modem support
-    "SMD Terminal Emulator                   ",         // Notes
+    "SMDT                                    ",         // Notes
     "EUJ             "                                  // Region support
 };

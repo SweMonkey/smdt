@@ -346,7 +346,7 @@ void RLN_PrintMAC(int x, int y)
 
 // Ping IP Address
 // Only accepts an IP address to ping
-void RLN_PingIP(char *ip)
+u8 RLN_PingIP(char *ip)
 {
     int ping_counter = 0;
     int byte_count = 0;
@@ -373,4 +373,6 @@ void RLN_PingIP(char *ip)
     }
 
     RLN_ExitMonitorMode();
+
+    return 0;
 }

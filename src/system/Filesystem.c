@@ -1,189 +1,131 @@
-// FS
 #include "Filesystem.h"
 #include "Utils.h"
 #include "Stdout.h"
 #include "File.h"
-#include "Network.h"
+#include "FS_ROM.h"
+#include "FS_SRAM.h"
 
+#define NUM_PARTITIONS 2
 #define MAX_PATH_LENGTH 256
-
 char cwd[MAX_PATH_LENGTH];
-static int InitFail = 0;
+char full_cwd[MAX_PATH_LENGTH];
+u16 ps = 1;                 // Selected partition
 
-
-// Variables used by the filesystem
-lfs_t lfs;
-lfs_file_t file;
-
-// Read a region in a block. Negative error codes are propagated to the user.
-int bd_read(const struct lfs_config *c, lfs_block_t block, lfs_off_t off, void *buffer, lfs_size_t size)
+typedef struct
 {
-    u8 *buf = (u8*)buffer;
-    SRAM_enableRO();
+    lfs_t        *lfs_type;
+    const char   *RootDir;
+    const char   *PartName;
+    BoolCallback *MountFunc;
+    BoolCallback *FormatFunc;
+    const struct lfs_config *cfg;
+} FS_PartList;
 
-    for (lfs_size_t i = 0; i < size; i++)
-        buf[i] = SRAM_readByte((block * c->block_size) + off + i);
-
-    SRAM_disable();
-    return 0;
-}
-
-// Program a region in a block. The block must have previously
-// been erased. Negative error codes are propagated to the user.
-// May return LFS_ERR_CORRUPT if the block should be considered bad.
-int bd_prog(const struct lfs_config *c, lfs_block_t block, lfs_off_t off, const void *buffer, lfs_size_t size)
+static const FS_PartList PList[] =
 {
-    u8 *buf = (u8*)buffer;
-    SRAM_enable();
-
-    for (lfs_size_t i = 0; i < size; i++)
-        SRAM_writeByte((block * c->block_size) + off + i, buf[i]);
-
-    SRAM_disable();
-    return 0;
-}
-
-// Erase a block. A block must be erased before being programmed.
-// The state of an erased block is undefined. Negative error codes are propagated to the user.
-// May return LFS_ERR_CORRUPT if the block should be considered bad.
-int bd_erase(const struct lfs_config *c, lfs_block_t block)
-{
-    SRAM_enable();
-
-    for (lfs_size_t i = 0; i < c->block_size; i++)
-        SRAM_writeByte((block * c->block_size) + i, 0);
-
-    SRAM_disable();
-    return 0;
-}
-
-// Sync the state of the underlying block device. Negative error codes are propagated to the user.
-int bd_sync(const struct lfs_config *c)
-{
-    return 0;
-}
-
-// configuration of the filesystem is provided by this struct
-const struct lfs_config cfg = 
-{
-    // block device operations
-    .read  = bd_read,
-    .prog  = bd_prog,
-    .erase = bd_erase,
-    .sync  = bd_sync,
-
-    // block device configuration
-    .read_size = 1,
-    .prog_size = 1,
-    .block_size = 256,
-    .block_count = 128,
-    .cache_size = 16,
-    .lookahead_size = 16,
-    .block_cycles = -1,
+    {&lfs_ROM , "/rom" , "ROM" , FS_Mount_ROM , NULL         , &cfg_rom },
+    {&lfs_SRAM, "/sram", "SRAM", FS_Mount_SRAM, FS_Erase_SRAM, &cfg_sram}
 };
 
-bool FS_EraseSRAM()
-{
-    vu32 *SStart = (u32*)0x1B4;
-    vu32 *SEnd = (u32*)0x1B8;
-    u16 SSize = (*SEnd-*SStart) >> 1;
+void FS_SetActivePartition(u16 num);
 
-    SRAM_enable();
-
-    // Check if SRAM is present
-    SRAM_writeByte(0, 0xDE);
-    SRAM_writeByte(1, 0xAD);
-    SRAM_writeByte(SSize-2, 0xBE);
-    SRAM_writeByte(SSize-1, 0xEF);
-
-    u8 r1 = SRAM_readByte(0);
-    u8 r2 = SRAM_readByte(1);
-    u8 r3 = SRAM_readByte(SSize-2);
-    u8 r4 = SRAM_readByte(SSize-1);
-
-    // Erase SRAM if present
-    if ((u32)((r1 << 24) | (r2 << 16) | (r3 << 8) | (r4)) == 0xDEADBEEF)
-    {
-        printf("  └[92mSRAM detected[0m\n");
-        //printf(" └%u KB SRAM detected\n", (SSize+1)/1024);
-        //cfg.block_count = (SSize+1) / cfg.block_size; // Set lfs filesystem size to SRAM size
-
-        for (u16 i = 0; i < SSize; i++)
-        {
-            SRAM_writeByte(i, 0);
-        }
-
-        SRAM_disable();
-        return TRUE;
-    }
-    
-    printf("  └[91mNo SRAM detected!\n[0m");
-    SRAM_disable();
-    return FALSE;
-}
 
 void FS_Init()
 {
-    // Mount the filesystem
-    InitFail = lfs_mount(&lfs, &cfg);
-
-    // Reformat if we can't mount the filesystem
-    // This should only happen on the first boot
-    if (InitFail) 
+    bool r = 1;
+    for (u8 i = 0; i < NUM_PARTITIONS; i++)
     {
-        Stdout_Push(" └[91mFilesystem error! Reformatting...[0m\n");
-        if (FS_EraseSRAM())
-        {
-            lfs_format(&lfs, &cfg);
-            lfs_mount(&lfs, &cfg);
-            FS_MkDir("/system");
-            FS_MkDir("/system/tmp");
-
-            /*lfs_file_t f;
-            FS_OpenFile("/system/rxbuffer.io", LFS_O_CREAT, &f);
-            FS_Close(&f);
-            FS_OpenFile("/system/txbuffer.io", LFS_O_CREAT, &f);
-            FS_Close(&f);
-            FS_OpenFile("/system/stdout.io", LFS_O_CREAT, &f);
-            FS_Close(&f);
-            FS_OpenFile("/system/stdin.io", LFS_O_CREAT, &f);
-            FS_Close(&f);*/
-
-            rxbuf = F_Open("/system/rxbuffer.io", LFS_O_CREAT | LFS_O_TRUNC  | LFS_O_RDONLY | LFS_O_IO);
-            txbuf = F_Open("/system/txbuffer.io", LFS_O_CREAT | LFS_O_TRUNC  | LFS_O_WRONLY | LFS_O_IO);
-            stdout = F_Open("/system/stdout.io",  LFS_O_CREAT | LFS_O_TRUNC  | LFS_O_RDWR   | LFS_O_IO);    // LFS_O_WRONLY
-            stdin = F_Open("/system/stdin.io",    LFS_O_CREAT | LFS_O_RDONLY | LFS_O_IO);
-            stderr = F_Open("/system/stderr.io",  LFS_O_CREAT | LFS_O_TRUNC  | LFS_O_RDWR   | LFS_O_IO);
-        }
+        r = PList[i].MountFunc();
     }
 
-    strclr(cwd);
-    strcat(cwd, "/");
+    memset(cwd, 0, MAX_PATH_LENGTH);
+    cwd[0] = '/';
+
+    u16 p = (r == 1) ? 0 : 1;   // If last mounted partition is the SRAM one and mount failed then set active partition to the ROM fs
+    FS_SetActivePartition(p);
 
     return;
 }
 
-void FS_PrintBlockDevices()
+void FS_SetActivePartition(u16 num)
 {
-    printf("%5s %6s %12s  %-16s\n", "Name", "Size", "Allocated", "Mount");
-    printf("%5s %6ld %12ld  %-16s\n", "SRAM", cfg.block_count*cfg.block_size/1024, lfs_fs_size(&lfs), "/");
+    if (num >= NUM_PARTITIONS) return;
+
+    ps = num;
+}
+
+u16 FS_GetActivePartition()
+{
+    return ps;
+}
+
+const char *FS_GetPartitionFromDir(const char *dir, u16 *old_part)
+{
+    static char buffer[MAX_PATH_LENGTH];
+
+    if (old_part != NULL) *old_part = FS_GetActivePartition();
+
+    if (dir == NULL) return NULL;
+
+    for (u16 i = 0; i < sizeof(PList) / sizeof(PList[0]); ++i)
+    {
+        const char *root = PList[i].RootDir;
+        size_t len = strlen(root);
+
+        if (strncmp(dir, root, len) == 0 && (dir[len] == '/' || dir[len] == '\0'))
+        {
+            FS_SetActivePartition(i);
+
+            const char *suffix = dir + len;
+            const char *new_dir = (*suffix == '\0') ? "/" : suffix;
+
+            strncpy(buffer, new_dir, MAX_PATH_LENGTH - 1);
+            buffer[MAX_PATH_LENGTH - 1] = '\0';
+            return buffer;
+        }
+    }
+
+    // In case no partiton just return dir as is
+    return dir;
+}
+
+
+const char *FS_GetRootDir()
+{
+    return PList[ps].RootDir;
 }
 
 char *FS_GetCWD()
 {
-    return cwd;
+    memset(full_cwd, 0, MAX_PATH_LENGTH);
+    strcat(full_cwd, PList[ps].RootDir);
+    strcat(full_cwd, cwd);
+    
+    return full_cwd;
+}
+
+void FS_PrintBlockDevices()
+{
+    printf("%3s %5s %6s %10s  %-10s\n", "Num", "Name", "Size", "Allocated", "Mount");
+
+    for (u8 i = 0; i < NUM_PARTITIONS; i++)
+    {
+        printf("%3d %5s %5ldK %9ldK  %-10s\n", i, PList[i].PartName, (PList[i].lfs_type->block_count * PList[i].cfg->block_size)/1024, (lfs_fs_size(PList[i].lfs_type) * PList[i].cfg->block_size)/1024, PList[i].RootDir);
+    }
 }
 
 void FS_ListDir(char *dir)
 {
     char *path = malloc(64);
-    FS_ResolvePath(dir, path);
+    u16 old_part;
+    const char *spath = FS_GetPartitionFromDir(dir, &old_part);
+    FS_ResolvePath(spath, path);
 
     lfs_dir_t d;
-    u32 err = lfs_dir_open(&lfs, &d, path);
+    u32 err = lfs_dir_open(PList[ps].lfs_type, &d, path);
 
     free(path);
-    if (err) return;
+    if (err) goto OnError;
 
     struct lfs_info info;
     char *fbuf = malloc(1024);
@@ -195,7 +137,7 @@ void FS_ListDir(char *dir)
 
     while (true) 
     {
-        int res = lfs_dir_read(&lfs, &d, &info);
+        int res = lfs_dir_read(PList[ps].lfs_type, &d, &info);
         if (res < 0) goto OnExit;
 
         if (res == 0) break;
@@ -233,74 +175,142 @@ void FS_ListDir(char *dir)
     Stdout_Push(fbuf);
 
     OnExit:
-    free(fbuf);
-    free(dbuf);
-    free(nbuf);
-    lfs_dir_close(&lfs, &d);
+        free(fbuf);
+        free(dbuf);
+        free(nbuf);
+        lfs_dir_close(PList[ps].lfs_type, &d);
+    OnError:
+        FS_SetActivePartition(old_part);
     return;
 }
 
 int FS_OpenFile(const char *filename, int flags, lfs_file_t *membuf)
 {
-    return lfs_file_open(&lfs, membuf, filename, flags);
+    u16 old_part;
+    const char *sfilename = FS_GetPartitionFromDir(filename, &old_part);
+
+    int r = lfs_file_open(PList[ps].lfs_type, membuf, sfilename, flags);
+
+    FS_SetActivePartition(old_part);
+    return r;
 }
 
-lfs_ssize_t FS_ReadFile(void *dest, lfs_ssize_t len, lfs_file_t *membuf)
+lfs_ssize_t FS_ReadFile(void *dest, lfs_ssize_t len, lfs_file_t *membuf, const char *fn)
 {
-    return lfs_file_read(&lfs, membuf, dest, len);
+    u16 old_part;
+    FS_GetPartitionFromDir(fn, &old_part);
+
+    lfs_ssize_t r = lfs_file_read(PList[ps].lfs_type, membuf, dest, len);
+
+    FS_SetActivePartition(old_part);
+    return r;
 }
 
-lfs_ssize_t FS_WriteFile(void *src, lfs_ssize_t len, lfs_file_t *membuf)
+lfs_ssize_t FS_WriteFile(void *src, lfs_ssize_t len, lfs_file_t *membuf, const char *fn)
 {
-    return lfs_file_write(&lfs, membuf, src, len);
+    u16 old_part;
+    FS_GetPartitionFromDir(fn, &old_part);
+
+    lfs_ssize_t r = lfs_file_write(PList[ps].lfs_type, membuf, src, len);
+
+    FS_SetActivePartition(old_part);
+    return r;
 }
 
 int FS_Remove(const char *filename)
 {
-    return lfs_remove(&lfs, filename);
+    u16 old_part;
+    const char *sfilename = FS_GetPartitionFromDir(filename, &old_part);
+
+    int r = lfs_remove(PList[ps].lfs_type, sfilename);
+
+    FS_SetActivePartition(old_part);
+    return r;
 }
 
 int FS_Rename(const char *old, const char *new)
 {
-    return lfs_rename(&lfs, old, new);
+    u16 old_part;
+    const char *sold = FS_GetPartitionFromDir(old, &old_part);
+
+    int r = lfs_rename(PList[ps].lfs_type, sold, new);
+
+    FS_SetActivePartition(old_part);
+    return r;
 }
 
 int FS_MkDir(const char *path)
 {
-    return lfs_mkdir(&lfs, path);
+    u16 old_part;
+    const char *spath = FS_GetPartitionFromDir(path, &old_part);
+
+    int r = lfs_mkdir(PList[ps].lfs_type, spath);
+
+    FS_SetActivePartition(old_part);
+    return r;
 }
 
-lfs_soff_t FS_Seek(lfs_file_t *membuf, lfs_soff_t off, int whence)
+lfs_soff_t FS_Seek(lfs_file_t *membuf, lfs_soff_t off, int whence, const char *fn)
 {
-    return lfs_file_seek(&lfs, membuf, off, whence);
+    u16 old_part;
+    FS_GetPartitionFromDir(fn, &old_part);
+
+    lfs_soff_t r = lfs_file_seek(PList[ps].lfs_type, membuf, off, whence);
+
+    FS_SetActivePartition(old_part);
+    return r;
 }
 
-lfs_soff_t FS_Tell(lfs_file_t *membuf)
+lfs_soff_t FS_Tell(lfs_file_t *membuf, const char *fn)
 {
-    return lfs_file_tell(&lfs, membuf);
+    u16 old_part;
+    FS_GetPartitionFromDir(fn, &old_part);
+
+    lfs_soff_t r = lfs_file_tell(PList[ps].lfs_type, membuf);
+
+    FS_SetActivePartition(old_part);
+    return r;
 }
 
-int FS_Close(lfs_file_t *membuf)
+int FS_Close(lfs_file_t *membuf, const char *fn)
 {
-    return lfs_file_close(&lfs, membuf);
+    u16 old_part;
+    FS_GetPartitionFromDir(fn, &old_part);
+
+    int r = lfs_file_close(PList[ps].lfs_type, membuf);
+
+    FS_SetActivePartition(old_part);
+    return r;
 }
 
 int FS_SetAttr(const char *path, u8 type, const void *buffer, lfs_size_t size)
 {
-    return lfs_setattr(&lfs, path, type, buffer, size);
+    u16 old_part;
+    const char *spath = FS_GetPartitionFromDir(path, &old_part);
+
+    int r = lfs_setattr(PList[ps].lfs_type, spath, type, buffer, size);
+
+    FS_SetActivePartition(old_part);
+    return r;
 }
 
 int FS_GetAttr(const char *path, u8 type, void *buffer, lfs_size_t size)
 {
-    return lfs_getattr(&lfs, path, type, buffer, size);
+    u16 old_part;
+    const char *spath = FS_GetPartitionFromDir(path, &old_part);
+
+    int r = lfs_getattr(PList[ps].lfs_type, spath, type, buffer, size);
+
+    FS_SetActivePartition(old_part);
+    return r;
 }
 
 
 int path_exists(const char *path) 
 {
     lfs_dir_t d;
-    u32 err = lfs_dir_open(&lfs, &d, path);
-    lfs_dir_close(&lfs, &d);
+    u32 err = lfs_dir_open(PList[ps].lfs_type, &d, path);
+    lfs_dir_close(PList[ps].lfs_type, &d);
 
     return !err;
 }
@@ -356,18 +366,20 @@ void FS_GoUpDirectory(char *path)
 // Function to change the directory
 void FS_ChangeDir(const char *path)
 {
-    char new_path[MAX_PATH_LENGTH];    
+    char new_path[MAX_PATH_LENGTH];
+    
+    const char *old_path = FS_GetPartitionFromDir(path, NULL);
     
     // Handle absolute path
-    if (path[0] == '/')
+    if (old_path[0] == '/')
     {
-        strncpy(new_path, path, MAX_PATH_LENGTH);
+        strncpy(new_path, old_path, MAX_PATH_LENGTH);
     }
     // Handle relative path
     else
     {
         strncpy(new_path, cwd, MAX_PATH_LENGTH);
-        char *token = strtok((char *)path, '/');
+        char *token = strtok((char *)old_path, '/');
 
         while (token != NULL) 
         {

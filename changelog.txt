@@ -1,3 +1,44 @@
+v0.33.0:
+Terminal: Shell fixes; Running commands will now be "delayed" to run and all text buffering will be dealt with properly (pre/during/post running).
+Telnet: Added scrollock functionality, it will halt printing to screen but beware that the rx buffer may fill up and drop incoming data!
+UI: Added a barebones "window manager" to deal with the increasing number of GUI windows.
+    All windows except the IRC nick list window has been updated to deal with the window manager.
+UI: Added a system information window which shows CPU, RAM and buffer usage, along with device viewer and system info such as region, version and smdt version etc. See Quick menu -> Debug -> System Info.
+UI: Added horizontal progress bar to the UI toolkit.
+UI: Floating windows didn't set the correct attributes and could end up using attributes from the window/UI element below it.
+UI: Fixes to the vertical scrollbar. It should now properly move over the entire range without trying to leave. Also made the slider dot longer depending on amount of scroll the scrollbar has.
+UI: A few tweaks to the theme palettes... for better or worse.
+Time: Rewrote large portions of the date/time code; Earlier version was based on some ancient code I wrote a long time ago. New code should deal with time a lot better (leapyear support etc).
+      Note: Clock will drift due to unreliable time ticker (Vblank, which may not always be enabled), SMDT will try to compensate with "leap frames" every now and then. 
+      Ultimately this is a futile exercise and the clock will always drift a few seconds over several hours no matter what (and I don't feel like autopolling time servers every now and then is a good idea).
+Time: Clock in terminal shell now only shows HH:MM instead of HH:MM:SS to avoid updating the text every second.
+IRC: Clock should no longer mismatch between what may be printed in chat with the time reported elsewhere in SMDT (1900 vs 1970 epoch mismatch).
+IRC: Fixed CPU usage "bug", the text input bar at the bottom was being read/parsed/updated every frame regardless of whether it needed to be updated or not - (60% CPU down to 6%).
+IRC: It was possible to send empty /privmsg <user> messages which caused SMDT to send whatever garbage it could find to <user>.
+IRC: Titlebar fixes; All the space between "SMDT" and "12345" should now be used for server/channel/nick text, before it was cut of early.
+IRC: No need to use "/raw <command>" anymore, it is now possibe to just use "/command" instead. For example, before: "/raw ns help", now: "/ns help" (tldr type the commands as is written on the irc channel).
+IRC: Added "/msg" command, it is identical to the "/privmsg" command.
+IRC: Fixed nicklist; the last nick in the list was never added to the internal nick list, hence always missing one nick.
+IRC: Joining a channel with no MOTD caused the smdt irc client to never add the channel (the channel tab text would remain "EMPTY PAGE" until a message or action was taken in it).
+Network: Uploading/Downloading icons in status bar is now lit up based on data availability in rx/tx buffer respectively. 
+         May need to special case the upload icon though since data is usually all sent before SMDT gets a chance to check and update the upload icon (tldr upload icon always remain unlit because all data is already gone).
+System: Multi partition support added. SMDT by default now have 2 mounted filesystems; "/sram/" and "/rom/", the former being used as a normal filesystem while the latter is read only (since it resides in ROM).
+        In the future the ROM fs will contain default config files and executable binaries.
+System: Fixed an LittleFS bug that would cause div0 exception when running SMDT using the Exodus emulator.
+System: Added global brightness control. Controls the screen brightness (55% to 115% in steps of 15%). See Quick menu -> Settings -> Colours -> Brightness.
+Misc: Removed the fake tree styled boot messages.
+Misc: A few fixes to the saturn keyboard driver since it seems I never really finished it. 1: It now makes sure it has a valid packet (nibble 0 and 1 being a certain value and that the packet is either a make or break code). 2: Driver init fixes.
+Misc: Bookmark functionality is now finished. It is now possible to add, edit and delete bookmarks using the bookmark window. 
+      Bookmarks are saved to "/sram/system/favlist.cfg", the file will be copied from "/rom/cfg/fvlist_default.cfg" in case that file does not exit.
+Misc: Bugfixes to cp and mv commands;
+      1. fclose() was trying to free() an uninitialized pointer when trying to copy or move a nonexistent file...
+      2. Upon failure the current working directory would be changed and left at where the file was supposed to be moved/copied to.
+Misc: Minor fixes to light mode (QuickMenu -> Settings -> Colours -> BG Colour -> Light mode). 8x8 and 4x8 fonts, in both 8 or 16 colour should be pretty good now. Mono colour 4x8 mode is a bit ugly unless you set a "proper" text colour.
+
+Known bugs:
+      Rebooting from an exception may cause the blastEm emulator to hang after the first few boot messages, can't replicate this hang using real hardware... Something happens after or during enabling all interrupts.
+
+
 v0.32.0:
 Telnet/Term: Added tabstops (forward and backward) and all related escape codes.
 Telnet/Term: Rejigged how IAC/ESCAPE/UTF8/Data codes are handled in TELNET_ParseRX().

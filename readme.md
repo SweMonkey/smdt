@@ -239,8 +239,8 @@ F5  = Channel 5 tab<br>
 Left arrow key  = Switch to previous channel<br>
 Right arrow key = Switch to next channel<br>
 Tab = Toggle channel user list<br>
-Numpad 4 = Scroll left<br>
-Numpad 6 = Scroll right<br>
+Numpad 1 = Scroll left<br>
+Numpad 3 = Scroll right<br>
 
 ### Telnet client
 None<br>

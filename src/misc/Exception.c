@@ -30,8 +30,11 @@ static inline void InitException()
     vLineMode = LMSM_EDIT;
     vNewlineConv = 1;
     TTY_SetFontSize(FONT_8x8_16);
-    TRM_SetWinHeight(1);
-    Stdout_Push("?25l\n"); // Hide cursor and print newline
+    TTY_ReloadPalette();
+    TRM_SetWinParam(FALSE, FALSE, 0, 1);
+    SetColor(18, 0xEEE);    // Window text FG Normal
+    SetColor(19, 0x222);    // Window inner BG
+    Stdout_Push("?25l\n");     // Hide cursor and print newline
 }
 
 static inline void WaitForInput()

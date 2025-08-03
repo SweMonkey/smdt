@@ -14,6 +14,7 @@ extern u8 sv_IRCFont;
 extern u8 sv_TelnetFont;
 extern u8 sv_TerminalFont;
 extern u8 sv_ThemeUI;
+extern s8 sv_CBrightness;
 
 SM_VarList VarList[] =
 {
@@ -51,6 +52,7 @@ SM_VarList VarList[] =
     {ST_BYTE, &sv_ShowJoinQuitMsg,  "ircjqmsg"},
     {ST_BYTE, &sv_WrapAtScreenEdge, "ircwrap"},
     {ST_BYTE, &sv_EnableUTF8,       "enableutf8"},
+    {ST_BYTE, &sv_CBrightness,      "brightness"},
     {0, 0, 0}  // List terminator
 };
 

@@ -5,28 +5,30 @@
 
 typedef struct
 {
-    u32 year;
-    u32 month;
-    u32 day;
-    u32 hour;
-    u16 minute;
-    u16 second;
+    u16 year;
+    u8 month;
+    u8 day;
+    u8 hour;
+    u8 minute;
+    u8 second;
 } SM_Time;
 
 extern SM_Time SystemTime;
-extern s32 SystemUptime;
+extern u32 SystemUptime;
 extern s8 sv_TimeZone;
 extern char sv_TimeServer[];
 extern u16 sv_EpochStart;
 
-SM_Time SecondsToDateTime(s32 seconds);
-void TimeToStr_Full(SM_Time t, char *ret);
-void TimeToStr_Date(SM_Time t, char *ret);
-void TimeToStr_Time(SM_Time t, char *ret);
+void SecondsToDateTime(SM_Time *t, u32 seconds);
+void TimeToStr_Full(SM_Time *t, char *ret);
+void TimeToStr_Date(SM_Time *t, char *ret);
+void TimeToStr_Time(SM_Time *t, char *ret);
+void TimeToStr_TimeNoSec(SM_Time *t, char *ret);
 
 void TickClock();
-void SetSystemDateTime(s32 seconds);
-s32 GetTimeSinceLastSync();
+void SetSystemDateTime(u32 seconds);
+u32 GetTimeSinceLastSync();
+u32 GetTimeSync();
 u8 DoTimeSync(char *server);
 
 #endif // TIME_H_INCLUDED

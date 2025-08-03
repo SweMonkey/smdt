@@ -38,7 +38,6 @@ inline void NET_SendChar(const u8 c)
     #ifdef EMU_BUILD
     return;
     #endif
-    //TRM_SetStatusIcon(ICO_NET_SEND, ICO_POS_2);
 
     if (bRLNetwork)
     {
@@ -60,7 +59,6 @@ inline void NET_SendChar(const u8 c)
     }
 
     TXBytes++;
-    //TRM_SetStatusIcon(ICO_NET_IDLE_SEND, ICO_POS_2);
 }
 
 inline void NET_BufferChar(const u8 c)
@@ -74,11 +72,7 @@ inline void NET_TransmitBuffer()
 {
     u8 data;
 
-    TRM_SetStatusIcon(ICO_NET_SEND, ICO_POS_2);
-
     while (Buffer_Pop(&TxBuffer, &data)) NET_SendChar(data);
-    
-    TRM_SetStatusIcon(ICO_NET_IDLE_SEND, ICO_POS_2);
 }
 
 inline void NET_SendString(const char *str)
@@ -143,10 +137,9 @@ void NET_SetPingFunc(NET_PingIP_CB *cb)
     PingIPCB = cb;
 }
 
-void NET_PingIP(char *ip)
+u8 NET_PingIP(char *ip)
 {
-    if (PingIPCB == NULL) return;
+    if (PingIPCB == NULL) return 2;
 
-    PingIPCB(ip);
-    return;
+    return PingIPCB(ip);
 }

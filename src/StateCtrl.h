@@ -3,7 +3,15 @@
 
 #include <genesis.h>
 
-typedef enum {PS_Dummy = 0, PS_Telnet = 1, PS_Debug = 3, PS_IRC = 4, PS_Terminal = 5, PS_Gopher = 6} State;
+typedef enum 
+{
+    PS_Dummy    = 0, 
+    PS_Telnet   = 1, 
+    PS_Debug    = 3, 
+    PS_IRC      = 4, 
+    PS_Terminal = 5, 
+    PS_Gopher   = 6
+} State;
 
 typedef u16 StateArg_CB(u8 argc, char *argv[]);
 
@@ -16,8 +24,6 @@ typedef struct
 
     VoidCallback *Run;
     VoidCallback *Input;
-    VoidCallback *HBlank;
-    VoidCallback *VBlank;
 } PRG_State;
 
 #define EXIT_SUCCESS 0

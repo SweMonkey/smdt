@@ -22,18 +22,14 @@ bool Buffer_IsEmpty(Buffer *b)
 /// @return Number of bytes in buffer
 u16 Buffer_GetNum(Buffer *b)
 {
-    u16 num = 0;
-
-    if (b->tail < b->head)
+    if (b->head >= b->tail)
     {
-        num = b->head - b->tail;
+        return b->head - b->tail;
     }
-    else if (b->tail > b->head)
+    else
     {
-        num = (BUFFER_LEN - b->head) + b->tail;
+        return BUFFER_LEN - (b->tail - b->head);
     }
-
-    return num;
 }
 
 /// @brief Push byte into buffer at head
@@ -55,6 +51,23 @@ bool Buffer_Push(Buffer *b, u8 data)
     b->head = next;           // head to next data offset.
 
     return TRUE;  // return success to indicate successful push.
+}
+
+/// @brief Push string into buffer at head
+/// @param b Pointer to buffer
+/// @param str String to push into buffer
+/// @return FALSE is returned if the buffer is full (data is dropped). TRUE on successful push
+bool Buffer_PushString(Buffer *b, const char *str)
+{
+    while (*str) 
+    {
+        if (!Buffer_Push(b, *str)) 
+        {
+            return FALSE;
+        }
+        str++;
+    }
+    return TRUE; // all characters pushed successfully
 }
 
 /// @brief Pop buffer data at tail into return byte

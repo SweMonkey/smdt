@@ -29,9 +29,9 @@ _Vectors_68K:
         dc.l    _Trace
         dc.l    _Line_1010_Emulation
         dc.l    _Line_1111_Emulation
-        dc.l     _Error_Exception, _Error_Exception, _Error_Exception, _Error_Exception
-        dc.l     _Error_Exception, _Error_Exception, _Error_Exception, _Error_Exception
-        dc.l     _Error_Exception, _Error_Exception, _Error_Exception, _Error_Exception
+        dc.l    _Error_Exception, _Error_Exception, _Error_Exception, _Error_Exception
+        dc.l    _Error_Exception, _Error_Exception, _Error_Exception, _Error_Exception
+        dc.l    _Error_Exception, _Error_Exception, _Error_Exception, _Error_Exception
         dc.l    _Error_Exception
         dc.l    _INT
         dc.l    _EXTINT
@@ -40,10 +40,11 @@ _Vectors_68K:
         dc.l    _INT
         dc.l    _VINT
         dc.l    _INT
-        dc.l    _trap_0
-        dc.l    _trap_1
-        dc.l    _trap_2
-        dc.l    _INT,_INT,_INT,_INT,_INT
+        dc.l    _trap_0 /* syscall */
+        dc.l    _trap_1 /* reset */
+        dc.l    _trap_2 /* test */
+        dc.l    _trap_3 /* smdt_halt */
+        dc.l    _INT,_INT,_INT,_INT
         dc.l    _INT,_INT,_INT,_INT,_INT,_INT,_INT,_INT
         dc.l    _INT,_INT,_INT,_INT,_INT,_INT,_INT,_INT
         dc.l    _INT,_INT,_INT,_INT,_INT,_INT,_INT,_INT
@@ -259,6 +260,9 @@ _trap_2:
         jsr syscall
         movem.l (%sp)+,%d0-%d6/%a0-%a1
         rte
+
+_trap_3:
+        jmp smdt_halt
 
 *------------------------------------------------
 *

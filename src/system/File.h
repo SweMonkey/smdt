@@ -29,6 +29,7 @@ typedef struct
 {
     lfs_file_t f;
     u16 fd;
+    char *fname;
 } SM_File;
 
 SM_File *F_Open(const char *filename, FileMode openmode);

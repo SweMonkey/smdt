@@ -28,6 +28,6 @@ void Input_Debug()
 
 const PRG_State DebugState = 
 {
-    Enter_Debug, ReEnter_Debug, Exit_Debug, Reset_Debug, Run_Debug, Input_Debug, NULL, NULL
+    Enter_Debug, ReEnter_Debug, Exit_Debug, Reset_Debug, Run_Debug, Input_Debug
 };
 
