@@ -11,7 +11,7 @@
 
 #include "devices/RL_Network.h"
 #include "misc/ConfigFile.h"
-#include "system/Stdout.h"
+#include "system/PseudoFile.h"
 
 /*
     USERLIST WARNING:
@@ -69,7 +69,7 @@ u16 Enter_IRC(u8 argc, char *argv[])
     UserWin = malloc(sizeof(SM_Window));
     if (UserWin == NULL)
     {
-        Stdout_Push("[91mIRC Client: Failed to allocate memory. Can't create UserWin\n[0m\n");
+        printf("[91mIRC Client: Failed to allocate memory. Can't create UserWin\n[0m\n");
         return EXIT_FAILURE;
     }
     UI_CreateWindow(UserWin, "", WF_NoBorder);

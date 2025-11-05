@@ -6,10 +6,12 @@
 #include "Cursor.h"         // sv_CursorCL
 #include "Network.h"        // sv_ListenPort
 #include "Keyboard.h"       // sv_KeyLayout
+#include "Mouse.h"          // MHitRect
 #include "Screensaver.h"    // sv_bScreensaver
 #include "UI.h"             // UI_ApplyTheme
 #include "IRC.h"            // IRC_SetFontSize
 #include "WinMgr.h"
+#include "Palette.h"
 
 #include "misc/ConfigFile.h"
 
@@ -42,6 +44,7 @@ void WINFN_WrapAtScreenEdge();
 void WINFN_ShowJQMsg();
 void WINFN_CharSet();
 void WINFN_Brightness();
+void WINFN_Pointer();
 
 void PrintCWD();
 
@@ -181,7 +184,7 @@ static struct s_menu
     {"BG Colour",
      "4x8 Mono colour",
      "4x8 8 colour set",
-     "Cursor colour",
+     "Cursor & Pointer",
      "Brightness"}
 },
 {//9
@@ -364,15 +367,13 @@ static struct s_menu
      "On"}
 },
 {//26
-    4,
+    2,
     0, 255, 0,
-    NULL, WINFN_CURSOR_CL, NULL,
-    "Cursor colour",
-    {254, 254, 254, 254},
-    {"Green",
-     "Black",
-     "White",
-     "Random"}
+    NULL, NULL, NULL,
+    "Cursor & Pointer",
+    {36, 37},
+    {"Terminal cursor",
+     "Mouse pointer"}
 },
 {//27
     3,
@@ -463,27 +464,64 @@ static struct s_menu
      "85%",
      "70%",
      "55%"}
-}};
+},
+{//36
+    4,
+    0, 255, 0,
+    NULL, WINFN_CURSOR_CL, NULL,
+    "Terminal cursor",
+    {254, 254, 254, 254},
+    {"Green",
+     "Black",
+     "White",
+     "Random"}
+},
+{//37
+    2,
+    0, 255, 0,
+    NULL, WINFN_Pointer, NULL,
+    "Mouse pointer",
+    {254, 254},
+    {"Normal",
+     "Inverted"}
+},};
+
+static const MRect qrect_data[] =
+{
+    {16, 32, 168, 8, 0},
+    {16, 40, 168, 8, 1},
+    {16, 48, 168, 8, 2},
+    {16, 56, 168, 8, 3},
+    {16, 64, 168, 8, 4},
+    {16, 72, 168, 8, 5},
+    {16, 80, 168, 8, 6},
+    {16, 88, 168, 8, 7},
+    {255, 0,   0, 0, 0},   // Terminator
+};
 
 
 void QMenu_Input()
 {
-    if (is_KeyDown(KEY_RETURN))
+    if (is_KeyDown(KEY_RETURN) || is_KeyUp(sv_MBind_Click))
     {
         EnterMenu();
     }
-    if (is_KeyDown(KEY_ESCAPE))
+    else if (bMouse)
     {
-        ExitMenu();
+        TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+4+SelectedIdx, PAL1);
+        SelectedIdx = Mouse_GetRect(qrect_data);
+
+        if (SelectedIdx >= MainMenu[MenuIdx].num_entries) SelectedIdx = 255;    // Don't allow selecting entries that may not exist in current menu
+        else TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+4+SelectedIdx, PAL0);
     }
-    if (is_KeyDown(KEY_UP))
+    else
     {
-        UpMenu();
+        if (is_KeyDown(KEY_UP)) UpMenu();
+
+        if (is_KeyDown(KEY_DOWN)) DownMenu();
     }
-    if (is_KeyDown(KEY_DOWN))
-    {
-        DownMenu();
-    }
+
+    if (is_KeyDown(KEY_ESCAPE) || is_KeyUp(sv_MBind_AltClick)) ExitMenu();
 }
 
 void SetupQItemTags()
@@ -498,12 +536,13 @@ void SetupQItemTags()
     MainMenu[22].tagged_entry = vLineMode>1?0:vLineMode;
     MainMenu[24].tagged_entry = sv_bHighCL;
     MainMenu[25].tagged_entry = sv_bScreensaver;
-    MainMenu[26].tagged_entry = sv_QCURCL;
     MainMenu[28].tagged_entry = sv_ThemeUI;
     MainMenu[29].tagged_entry = vBackspace;
     MainMenu[32].tagged_entry = sv_WrapAtScreenEdge;
     MainMenu[33].tagged_entry = sv_ShowJoinQuitMsg;
     MainMenu[34].tagged_entry = sv_EnableUTF8;
+    MainMenu[36].tagged_entry = sv_QCURCL;
+    MainMenu[37].tagged_entry = sv_PointerStyle;
 
     switch (sv_TerminalFont)
     {
@@ -632,8 +671,6 @@ void SetupQItemTags()
 void DrawMenu(u8 idx)
 {    
     TRM_SetWinHeight(MainMenu[idx].num_entries+5);
-    TRM_ClearArea(1, 1, 23, MainMenu[idx].num_entries+4, PAL1, TRM_CLEAR_BG);
-
     MainMenu[MenuIdx].selected_entry = SelectedIdx;   // Mark previous menu selection entry
 
     MenuIdx = idx;
@@ -666,8 +703,11 @@ void DrawMenu(u8 idx)
 
 void EnterMenu()
 {
+    if (SelectedIdx == 255) return;
+
     u8 next = MainMenu[MenuIdx].next_menu[SelectedIdx];
-    if (next < 254) 
+
+    if (next < 254)
     {
         VoidCallback *func = MainMenu[next].entry_function;
         if (func != NULL) func();
@@ -1025,7 +1065,7 @@ void WINFN_DEBUGSEL()
     {
         case 2:
         {
-            char *fn[] = {"/sram/system/rxbuffer.io"};
+            char *fn[] = {"/sram/system/tty_in.io"};
 
             WinMgr_Close(W_QMenu);
             WinMgr_Open(W_HexView, 1, fn);
@@ -1034,7 +1074,7 @@ void WINFN_DEBUGSEL()
 
         case 3:
         {
-            char *fn[] = {"/sram/system/txbuffer.io"};
+            char *fn[] = {"/sram/system/tty_out.io"};
 
             WinMgr_Close(W_QMenu);
             WinMgr_Open(W_HexView, 1, fn);
@@ -1299,9 +1339,19 @@ void WINFN_Brightness()
     SetColor( 4, 0x0E0);
     SetColor( 6, 0xEEE);
     SetColor( 7, 0x0C0);
-    SetColor(17, sv_CBGCL);
-    SetColor(18, 0xEEE);
-    SetColor(50, sv_CBGCL);
-    
+    SetColor(17, sv_CBGCL); // Mouse pointer outline (temp) - Window text BG Normal / Terminal text BG
+    SetColor(18, 0xEEE);    // Mouse pointer fill (temp)    - Window text FG Normal
+    SetColor(49, 0xEEE);    // Mouse pointer outline (inverted)
+    SetColor(50, sv_CBGCL); // Mouse pointer fill (inverted)
+    SetColor(54, 0x444);    // Screensaver colour 0
+    SetColor(55, 0xEEE);    // Screensaver colour 1
+
     UI_ApplyTheme();
+}
+
+void WINFN_Pointer()
+{
+    sv_PointerStyle = SelectedIdx;
+    u16 ps = (sv_PointerStyle ? 0x6000 : 0x2000) | 0x8017;
+    SetSprite_TILE(SPRITE_ID_POINTER, ps);
 }

@@ -8,7 +8,7 @@
 #include "Keyboard.h"       // bKB_Ctrl
 #include "misc/CMDFunc.h"
 
-#include "system/Stdout.h"
+#include "system/PseudoFile.h"
 #include "system/Time.h"
 #include "system/Filesystem.h"
 
@@ -23,8 +23,19 @@ static bool bRunningCMD = FALSE;
 static char LastCommand[2][INPUT_SIZE] = {'\0'};
 static u8 LCPos = 0;   // Last command position
 
+static bool RestoreStdin = FALSE;
+static bool RestoreStdout = FALSE;
+static char *NewInput = NULL;
+static char *NewOutput = NULL;
+static bool IO_Append = FALSE;
+
 char *argv[INPUT_SIZE_ARGV]; // Argument list
 int argc = 0;                // Argument count
+
+#ifdef EMU_BUILD
+static u32 cputime;
+static char title[18];
+#endif
 
 
 static void ClearArgv()
@@ -47,6 +58,53 @@ static void RunCommand()
 {
     u16 l = 0;      // List position
 
+    // Input redirection
+    if (NewInput)
+    {
+        char fn_buf[FILE_MAX_FNBUF];
+        FS_ResolvePath(NewInput, fn_buf);
+
+        SM_File *New_stdin = F_Open(fn_buf, FM_RDONLY);
+
+        if (New_stdin)
+        {
+            F_Close(stdin);
+            stdin = New_stdin;
+            RestoreStdin = TRUE;
+        }
+        else
+        {
+            //F_Printf(stderr, "Failed to open input file: %s\n", NewInput);
+        }
+
+        NewInput = NULL;
+    }
+
+    // Output redirection
+    if (NewOutput)
+    {
+        u16 flags = FM_WRONLY | FM_CREATE;
+        if (IO_Append) flags |= FM_APPEND;
+
+        char fn_buf[FILE_MAX_FNBUF];
+        FS_ResolvePath(NewOutput, fn_buf);
+
+        SM_File *New_stdout = F_Open(fn_buf, flags);
+
+        if (New_stdout)
+        {
+            F_Close(stdout);
+            stdout = New_stdout;
+            RestoreStdout = TRUE;
+        }
+        else
+        {
+            //F_Printf(stderr, "Failed to open output file: \"%s\"\n", NewOutput);
+        }
+
+        NewOutput = NULL;
+    }
+
     // Iterate argv0 through the command list and call bound function
     while (CMDList[l].id != 0)
     {
@@ -55,6 +113,8 @@ static void RunCommand()
             bRunningCMD = TRUE;
             CMDList[l].fptr(argc, argv);
             bRunningCMD = FALSE;
+
+            NET_TransmitBuffer();
             Stdout_Flush();
             goto Exit;
         }
@@ -70,6 +130,22 @@ static void RunCommand()
 
     Exit:
 
+    // Restore IO files
+    if (RestoreStdin)
+    {
+        F_Close(stdin);
+        stdin = F_Open("/sram/system/stdin.io", 0);
+        RestoreStdin = FALSE;
+    }
+    
+    if (RestoreStdout)
+    {
+        F_Close(stdout);
+        stdout = F_Open("/sram/system/stdout.io", 0);
+        RestoreStdout = FALSE;
+    }
+
+    // Print CWD
     if (isCurrentState(PS_Terminal) && StateHasChanged() == FALSE)
     {
         Stdout_PushByte('\n');
@@ -82,11 +158,11 @@ static void RunCommand()
     return;
 }
 
-static u8 ParseInputString()
+static u8 ParseInputString(void)
 {
-    u8 inbuf[INPUT_SIZE] = {0};     // Input buffer string
-    u8 data;        // Byte buffer
-    u16 i = 0;      // Buffer iterator
+    u8 inbuf[INPUT_SIZE] = {0};
+    u8 data;
+    u16 i = 0;
 
     memset(inbuf, 0, INPUT_SIZE);
 
@@ -129,6 +205,36 @@ static u8 ParseInputString()
         return 1;
     }
 
+    // Redirection parsing
+    for (int j = 0; j < argc; j++)
+    {
+        if (strcmp(argv[j], "<") == 0 && (j + 1 < argc))
+        {
+            NewInput = argv[j + 1];
+            argv[j] = NULL;      // terminate command args
+            argc = j;
+            break;
+        }
+        else if (strcmp(argv[j], ">") == 0 && (j + 1 < argc))
+        {
+            NewOutput = argv[j + 1];
+            IO_Append = FALSE;
+            argv[j] = NULL;
+            argc = j;
+            break;
+        }
+        else if (strcmp(argv[j], ">>") == 0 && (j + 1 < argc))
+        {
+            NewOutput = argv[j + 1];
+            IO_Append = TRUE;
+            argv[j] = NULL;
+            argc = j;
+            break;
+        }
+    }
+
+    // Do not call RunCommand() here - defer it to later along with restoring streams
+
     return 0;
 }
 
@@ -152,7 +258,7 @@ static u8 DoBackspace()
     return 1;
 }
 
-static void DrawClockUpdate()
+void ShellDrawClockUpdate()
 {
     TimeToStr_TimeNoSec(&SystemTime, TimeString);
     TRM_DrawText(TimeString, 30, 0, PAL1);
@@ -173,8 +279,16 @@ static void SetupTerminal()
     // Shell
     bRunningCMD = FALSE;
 
+    // IO pseudofiles
+    RestoreStdin = FALSE;
+    RestoreStdout = FALSE;
+
+    NewInput = NULL;
+    NewOutput = NULL;
+    IO_Append = FALSE;
+
     //DoTimeSync(sv_TimeServer);
-    DrawClockUpdate();
+    ShellDrawClockUpdate();
 
     Buffer_Flush(&TxBuffer);
     Buffer_Flush(&RxBuffer);
@@ -185,9 +299,9 @@ static void SetupTerminal()
 u16 Enter_Terminal(u8 argc, char *argv[])
 {
     SetupTerminal();
-    Stdout_Push("SMDT Command Shell v0.3\n");
+    printf("SMDT Command Shell v0.3\n");
     printf("Type [32mhelp[0m for available commands%s", sv_Font?" - ":"\n");
-    Stdout_Push("Press [32mF8[0m for quick menu\n\n");
+    printf("Press [32mF8[0m for quick menu\n\n");
 
     PrintCWD();
 
@@ -220,7 +334,15 @@ void Run_Terminal()
     #ifdef ENABLE_CLOCK
     if (ClockLastTime != SystemTime.minute)
     {
-        DrawClockUpdate();
+        ShellDrawClockUpdate();
+    }
+    #endif
+
+    #ifdef EMU_BUILD
+    if (SecondElapsed(&cputime, 1))
+    {
+        snprintf(title, 17, "%s - CPU: %03u%c", STATUS_TEXT_SHORT, SYS_getCPULoad(), '%');
+        TRM_DrawText(title, 1, 0, PAL1);
     }
     #endif
 }

@@ -3,10 +3,11 @@
 #include "Utils.h"
 #include "Terminal.h"
 #include "Telnet.h"
-#include "system/Stdout.h"
+#include "system/PseudoFile.h"
 #include "Input.h"
 #include "Keyboard.h"
 #include "StateCtrl.h"
+#include "Palette.h"
 
 extern u32 registerState[];
 extern u32 pcState;

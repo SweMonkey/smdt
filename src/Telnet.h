@@ -26,6 +26,7 @@ extern s16 DMarginRight;
 
 void TELNET_Init(TTY_InitFlags tty_flags);
 void Telnet_Quit();
+void Telnet_MouseTrack();
 void TELNET_ParseRX(u8 byte);
 
 #endif // TELNET_H_INCLUDED

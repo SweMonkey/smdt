@@ -4,7 +4,8 @@
 #include "Network.h"
 #include "Utils.h"
 #include "WinMgr.h"
-#include "system/Stdout.h"
+#include "Mouse.h"          // MHitRect
+#include "system/PseudoFile.h"
 
 static u16 FileOffset = 0;
 static s16 ScrollY = 0;
@@ -15,6 +16,15 @@ static char WinTitle[38];
 static bool bIOFILE = FALSE;
 static u8 NumLines = 23;
 static u16 ScrollMax = 0;
+static u16 r = 255;         // Mouse widget collision target
+
+static const MRect mrect_data[] =
+{
+    {304,  32, 8,   8, 0},   // Up
+    {304,  40, 8, 168, 1},   // Slider area
+    {304, 208, 8,   8, 2},   // Down
+    {255,   0, 0,   0, 0},   // Terminator
+};
 
 
 static void DrawDataLine(u8 Line)
@@ -56,13 +66,81 @@ static void UpdateView()
 
     UI_DrawVLine(4, 0, 23);
     UI_DrawVLine(28, 0, 23);
-    UI_DrawVScrollbar(37, 0, 23, 0, ScrollMax, ScrollY>>3);
+    UI_DrawVScrollbar(37, 0, 23, r, 0, ScrollMax, ScrollY>>3);
 
     UI_End();
 }
 
 void HexView_Input()
 {
+    if (bMouse)
+    {
+        r = Mouse_GetRect(mrect_data) & 0x7F;
+
+        switch (r)
+        {
+            case 0: // Up
+                if (is_KeyDown(sv_MBind_Click))
+                {
+                    if (ScrollY > 7) 
+                    {
+                        ScrollY -= 8;
+                        UpdateView();
+                    }
+                }
+                else // Hover
+                {
+                    UI_Begin(HexWindow);                    
+                    UI_DrawVScrollbar(37, 0, 23, r, 0, ScrollMax, ScrollY>>3);
+                    UI_RepaintColumn(38, 1);
+                    UI_EndNoPaint();
+                }
+            break;
+
+            case 1: // Slider     
+                if (is_KeyDown(sv_MBind_Click))
+                {
+                    // ...
+                }
+                else // Hover
+                {
+                    UI_Begin(HexWindow);                    
+                    UI_DrawVScrollbar(37, 0, 23, r, 0, ScrollMax, ScrollY>>3);
+                    UI_RepaintColumn(38, 1);
+                    UI_EndNoPaint();
+                }       
+            break;
+
+            case 2: // Down
+                if (is_KeyDown(sv_MBind_Click))
+                {
+                    if (ScrollY < (bufsize-184))
+                    {
+                        ScrollY += 8;
+                        UpdateView();
+                    }
+                }
+                else // Hover
+                {
+                    UI_Begin(HexWindow);                    
+                    UI_DrawVScrollbar(37, 0, 23, r, 0, ScrollMax, ScrollY>>3);
+                    UI_RepaintColumn(38, 1);
+                    UI_EndNoPaint();
+                }
+            break;
+        
+            default:
+                if (is_KeyDown(sv_MBind_Click) == FALSE)
+                {
+                    UI_Begin(HexWindow);                    
+                    UI_DrawVScrollbar(37, 0, 23, r, 0, ScrollMax, ScrollY>>3);
+                    UI_RepaintColumn(38, 1);
+                    UI_EndNoPaint();
+                }
+            break;
+        }
+    }
+
     if (is_KeyDown(KEY_UP))
     {
         if (ScrollY > 7) 
@@ -113,7 +191,7 @@ void HexView_Input()
         }
     }
 
-    if (is_KeyDown(KEY_ESCAPE))
+    if (is_KeyUp(KEY_ESCAPE) || is_KeyUp(sv_MBind_AltClick))
     {
         WinMgr_Close(W_HexView);
     }
@@ -145,7 +223,7 @@ u16 HexView_Open(const char *filename)
     bIOFILE = FALSE;
 
     // Open file, take special care of IO files
-    if (strcmp(fn_buf, "/sram/system/rxbuffer.io") == 0)
+    if (strcmp(fn_buf, "/sram/system/tty_in.io") == 0)
     {
         strcpy(WinTitle, "HexView - Rx Buffer");
         
@@ -153,7 +231,7 @@ u16 HexView_Open(const char *filename)
         bufsize = BUFFER_LEN;
         bIOFILE = TRUE;
     }
-    else if (strcmp(fn_buf, "/sram/system/txbuffer.io") == 0)
+    else if (strcmp(fn_buf, "/sram/system/tty_out.io") == 0)
     {
         strcpy(WinTitle, "HexView - Tx Buffer");
         
@@ -203,7 +281,7 @@ u16 HexView_Open(const char *filename)
 
     if (HexWindow == NULL)
     {
-        Stdout_Push("[91mFailed to allocate memory;\nCan't create HexWindow[0m\n");
+        printf("[91mFailed to allocate memory;\nCan't create HexWindow[0m\n");
         
         if (bIOFILE == FALSE)
         {

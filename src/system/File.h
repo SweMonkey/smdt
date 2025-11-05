@@ -2,6 +2,7 @@
 #define FILE_H_INCLUDED
 
 #include "Utils.h"
+#include "Buffer.h"
 #include "system/Filesystem.h"
 
 #define FILE_MAX_FNBUF 64
@@ -29,6 +30,7 @@ typedef struct
 {
     lfs_file_t f;
     u16 fd;
+    Buffer *io_buf;
     char *fname;
 } SM_File;
 

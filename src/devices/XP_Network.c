@@ -2,7 +2,7 @@
 #include "Buffer.h"
 #include "Utils.h"      // TRM
 #include "Network.h"    // RxBuffer/TxBuffer
-#include "system/Stdout.h"
+#include "system/PseudoFile.h"
 
 #define CTIME 500000
 #define RTIME 300000
@@ -277,6 +277,8 @@ u8 XPN_PingIP(char *ip)
                 // Flush stdout after pushing byte
                 Stdout_Flush();
             }
+
+            // Look for "unreachable\n" with xport error code "2>" and bail here
 
             timeout = 0;
         }

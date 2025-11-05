@@ -110,15 +110,10 @@
 
 //#define KEY_PAUSE     0xE11477
 
-/*#define MOUSE_0 0
-#define MOUSE_LEFT 0x1
-#define MOUSE_MIDDLE 0x2
-#define MOUSE_RIGHT 0x4
-#define MOUSE_BTN1 0x8
-#define MOUSE_BTN2 0x10
-#define MOUSE_BTN3 0x20
-#define MOUSE_BTN4 0x40
-#define MOUSE_BTN5 0x80*/
+#define MOUSE_LEFT_BTN   0x1F0
+#define MOUSE_RIGHT_BTN  0x1F1
+#define MOUSE_MIDDLE_BTN 0x1F2
+#define MOUSE_C_BTN      0x1F3
 
 #endif // KEYDEF_H_INCLUDED
 

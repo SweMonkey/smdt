@@ -9,11 +9,12 @@
 #include "Terminal.h"
 #include "Telnet.h"
 #include "WinMgr.h"
+#include "Palette.h"
 
 #include "misc/ConfigFile.h"
 #include "misc/Exception.h"
 
-#include "system/Stdout.h"
+#include "system/PseudoFile.h"
 #include "system/File.h"
 #include "system/Filesystem.h"
 
@@ -27,10 +28,11 @@ int main(bool hardReset)
 
     sv_CBrightness = 0; // Set full brightness during boot
 
-    PAL_setPalette(PAL0, palette_black, DMA);
-    PAL_setPalette(PAL1, palette_black, DMA);
-    PAL_setPalette(PAL2, palette_black, DMA);
-    PAL_setPalette(PAL3, palette_black, DMA);
+    SetPalette(PAL0, palette_black);
+    SetPalette(PAL1, palette_black);
+    SetPalette(PAL2, palette_black);
+    SetPalette(PAL3, palette_black);
+    UploadPalette();
 
     Z80_unloadDriver();
     Z80_requestBus(TRUE);   // Make sure SGDK library is built with HALT_Z80_ON_IO and HALT_Z80_ON_DMA set to 0, to make sure the bus never gets released again
@@ -77,7 +79,8 @@ int main(bool hardReset)
     // Setup initial colour values needed for boot
     SetColor(17, 0x000);    // Window text BG Normal / Terminal text BG
     SetColor(20, 0x444);    // Window title BG
-    SetColor(50, 0x000);    // Window text FG Inverted
+    SetColor(49, 0xEEE);    // Inverted cursor outline
+    SetColor(50, 0x000);    // Window text FG Inverted / Inverted cursor inner
     SetColor(51, 0xEEE);    // Window text BG Inverted
     SetColor(54, 0x444);    // Screensaver colour 0
     SetColor(55, 0xEEE);    // Screensaver colour 1
@@ -103,13 +106,18 @@ int main(bool hardReset)
     vNewlineConv = 1;
     bAutoFlushStdout = TRUE;
     SetColor(4, 0);    // Set cursor colour back to black to hide it
+    UploadPalette();
+
+    // Setup permanent sprite links
+    SetSprite_SIZELINK(SPRITE_ID_CURSOR, SPR_SIZE_1x1, SPRITE_ID_SCRSAV);
+    SetSprite_SIZELINK(SPRITE_ID_SCRSAV, SPR_WIDTH_4x1 | SPR_HEIGHT_1x4, SPRITE_ID_POINTER);
+    SetSprite_SIZELINK(SPRITE_ID_POINTER, SPR_SIZE_1x1, 0);
     
     VDP_setEnable(TRUE);
  
     Stdout_Push(" [97mInitializing system...[0m\n");
 
     WinMgr_Init();
-    Input_Init();
 
     TRM_SetStatusIcon(ICO_ID_UNKNOWN,    ICO_POS_0);
     TRM_SetStatusIcon(ICO_NET_IDLE_RECV, ICO_POS_1);
@@ -127,6 +135,8 @@ int main(bool hardReset)
     }
     else Stdout_Push(" [92mSuccessfully loaded config file[0m\n");
 
+    Input_Init();
+    
     SYS_setExtIntCallback(NET_RxIRQ);   // Set external IRQ callback
 
     // Enable interrupts during driver init, certain devices will need ExtIRQ working for detection

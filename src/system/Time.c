@@ -5,7 +5,7 @@
 // https://www.epochconverter.com/
 
 SM_Time SystemTime;
-u32 SystemUptime = 0;            // How long the system has been running (Seconds)
+u32 SystemUptime = 0;         // How long the system has been running (Seconds)
 
 static u32 TimeSync = 0;      // Synchronized time (Seconds)
 static u32 LastTimeSync = 0;  // Time when last synchronized (Seconds)
@@ -208,4 +208,18 @@ u8 DoTimeSync(char *server)
     }
 
     return 1;   // Connection to <server> failed
+}
+
+bool FrameElapsed(u32 *previous, u16 num)
+{
+    bool v = (FrameTick >= *previous+num);
+    if (v) *previous = FrameTick;
+    return v;
+}
+
+bool SecondElapsed(u32 *previous, u16 num)
+{
+    bool v = (SystemUptime >= *previous+num);
+    if (v) *previous = SystemUptime;
+    return v;
 }

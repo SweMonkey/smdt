@@ -2,19 +2,28 @@
 #include "Input.h"
 #include "UI.h"
 #include "Utils.h"
-#include "system/Stdout.h"
+#include "system/PseudoFile.h"
 #include "WinMgr.h"
 #include "Network.h"
+#include "Mouse.h"          // MHitRect
 #include "system/Time.h"
 
 static SM_Window *InfoWindow = NULL;
 static s16 ScrollY = 0;
-static s8 sIdx = -1;    // Selector idx between tab + buttons
+static s8 sIdx = 0;     // Selector idx between tab + buttons
 static u16 tIdx = 0;    // Selector idx for tabs
-static u8 UpdateCnt = 0;
+static u32 UpdateCnt = 0;
 static SM_Time uptime;
 static u32 Lastdown = 0;
 static u32 Lastup = 0;
+
+static const MRect mrect_data[] =
+{
+    {  8,  32, 112, 8, 0},
+    {136,  32,  56, 8, 1},
+    {208,  32,  32, 8, 2},
+    {255,   0,   0, 0, 0},   // Terminator
+};
 
 static const char * const tab_text[3] =
 {
@@ -95,9 +104,9 @@ static void DrawSysMonTab()
 
     if (unit == 'B')
     {
-        snprintf(buftext, 38, "Down: %lu bytes", down);
+        snprintf(buftext, 20, "Down: %lu bytes", down);
     }
-    else snprintf(buftext, 38, "Down: %lu,%03lu %ciB", down, rem > 999 ? 999 : rem, unit);
+    else snprintf(buftext, 20, "Down: %lu,%03lu %ciB", down, rem > 999 ? 999 : rem, unit);
     UI_DrawText(1, 16, PAL1, buftext);
 
     // Up
@@ -127,9 +136,9 @@ static void DrawSysMonTab()
 
     if (unit == 'B')
     {
-        snprintf(buftext, 38, "  Up: %lu bytes", up);
+        snprintf(buftext, 20, "  Up: %lu bytes", up);
     }
-    else snprintf(buftext, 38, "  Up: %lu,%03lu %ciB", up, rem > 999 ? 999 : rem, unit);
+    else snprintf(buftext, 20, "  Up: %lu,%03lu %ciB", up, rem > 999 ? 999 : rem, unit);
     UI_DrawText(1, 17, PAL1, buftext);
 
     
@@ -139,23 +148,23 @@ static void DrawSysMonTab()
 
     if (downspeed >= 1000)
     {
-        snprintf(buftext, 38, "Down: %lu,%02lu Kbps", downspeed/1000, downspeed % 1000);
+        snprintf(buftext, 18, "Down: %lu,%03lu Kbps", downspeed/1000, downspeed % 1000);
         UI_DrawText(21, 16, PAL1, buftext);
     }
     else
     {
-        snprintf(buftext, 38, "Down: %lu bps", downspeed);
+        snprintf(buftext, 18, "Down: %lu bps", downspeed);
         UI_DrawText(21, 16, PAL1, buftext);
     }
     
     if (upspeed >= 1000)
     {
-        snprintf(buftext, 38, "  Up: %lu,%02lu Kbps", upspeed/1000, upspeed % 1000);
+        snprintf(buftext, 18, "  Up: %lu,%03lu Kbps", upspeed/1000, upspeed % 1000);
         UI_DrawText(21, 16, PAL1, buftext);
     }
     else
     {
-        snprintf(buftext, 38, "  Up: %lu bps", upspeed);
+        snprintf(buftext, 18, "  Up: %lu bps", upspeed);
         UI_DrawText(21, 17, PAL1, buftext);
     }
     
@@ -260,25 +269,15 @@ static void UpdateView()
 {
     UI_Begin(InfoWindow);
 
-    UI_DrawTabs(0, 0, 38, 3, tIdx, sIdx+1, tab_text);
+    UI_DrawTabs(0, 0, 38, 3, tIdx, sIdx, tab_text);
     UI_ClearRect(0, 2, 38, 21);
 
     switch (tIdx)
     {
-        case 0:
-            DrawSysMonTab();
-        break;
-
-        case 1:
-            DrawDeviceTab();
-        break;
-
-        case 2:
-            DrawInfoTab();
-        break;
-    
-        default:
-        break;
+        case 0: DrawSysMonTab(); break;
+        case 1: DrawDeviceTab(); break;
+        case 2: DrawInfoTab(); break;    
+        default: break;
     }
 
     UI_End();
@@ -286,50 +285,68 @@ static void UpdateView()
 
 void InfoView_Input()
 {
-    if (is_KeyDown(KEY_LEFT))
+    if (bMouse)
     {
-        switch (sIdx)
+        u16 r = Mouse_GetRect(mrect_data) & 0x7F;
+
+        // Click
+        if ((r < 3) && (tIdx != r))
         {
-            case -1: if (tIdx == 0) tIdx = 2; else tIdx--; break;
-            default: break;
+            if (is_KeyUp(sv_MBind_Click))
+            {
+                tIdx = r;
+                UpdateView();
+                SecondElapsed(&UpdateCnt, 1);   // Reset UpdateCnt
+            }
         }
+
+        // Hover
+        if ((sIdx != r) && (is_KeyUp(sv_MBind_Click) == FALSE))
+        {
+            sIdx = r;
+            UI_Begin(InfoWindow);
+            UI_DrawTabs(0, 0, 38, 3, tIdx, sIdx, tab_text);
+            UI_RepaintRow(3, 1);
+            UI_EndNoPaint();
+        }
+    }
+
+    if (is_KeyUp(KEY_LEFT))
+    {
+        if (tIdx == 0) tIdx = 2; else tIdx--;
+
+        sIdx = tIdx;
         UpdateView();
     }
 
-    if (is_KeyDown(KEY_RIGHT))
+    if (is_KeyUp(KEY_RIGHT))
     {
-        switch (sIdx)
-        {
-            case -1: if (tIdx == 2) tIdx = 0; else tIdx++; break;
-            default: break;
-        }
+        if (tIdx == 2) tIdx = 0; else tIdx++;
+        
+        sIdx = tIdx;
         UpdateView();
     }
 
     // Quick switch tab
-    if (is_KeyDown(KEY_TAB))
+    if (is_KeyUp(KEY_TAB))
     {
-        if (tIdx < 2) tIdx++;
-        else tIdx = 0;
+        if (tIdx < 2) tIdx++; else tIdx = 0;
 
-        sIdx = -1;
+        sIdx = tIdx;
         UpdateView();
     }
 
     // Back/Close
-    if (is_KeyDown(KEY_ESCAPE))
+    if (is_KeyUp(KEY_ESCAPE) || is_KeyUp(sv_MBind_AltClick))
     {
         WinMgr_Close(W_InfoView);
     }
 
     // Abuse the input loop for UI draw updates...
-    if (UpdateCnt >= (bPALSystem?50:60))
+    if (SecondElapsed(&UpdateCnt, 1))
     {
         if (tIdx != 1) UpdateView();
-
-        UpdateCnt = 0;
     }
-    else UpdateCnt++;
 
     return;
 }
@@ -354,7 +371,7 @@ u16 InfoView_Open()
 
     if (InfoWindow == NULL)
     {
-        Stdout_Push("[91mFailed to allocate memory;\nCan't create InfoWindow[0m\n");
+        printf("[91mFailed to allocate memory;\nCan't create InfoWindow[0m\n");
         return 1;
     }
 

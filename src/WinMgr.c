@@ -1,9 +1,9 @@
 #include "WinMgr.h"
 #include "UI.h"
 #include "QMenu.h"
-#include "HexView.h"
-#include "FavView.h"
-#include "InfoView.h"
+#include "windows/HexView.h"
+#include "windows/FavView.h"
+#include "windows/InfoView.h"
 
 static bool bWindowOpen = FALSE;
 static u8 CurrentWinID = 255;
@@ -78,6 +78,7 @@ void WinMgr_Close(WinID winid)
 
     bWindowOpen = FALSE;
     CurrentWinID = 255;
+    UI_EndNoPaint();        // In case of dangling winptr
 }
 
 void WinMgr_Input()

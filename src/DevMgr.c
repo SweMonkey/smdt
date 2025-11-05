@@ -3,6 +3,7 @@
 #include "DevMgr.h"
 #include "devices/Keyboard_PS2.h"   // KB_SendCommand() and KB_Poll()
 #include "devices/Keyboard_Saturn.h"
+#include "devices/MegaMouse.h"
 #include "Keyboard.h"
 #include "devices/RL_Network.h"
 #include "devices/XP_Network.h"
@@ -10,7 +11,7 @@
 #include "QMenu.h"                  // ChangeText() when KB is detected
 #include "Utils.h"                  // Definitions
 #include "Input.h"                  // Input_JP
-#include "system/Stdout.h"
+#include "system/PseudoFile.h"
 
 /*
 ID	        Peripheral
@@ -45,6 +46,7 @@ bool bRLNetwork = FALSE;            // Use RetroLink cartridge instead of built-
 bool bXPNetwork = FALSE;            // Use XPort network adapter
 bool bMegaCD = FALSE;               // Mega/Sega CD detected flag
 bool bVRAM_128KB = FALSE;
+bool bMouse = FALSE;
 DevPort sv_ListenPort = DP_Port2;   // Default UART port to listen on
 
 
@@ -159,6 +161,25 @@ void DetectDevices()
         }
     }
 
+    if ((DevId0 == DEVICE_MOUSE) || (DevId1 == DEVICE_MOUSE) || (DevId2 == DEVICE_MOUSE))
+    {
+             if (DevId0 == DEVICE_MOUSE) SetDevicePort(&DRV_MMOUSE, DP_Port1);
+        else if (DevId1 == DEVICE_MOUSE) SetDevicePort(&DRV_MMOUSE, DP_Port2);
+        else if (DevId2 == DEVICE_MOUSE) SetDevicePort(&DRV_MMOUSE, DP_Port3);
+
+        if (MM_Mouse_Init())
+        {
+            Stdout_Push(" [92mMega Mouse found[0m\n");
+            DevList[DevSeq++] = &DRV_MMOUSE;
+            bMouse = TRUE;
+
+            if (bNoKeyboard)
+            {
+                TRM_SetStatusIcon(ICO_MOUSE_OK, ICO_POS_0);
+            }
+        }
+    }
+
     if (bNoKeyboard)
     {
         Stdout_Push(" [93mNo keyboard found.[0m\n");
@@ -166,7 +187,7 @@ void DetectDevices()
     }
 
     // -- Joypad setup ---------------------------------
-    if (bNoKeyboard || ((DRV_KBPS2.PAssign != DP_Port1) && (DRV_KBSATURN.PAssign != DP_Port1))) // Only enable joypad if there is no keyboard detected, or if port 1 is free
+    if (!bMouse && (bNoKeyboard || ((DRV_KBPS2.PAssign != DP_Port1) && (DRV_KBSATURN.PAssign != DP_Port1))) ) // Only enable joypad if there is no keyboard detected, or if port 1 is free
     {
         DRV_Joypad.Id.sName = "Joypad";
         DRV_Joypad.Id.Bitmask = 0x40;
@@ -303,6 +324,8 @@ void DeviceManager_Init()
     bRLNetwork = FALSE;
     bXPNetwork = FALSE;
     bMegaCD = FALSE;
+    bVRAM_128KB = FALSE;
+    bMouse = FALSE;
 
     DetectDevices();    // Detect and setup
 }

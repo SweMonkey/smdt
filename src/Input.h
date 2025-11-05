@@ -7,7 +7,7 @@
 bool is_KeyDown(u16 key);
 bool is_KeyUp(u16 key);
 bool is_AnyKey();
-u16 get_KeyPress(u8 KeyState);
+u8 get_KeyPress(u16 key);
 void set_KeyPress(u16 key, u8 KeyState);
 
 void Input_JP(u16 joy, u16 changed, u16 state);

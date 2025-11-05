@@ -24,6 +24,9 @@ Row     Column      Usage                                               Index
 3       2           Window text FG Inverted & Pointer inner (Inverted)  50
 3       3           Window text BG Inverted                             51
 
+3       4           Not used                                            52
+3       5           Not used                                            53
+
 3       6           Screensaver colour 0                                54
 3       7           Screensaver colour 1                                55
 

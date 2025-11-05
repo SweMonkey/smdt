@@ -15,6 +15,7 @@ extern u8 sv_TelnetFont;
 extern u8 sv_TerminalFont;
 extern u8 sv_ThemeUI;
 extern s8 sv_CBrightness;
+extern u8 sv_PointerStyle;
 
 SM_VarList VarList[] =
 {
@@ -53,6 +54,7 @@ SM_VarList VarList[] =
     {ST_BYTE, &sv_WrapAtScreenEdge, "ircwrap"},
     {ST_BYTE, &sv_EnableUTF8,       "enableutf8"},
     {ST_BYTE, &sv_CBrightness,      "brightness"},
+    {ST_BYTE, &sv_PointerStyle,     "pointerstyle"},
     {0, 0, 0}  // List terminator
 };
 

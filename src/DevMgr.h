@@ -29,6 +29,7 @@
 #define ICO_KB_OK      0x1C // Keyboard input device 'K'
 #define ICO_JP_OK      0x1E // Joypad input device 'J'
 #define ICO_ID_ERROR   0x1D // Error with input device 'X'
+#define ICO_MOUSE_OK   0x20 // Mouse input device 'M'
 
 typedef enum 
 {
@@ -80,6 +81,7 @@ extern bool bRLNetwork;
 extern bool bXPNetwork;
 extern bool bMegaCD;
 extern bool bVRAM_128KB;
+extern bool bMouse;
 
 void SetDevicePort(SM_Device *d, DevPort p);
 void DeviceManager_Init();

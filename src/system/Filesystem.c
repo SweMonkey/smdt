@@ -1,6 +1,6 @@
 #include "Filesystem.h"
 #include "Utils.h"
-#include "Stdout.h"
+#include "PseudoFile.h"
 #include "File.h"
 #include "FS_ROM.h"
 #include "FS_SRAM.h"
@@ -43,6 +43,8 @@ void FS_Init()
 
     u16 p = (r == 1) ? 0 : 1;   // If last mounted partition is the SRAM one and mount failed then set active partition to the ROM fs
     FS_SetActivePartition(p);
+
+    IO_CreatePseudoFiles();
 
     return;
 }
@@ -128,14 +130,7 @@ void FS_ListDir(char *dir)
     if (err) goto OnError;
 
     struct lfs_info info;
-    char *fbuf = malloc(1024);
-    char *dbuf = malloc(1024);
-    char *nbuf = malloc(64);
-
-    memset(fbuf, 0, 1024);
-    memset(dbuf, 0, 1024);
-
-    while (true) 
+    while (TRUE) 
     {
         int res = lfs_dir_read(PList[ps].lfs_type, &d, &info);
         if (res < 0) goto OnExit;
@@ -144,40 +139,45 @@ void FS_ListDir(char *dir)
 
         if (info.name[0] == '.') continue;
 
-        memset(nbuf, 0, 64);
+        switch (info.type) 
+        {
+            case LFS_TYPE_DIR:
+            {
+                printf("[94m%-30s[0m\n", info.name);
+                break;
+            }
+
+            default: break;
+        }
+    }
+    
+    lfs_dir_close(PList[ps].lfs_type, &d);
+    err = lfs_dir_open(PList[ps].lfs_type, &d, path);
+    if (err) goto OnError;
+    while (TRUE) 
+    {
+        int res = lfs_dir_read(PList[ps].lfs_type, &d, &info);
+        if (res < 0) goto OnExit;
+
+        if (res == 0) break;
+
+        if (info.name[0] == '.') continue;
 
         switch (info.type) 
         {
             case LFS_TYPE_REG:
             {
                 u8 nlen = strlen(info.name);
-                snprintf(nbuf, 64, "%s%-30s[0m %4lu %s\n", ((info.name[nlen-2] == 'i') && (info.name[nlen-1] == 'o') ? "[95m" : ""), info.name, info.size >= 1024 ? info.size/1024 : info.size, info.size >= 1024 ? "KB" : "B");
-                strncat(fbuf, nbuf, 1024);
-                break;
-            }
-            case LFS_TYPE_DIR:
-            {
-                snprintf(nbuf, 64, "[94m%-30s[0m\n", info.name);
-                strncat(dbuf, nbuf, 1024);
+                printf("%s%-30s[0m %4lu %s\n", ((info.name[nlen-2] == 'i') && (info.name[nlen-1] == 'o') ? "[95m" : ""), info.name, info.size >= 1024 ? info.size/1024 : info.size, info.size >= 1024 ? "KB" : "B");
                 break;
             }
 
-            default:
-            {
-                snprintf(nbuf, 64, "[91m%-30s[0m %4lu %s\n", info.name, info.size >= 1024 ? info.size/1024 : info.size, info.size >= 1024 ? "KB" : "B");
-                strncat(fbuf, nbuf, 1024);
-                break;
-            }
+            default: break;
         }
     }
-    
-    Stdout_Push(dbuf);
-    Stdout_Push(fbuf);
 
     OnExit:
-        free(fbuf);
-        free(dbuf);
-        free(nbuf);
+        printf("[0m");
         lfs_dir_close(PList[ps].lfs_type, &d);
     OnError:
         FS_SetActivePartition(old_part);

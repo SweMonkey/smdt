@@ -8,12 +8,10 @@
 // Statistics
 u32 RXBytes = 0;
 u32 TXBytes = 0;
+u16 TxUpdate = 0;
 
 Buffer RxBuffer, TxBuffer;
 SM_Device DRV_UART;
-
-SM_File *rxbuf; // RxBuffer as an IO file
-SM_File *txbuf; // TxBuffer as an IO file
 
 NET_Connect_CB *ConnectCB = NULL;
 NET_Disconnect_CB *DisconnectCB = NULL;
@@ -33,7 +31,7 @@ void NET_RxIRQ()
     //RXBytes++;
 }
 
-inline void NET_SendChar(const u8 c)
+void NET_SendChar(const u8 c)
 {
     #ifdef EMU_BUILD
     return;
@@ -58,29 +56,30 @@ inline void NET_SendChar(const u8 c)
         );
     }
 
+    TxUpdate = 1;
     TXBytes++;
 }
 
-inline void NET_BufferChar(const u8 c)
+void NET_BufferChar(const u8 c)
 {    
     if ((vLineMode & LMSM_EDIT) == 0) NET_SendChar(c);
     else Buffer_Push(&TxBuffer, c);
 }
 
 // Pop and transmit data in TxBuffer
-inline void NET_TransmitBuffer()
+void NET_TransmitBuffer()
 {
     u8 data;
 
     while (Buffer_Pop(&TxBuffer, &data)) NET_SendChar(data);
 }
 
-inline void NET_SendString(const char *str)
+void NET_SendString(const char *str)
 {
     while (*str) NET_SendChar(*str++);
 }
 
-inline void NET_SendStringLen(const char *str, u16 len)
+void NET_SendStringLen(const char *str, u16 len)
 {
     for (u16 i = 0; i < len; i++)
     {

@@ -29,6 +29,9 @@ void UI_ToggleVisible(SM_Window *w);
 bool UI_GetVisible(SM_Window *w);
 
 void UI_RepaintWindow();
+void UI_RepaintRow(u8 row, u8 num);
+void UI_RepaintColumn(u8 column, u8 num);
+void UI_RepaintTile(u8 x, u8 y);
 
 void UI_SetWindowTitle(const char *title);
 void UI_CreateWindow(SM_Window *w, const char *title, UI_WindowFlags flags);
@@ -36,12 +39,16 @@ void UI_CreateWindow(SM_Window *w, const char *title, UI_WindowFlags flags);
 void UI_DrawText(u8 x, u8 y, u8 attribute, const char *text);
 void UI_ClearRect(u8 x, u8 y, u8 width, u8 height);
 void UI_FillRect(u8 x, u8 y, u8 width, u8 height, u8 fillbyte);
+void UI_SetTile(u8 x, u8 y, u8 tile);
+void UI_FillAttributeRect(u8 x, u8 y, u8 width, u8 height, u8 attribute);
+void UI_FillAttributeRow(u8 x1, u8 x2, u8 y, u8 attribute);
+void UI_SetAttribute(u8 x, u8 y, u8 attribute);
 void UI_DrawVLine(u8 x, u8 y, u8 height);
 void UI_DrawHLine(u8 x, u8 y, u8 width);
 void UI_DrawPanel(u8 x, u8 y, u8 width, u8 height);
 void UI_DrawGroupBox(u8 x, u8 y, u8 width, u8 height, const char *caption);
 void UI_DrawWindow(u8 x, u8 y, u8 width, u8 height, bool bChild, const char *title);
-void UI_DrawVScrollbar(u8 x, u8 y, u8 height, u16 min, u16 max, u16 pos);
+void UI_DrawVScrollbar(u8 x, u8 y, u8 height, u8 selected, u16 min, u16 max, u16 pos);
 void UI_DrawItemList(u8 x, u8 y, u8 width, u8 height, char *list[], u16 item_count, u16 scroll);
 void UI_DrawTextInput(u8 x, u8 y, u8 width, const char *caption, char str[], bool bShowCaret);
 void UI_DrawItemListSelect(u8 x, u8 y, u8 width, u8 height, const char *caption, char *list[], u8 item_count, u8 selected_item, UI_ItemListFlags flags);

@@ -30,7 +30,7 @@ Originial source at: https://github.com/b1tsh1ft3r/retro.link/tree/main/sega_gen
 #include "Utils.h"      // TRM
 #include "Network.h"    // RxBuffer/TxBuffer
 #include "XP_Network.h"
-#include "system/Stdout.h"
+#include "system/PseudoFile.h"
 
 
 #define RL_DLM 0x00

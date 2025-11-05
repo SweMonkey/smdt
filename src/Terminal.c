@@ -6,6 +6,7 @@
 #include "Network.h"
 #include "Cursor.h"
 #include "Screensaver.h"
+#include "Palette.h"
 
 #define TTY_CURSOR_X (((sv_Font?(sx << 2):(sx << 3))) + HScroll + 128)
 #define TTY_CURSOR_Y ((sy << 3) - VScroll + 128)
@@ -69,24 +70,12 @@ static const u16 pColorsHalf[16] =
     0x222, 0x337, 0x373, 0x377, 0x732, 0x737, 0x773, 0x777,   // Shadowed (For AA)
 };
 
-// Inverted light mode colours for 4x8 font
-/*static const u16 pInvColors4[16] =
-{
-    0x111, 0x006, 0x060, 0x066, 0x600, 0x606, 0x660, 0x666,   // Normal
-    0x222, 0x228, 0x282, 0x288, 0x821, 0x828, 0x882, 0x888,   // Highlighted
-};*/
-
 // Inverted light mode antialias colours for 4x8 font
 static const u16 pInvColorsDouble[16] =
 {
     0xccc, 0x00c, 0x0c0, 0x0cc, 0xc00, 0xc0c, 0xcc0, 0x444,   // Shadowed (For AA)
     0xeee, 0x66e, 0x6e6, 0x6ee, 0xe64, 0xe6e, 0xee6, 0x666,   // Shadowed (For AA)
 };
-/*static const u16 pInvColorsHalf[16] =
-{
-    0x000, 0x002, 0x020, 0x022, 0x200, 0x202, 0x220, 0x222,   // Shadowed (For AA)
-    0x000, 0x337, 0x373, 0x377, 0x732, 0x737, 0x773, 0x444,   // Shadowed (For AA)
-};*/
 
 // Palette and font lookup table
 static const u16 PF_Table[16] = 
@@ -246,8 +235,7 @@ void TTY_SetDarkColours()
     }
     else
     {
-        SetPalette(PAL2, pInvColors, DMA);
-        DMA_waitCompletion();
+        SetPalette(PAL2, pInvColors);
     }
 }
 
@@ -346,8 +334,7 @@ void TTY_ReloadPalette()
     }
     else        // 8x8
     {
-        SetPalette(PAL2, pColors, DMA);
-        DMA_waitCompletion();
+        SetPalette(PAL2, pColors);
     }
     
     SetColor( 0, sv_CBGCL); // VDP BG Colour
@@ -459,7 +446,6 @@ void TTY_SetFontSize(u8 size)
     // Setup cursor sprite
     SetSprite_Y(SPRITE_ID_CURSOR, spry);
     SetSprite_X(SPRITE_ID_CURSOR, sprx);
-    SetSprite_SIZELINK(SPRITE_ID_CURSOR, SPR_SIZE_1x1, 0);
     SetSprite_TILE(SPRITE_ID_CURSOR, LastCursor);
 }
 
@@ -712,16 +698,6 @@ void TTY_SetAttribute(u8 v)
         kprintf("N ColorFG: $%X", ColorFG);
         #endif
     }
-    else if ((v >= 40) && (v <= 47))
-    {
-        ColorBG = v - 40;
-
-        if (bIntense) ColorBG += 8; // Should this exist?
-
-        #ifdef ATT_LOGGING
-        kprintf("N ColorBG: $%X", ColorBG);
-        #endif
-    }
     // Light intensity color
     else if ((v >= 90) && (v <= 97))
     {
@@ -731,20 +707,11 @@ void TTY_SetAttribute(u8 v)
         kprintf("L ColorFG: $%X", ColorFG);
         #endif
     }
-    else if ((v >= 100) && (v <= 107))
-    {
-        ColorBG = v - 92;
-
-        #ifdef ATT_LOGGING
-        kprintf("L ColorBG: $%X", ColorBG);
-        #endif
-    }
 
     switch (v)
     {
         case 0:     // Reset
             ColorFG = CL_FG;//15;
-            ColorBG = CL_BG;//0;
 
             bIntense = FALSE;
             bInverse = FALSE;
@@ -811,14 +778,6 @@ void TTY_SetAttribute(u8 v)
 
             #ifdef ATT_LOGGING
             kprintf("Text FG color reset at $%lX", RXBytes);
-            #endif
-        break;
-
-        case 49:    // Reset BG color
-            ColorBG = CL_BG;
-
-            #ifdef ATT_LOGGING
-            kprintf("Text BG color reset at $%lX", RXBytes);
             #endif
         break;
 

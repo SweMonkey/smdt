@@ -5,7 +5,9 @@
 #include "Cursor.h"
 #include "DevMgr.h"
 #include "WinMgr.h"
-#include "system/Stdout.h"
+#include "Mouse.h"
+#include "system/PseudoFile.h"
+#include "system/Time.h"
 
 // https://vt100.net/docs/vt100-ug/chapter3.html
 // https://invisible-island.net/xterm/ctlseqs/ctlseqs.html
@@ -152,6 +154,27 @@ static u8 IAC_InSubNegotiation = 0;             // TRUE = Currently in a SB/SE b
 static u8 IAC_SubNegotiationOption = 0xFF;      // Current TO_xxx option to operate in a subnegotiation 
 static u8 IAC_SNSeq = 0;                        // Counter - where in "IAC_SubNegotiationBytes" we are
 static u8 IAC_SubNegotiationBytes[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};   // Recieved byte stream in a subnegotiation block
+
+// Mouse tracking
+static u32 PreviousFrame = 0;   // Frame tracker to make sure we don't sent mouse events to often
+static s16 MLastX, MLastY;      // Last reported X/Y mouse position
+typedef enum
+{
+    MT_ClickOnly = 0,
+    MT_DownUp    = 1,
+    MT_HighLight = 2,
+    MT_ClickDrag = 3,
+    MT_Movement  = 4
+} MT_Mode;  // Mouse tracking modes - mutually exclusive
+static MT_Mode MTrackMode = MT_ClickOnly;
+typedef enum
+{
+    MR_Default   = 0,
+    MR_Multibyte = 1,
+    MR_Digits    = 2,
+    MR_URXVT     = 3,
+} MR_Mode;  // Mouse reporting format
+static MR_Mode MReportFormat = MR_Default;
 
 // Misc
 static u8 CharMapSelection = 0;         // Character map selection (0 = Default extended ASCII, 1 = DEC Line drawing set)
@@ -332,6 +355,10 @@ void TELNET_Init(TTY_InitFlags tty_flags)
     bOSC_GetString = FALSE;
     bOSC_Parse = FALSE;
     bOSC_GetType = TRUE;
+
+    // Mouse tracking
+    MTrackMode = MT_ClickOnly;
+    MReportFormat = MR_Default;
 }
 
 void Telnet_Quit()
@@ -344,6 +371,68 @@ void Telnet_Quit()
 
     free(LabelStack);
     LabelStack = NULL;
+}
+
+void Telnet_MouseTrack()
+{
+    s16 MCurX = Mouse_GetX();
+    s16 MCurY = Mouse_GetY();
+
+    if (FrameElapsed(&PreviousFrame, 1) && bMouse && ((MCurX != MLastX) || (MCurY != MLastY)))
+    {
+        char str[16];
+        u16 len = 0;
+        u8 btn = 0;
+        u8 column = 0;
+        u8 row = 0;
+
+        switch (MTrackMode)
+        {
+            case MT_ClickOnly:
+                
+            break;
+
+            case MT_DownUp:
+            break;
+
+            case MT_HighLight:
+            break;
+
+            case MT_ClickDrag:
+            break;
+
+            case MT_Movement:
+                column = (MCurX / 8) + 1;
+                row = (MCurY / 8) + 1;
+            break;
+        
+            default:
+            break;
+        }
+        
+        switch (MReportFormat)
+        {
+            case MR_Default:        
+                len = sprintf(str, "[M%u%u%u", btn, column, row);
+                NET_SendStringLen(str, len);
+            break;
+            
+            case MR_Multibyte:
+            break;
+
+            case MR_Digits:
+            break;
+
+            case MR_URXVT:
+            break;
+        
+            default:
+            break;
+        }
+    }
+
+    MLastX = MCurX;
+    MLastY = MCurY;
 }
 
 inline u8 Find_NextTabStop()
@@ -1194,8 +1283,10 @@ static void DoEscape(u8 byte)
                     else if (ESC_Buffer[1] == '"')
                     {
                         u8 level = ESC_Param[0];
-                        // Not used, uncomment when its needed: 
-                        // u8 bit7 = ESC_Buffer[0] - 48;
+                        // Not used, remove ifdef when its needed:
+                        #ifdef ESC_LOGGING
+                        u8 bit7 = ESC_Buffer[0] - 48;
+                        #endif
 
                         if (level < 61) 
                         {
@@ -1216,8 +1307,10 @@ static void DoEscape(u8 byte)
                     // Request Mode (RQM)
                     else if (ESC_Buffer[1] == '$')
                     {
-                        // Not used, uncomment when its needed: 
-                        // u8 data_end = ESC_Buffer[0] - 48;
+                        // Not used, remove ifdef when its needed:
+                        #ifdef ESC_LOGGING
+                        u8 data_end = ESC_Buffer[0] - 48;
+                        #endif
                         
                         #ifdef ESC_LOGGING
                         kprintf("[93mRequest Mode (RQM): %u[0m", data_end);
@@ -2677,11 +2770,31 @@ static void DoEscape(u8 byte)
                     break;
 
                     case 1000:  // Mouse Down+Up Tracking
+                        MTrackMode = MT_DownUp;
+                    break;
+                    
+                    case 1001:  // Mouse Highlight Mode
+                        MTrackMode = MT_HighLight;
+                    break;
+                    
                     case 1002:  // Mouse Click and Dragging Tracking
+                        MTrackMode = MT_ClickDrag;
+                    break;
+
                     case 1003:  // Mouse Tracking with Movement
+                        MTrackMode = MT_Movement;
+                    break;
+
                     case 1005:  // Mouse Report Format multibyte
+                        MReportFormat = MR_Multibyte;
+                    break;
+
                     case 1006:  // Mouse Reporting Format Digits
+                        MReportFormat = MR_Digits;
+                    break;
+
                     case 1015:  // Mouse Reporting Format URXVT
+                        MReportFormat = MR_URXVT;
                         #ifdef ESC_LOGGING
                         kprintf("[93mAttempt at activating mouse related mode: %uh (Not implemented)[0m", QSeqNumber);
                         #endif

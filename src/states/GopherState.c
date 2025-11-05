@@ -3,9 +3,10 @@
 #include "Terminal.h"
 #include "Telnet.h"
 #include "Cursor.h"
-#include "system/Stdout.h"
+#include "system/PseudoFile.h"
 #include "Utils.h"
 #include "Input.h"
+#include "Mouse.h"
 
 #ifdef EMU_BUILD
 #include "kdebug.h"
@@ -13,11 +14,11 @@ asm(".global gopherdump\ngopherdump:\n.incbin \"tmp/streams/rx_floodgap2.log\"")
 extern const unsigned char gopherdump[];
 #endif
 
-//#ifndef EMU_BUILD
+#ifndef EMU_BUILD
 static u8 rxdata;
 static u8 rxdata1;
 static u8 rxdata2;
-//#endif
+#endif
 
 #define B_LINEBUF_LEN 200
 #define B_PAGEROWS 180
@@ -68,7 +69,7 @@ u16 Enter_Gopher(u8 argc, char *argv[])
         kprintf("Failed to allocate memory for LineBuf");
         #endif
 
-        Stdout_Push("[91mGopher Client: Failed to allocate memory\n for LineBuf![0m\n");
+        printf("[91mGopher Client: Failed to allocate memory\n for LineBuf![0m\n");
         return EXIT_FAILURE;
     }
     //memset(LineBuf, 0, B_LINEBUF_LEN);
@@ -81,7 +82,7 @@ u16 Enter_Gopher(u8 argc, char *argv[])
         kprintf("Failed to allocate memory for PageBuffer");
         #endif
 
-        Stdout_Push("[91mGopher Client: Failed to allocate memory for PageBuffer![0m\n");
+        printf("[91mGopher Client: Failed to allocate memory for PageBuffer![0m\n");
         printf("[91mFree: %u - LFree: %u - Needed: %u[0m\n", MEM_getFree(), MEM_getLargestFreeBlock(), B_PAGEBUF_LEN);
         return EXIT_FAILURE;
     }
@@ -95,7 +96,7 @@ u16 Enter_Gopher(u8 argc, char *argv[])
         kprintf("Failed to allocate memory for LFPos");
         #endif
 
-        Stdout_Push("[91mGopher Client: Failed to allocate memory\n for LFPos![0m\n");
+        printf("[91mGopher Client: Failed to allocate memory\n for LFPos![0m\n");
         return EXIT_FAILURE;
     }
     //memset(LFPos, 0, B_PAGEROWS*2);
@@ -105,10 +106,15 @@ u16 Enter_Gopher(u8 argc, char *argv[])
     PointerY_A = 14;
     PointerX = 160;
 
-    SetSprite_Y(SPRITE_ID_POINTER, (PointerY_A*8)+142);
-    SetSprite_SIZELINK(SPRITE_ID_POINTER, SPR_SIZE_1x1, 0);
-    SetSprite_TILE(SPRITE_ID_POINTER, 0x6017);  // 0x6000= Inverted mouse, 0x2000= Normal mouse
-    SetSprite_X(SPRITE_ID_POINTER, PointerX+128);
+    if (!bMouse)
+    {
+        u16 ps = (sv_PointerStyle ? 0x6000 : 0x2000) | 0x8017;  // 0x6000 = PAL3, 0x2000 = PAL1, 0x8000 = High prio, 0x17 = pointer tile
+
+        SetSprite_Y(SPRITE_ID_POINTER, (PointerY_A*8)+142);
+        SetSprite_SIZELINK(SPRITE_ID_POINTER, SPR_SIZE_1x1, 0);
+        SetSprite_TILE(SPRITE_ID_POINTER, ps);
+        SetSprite_X(SPRITE_ID_POINTER, PointerX+128);
+    }
 
     // Hide terminal cursor
     SetSprite_TILE(SPRITE_ID_CURSOR, 0x16);
@@ -154,6 +160,12 @@ void Exit_Gopher()
 
     bDoCursorBlink = TRUE;
     
+    if (!bMouse)
+    {
+        SetSprite_Y(SPRITE_ID_POINTER, 0);
+        SetSprite_X(SPRITE_ID_POINTER, 128);
+    }
+
     // Show terminal cursor
     SetSprite_TILE(SPRITE_ID_CURSOR, LastCursor);
 

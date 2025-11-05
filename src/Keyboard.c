@@ -5,6 +5,7 @@
 #include "Terminal.h"
 #include "Input.h"
 #include "Network.h"
+#include "system/PseudoFile.h"
 #include "WinMgr.h"
 #include "Utils.h"
 
@@ -251,11 +252,13 @@ void KB_Interpret_Scancode(u8 scancode)
         u8 key = SCTablePtr[sv_KeyLayout][0][scancode];
 
         NET_BufferChar(key & 0x1F); // Add control byte to TxBuffer
+        //Buffer_Push(&StdinBuffer, key & 0x1F);
 
         if (!vDoEcho) 
         {
             TTY_PrintChar('^');     // Print ^ to TTY if ECHO is false
             TTY_PrintChar(key);
+            //Buffer_Push(&StdinBuffer, key);
         }
         
         return;
@@ -271,10 +274,13 @@ void KB_Interpret_Scancode(u8 scancode)
     if (isPrintable(key) && !bWindowActive)
     {
         NET_BufferChar(key);                // Send key to TxBuffer
+        //Buffer_Push(&StdinBuffer, key);
+
         if (!vDoEcho) TTY_PrintChar(key);   // Only print characters if ECHO is false
     }
     else if (isPrintable(key) && (WinMgr_GetCurrentWinID() == W_FavView))
     {
         Buffer_Push(&TxBuffer, key);
+        //Buffer_Push(&StdinBuffer, key);
     }
 }

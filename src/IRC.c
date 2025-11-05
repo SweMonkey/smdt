@@ -6,9 +6,10 @@
 #include "Network.h"
 #include "Cursor.h"
 #include "StateCtrl.h"
+#include "Palette.h"
 #include "../res/system.h"
 
-#include "system/Stdout.h"
+#include "system/PseudoFile.h"
 #include "system/Time.h"
 
 /*
@@ -104,8 +105,7 @@ void IRC_SetPalette()
     }
     else
     {
-        SetPalette(PAL2, pColors, DMA);
-        DMA_waitCompletion();
+        SetPalette(PAL2, pColors);
     }
 }
 
@@ -143,7 +143,7 @@ u16 IRC_Reset()
             kprintf("Failed to allocate memory for PG_Buffer[%u]", ch);
             #endif
             
-            Stdout_Push("[91mIRC Client: Failed to allocate memory for PG_Buf![0m\n");
+            printf("[91mIRC Client: Failed to allocate memory for PG_Buf![0m\n");
             return EXIT_FAILURE;
         }
         TMB_SetActiveBuffer(PG_Buffer[ch]);
@@ -160,7 +160,7 @@ u16 IRC_Reset()
         kprintf("Failed to allocate memory for LineBuf");
         #endif
 
-        Stdout_Push("[91mIRC Client: Failed to allocate memory for LineBuf![0m\n");
+        printf("[91mIRC Client: Failed to allocate memory for LineBuf![0m\n");
         return EXIT_FAILURE;
     }
     memset(LineBuf, 0, sizeof(struct s_linebuf));
@@ -173,7 +173,7 @@ u16 IRC_Reset()
         kprintf("Failed to allocate memory for RXString");
         #endif
 
-        Stdout_Push("[91mIRC Client: Failed to allocate memory for RXString![0m\n");
+        printf("[91mIRC Client: Failed to allocate memory for RXString![0m\n");
         return EXIT_FAILURE;
     }
     memset(RXString, 0, B_RXSTRING_LEN);
@@ -206,7 +206,7 @@ u16 IRC_Reset()
         kprintf("Failed to allocate memory for PG_UserList");
         #endif
 
-        Stdout_Push("[91mFailed to allocate memory for PG_UserList![0m\n");
+        printf("[91mFailed to allocate memory for PG_UserList![0m\n");
         return EXIT_FAILURE;
     }
 
@@ -228,22 +228,24 @@ u16 IRC_Reset()
     // First 9 textboxes
     for (u8 i = 0; i < 9; i++)
     {
-        SetSprite_Y(i+2, spr_y);
-        SetSprite_SIZELINK(i+2, SPR_WIDTH_4x1, i+3);
-        SetSprite_TILE(i+2, 0x6000+TTS_VRAMIDX+(i*4));  // 0x6000 = PAL3
-        SetSprite_X(i+2, spr_x+(i*32));
+        SetSprite_Y(i+3, spr_y);
+        SetSprite_SIZELINK(i+3, SPR_WIDTH_4x1, i+4);
+        SetSprite_TILE(i+3, 0x6000+TTS_VRAMIDX+(i*4));  // 0x6000 = PAL3
+        SetSprite_X(i+3, spr_x+(i*32));
     }
 
     // Final 10th textbox
-    SetSprite_Y(11, spr_y);
-    SetSprite_SIZELINK(11, SPR_WIDTH_3x1, 0);
-    SetSprite_TILE(11, 0x6000+TTS_VRAMIDX+36);  // 0x6000 = PAL3
-    SetSprite_X(11, spr_x+288);
+    SetSprite_Y(12, spr_y);
+    SetSprite_SIZELINK(12, SPR_WIDTH_3x1, 0);
+    SetSprite_TILE(12, 0x6000+TTS_VRAMIDX+36);  // 0x6000 = PAL3
+    SetSprite_X(12, spr_x+288);
 
     // Setup cursor sprite y position and tile
     SetSprite_Y(SPRITE_ID_CURSOR, spr_y);
     SetSprite_TILE(SPRITE_ID_CURSOR, LastCursor);
-    //SetSprite_SIZELINK(SPRITE_ID_CURSOR, 0, 1);
+
+    // Update mousepointer sprite link to first text box sprite (mousepointer being the last permanent sprite that is always active)
+    SetSprite_SIZELINK(SPRITE_ID_POINTER, SPR_SIZE_1x1, 3);
 
     return EXIT_SUCCESS;
 }
@@ -253,6 +255,9 @@ void IRC_Exit()
     char buf[64];
     sprintf(buf, "QUIT %s\n", sv_QuitStr);
     NET_SendString(buf);
+
+    // Revert mousepointer sprite link back to the start of the list (mousepointer being the last permanent sprite that is always active)
+    SetSprite_SIZELINK(SPRITE_ID_POINTER, SPR_SIZE_1x1, 0);
 
     // Free previously allocated memory. DO NOT TRY TO DEBUG IN EMULATORS, IT WILL MISLEAD AND CAUSE YOU HARM.
     for (u8 ch = 0; ch < IRC_MAX_CHANNELS; ch++)

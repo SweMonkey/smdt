@@ -1,3 +1,28 @@
+v0.33.2:
+Terminal: Removed BG colour attribute stuff, no point in parsing and interpreting it when it wont ever be used.
+Telnet: Initial mouse tracking code added, but for the most part disabled until completed.
+System: Palettes and colours are now stored in an array in RAM and in case it has been modified then that array is DMA'd to CRAM in vblank.
+System: Fixed a bug in RevertState which caused an infinite loop, the system would abort state switch and retry infinitely. Fix: Make sure VBlank can't run during early state switch.
+System: Pseudofiles implemented; stdout, stdin, stderr (residing in /sram/system/) now works more unix like. 
+        All terminal shell text is now piped into the stdout.io pseudofile by default ( internal printf is actually fprintf(stdout, ...) ). 
+        You can now pipe any command output into a file by doing this: "somecommand > outfile.txt" or appending: "echo appending this text >> existingfile.txt"
+        Serial input/output is split into 2 pseduofiles, tty_in.io and tty_out.io.
+        stdin exists but is not properly implemented yet.
+Network: Fixed upload icon. It was always set to idle state even when it should be set to "on".
+Drivers: Added Mega Mouse support.
+UI: Removed flickering when navigating the Quick Menu.
+UI: Added mouse support to the GUI... mostly, irc nick window do not yet support mouse tracking and bookmark window has some bugs (such as clicking items in the list ignores scrollbar value).
+UI: Misc UI helper functions added.
+Misc: The boldfont variable is now properly reset when selected font is any but the bold font.
+Misc: Shuffled some stuff around from VBlank handler to mainloop.
+Misc: Added a http webserver... because why not, extremely barebones and -may- does contain bugs. Create a default config and www directory with the command "test -www_create" and start the server with the command "webserv".
+Misc: Removed sprite linking setup from screensaver code. 
+Misc: Timer functions added; FrameElapsed() and SecondElapsed(), used to detect when a frame or a second has elapsed.
+Misc: Testing out new status bar icons, I may revert these in the future... Source for icon pack: https://shmorgus.itch.io/micro-icon-pack (License: CC0)
+
+Alot has changed in this update, expect bugs!
+
+
 v0.33.0:
 Terminal: Shell fixes; Running commands will now be "delayed" to run and all text buffering will be dealt with properly (pre/during/post running).
 Telnet: Added scrollock functionality, it will halt printing to screen but beware that the rx buffer may fill up and drop incoming data!

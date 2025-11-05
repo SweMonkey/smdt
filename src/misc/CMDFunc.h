@@ -52,5 +52,6 @@ void CMD_Date(u8 argc, char *argv[]);
 void CMD_About(u8 argc, char *argv[]);
 
 void CMD_PSGBeep(u8 argc, char *argv[]);
+void CMD_HTTPWeb(u8 argc, char *argv[]);
 
 #endif // CMDFUNC_H_INCLUDED

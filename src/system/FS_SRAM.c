@@ -1,6 +1,6 @@
 #include "Filesystem.h"
 #include "FS_SRAM.h"
-#include "Stdout.h"
+#include "PseudoFile.h"
 #include "Network.h"
 
 lfs_t lfs_SRAM;
@@ -97,12 +97,6 @@ bool FS_Mount_SRAM()
 
             FS_MkDir("/sram/system");
             FS_MkDir("/sram/system/tmp");
-
-            rxbuf = F_Open("/sram/system/rxbuffer.io", LFS_O_CREAT | LFS_O_TRUNC  | LFS_O_RDONLY | LFS_O_IO);
-            txbuf = F_Open("/sram/system/txbuffer.io", LFS_O_CREAT | LFS_O_TRUNC  | LFS_O_WRONLY | LFS_O_IO);
-            stdout = F_Open("/sram/system/stdout.io",  LFS_O_CREAT | LFS_O_TRUNC  | LFS_O_RDWR   | LFS_O_IO);    // LFS_O_WRONLY
-            stdin = F_Open("/sram/system/stdin.io",    LFS_O_CREAT | LFS_O_RDONLY | LFS_O_IO);
-            stderr = F_Open("/sram/system/stderr.io",  LFS_O_CREAT | LFS_O_TRUNC  | LFS_O_RDWR   | LFS_O_IO);
 
             goto Success;
         }

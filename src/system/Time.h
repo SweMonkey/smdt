@@ -31,4 +31,7 @@ u32 GetTimeSinceLastSync();
 u32 GetTimeSync();
 u8 DoTimeSync(char *server);
 
+bool FrameElapsed(u32 *previous, u16 num);
+bool SecondElapsed(u32 *previous, u16 num);
+
 #endif // TIME_H_INCLUDED

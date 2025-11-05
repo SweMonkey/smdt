@@ -4,20 +4,20 @@
 #include <genesis.h>
 
 // Title bar prefix
-#define STATUS_VER_STR "v0.33.0"
+#define STATUS_VER_STR "v0.33.2"
 #define STATUS_TEXT "SMDT v33"
 #define STATUS_TEXT_SHORT "SMDT"
 
 #define SMDT_VMAJOR_INT 0
 #define SMDT_VMINOR_INT 33
-#define SMDT_VREV_INT 0
+#define SMDT_VREV_INT 2
 
 // VRAM memory addresses for various graphics, in tile units (/32)
 #define AVR_BGBLOCK 0       // $0000 - $01FF
 #define AVR_CURSOR  0x10    // $0200 - $02DF
 #define AVR_POINTER 0x17    // $02E0 - $02FF
 #define AVR_ICONS   0x18    // $0300 - $03FF
-#define AVR_SCRSAV  0x20    // $0400 - $05FF
+#define AVR_SCRSAV  0x30    // $0400 - $05FF
 #define AVR_FONT0   0x40    // $0800 - $47FF
 #define AVR_FONT1   0x240   // $4800 - $87FF
 #define AVR_UI      0x440   // $8800 - $9FFF
@@ -83,7 +83,6 @@
 
 extern bool bPALSystem;
 extern bool bHardReset;
-extern s8 sv_CBrightness;
 
 typedef u16 U16Callback(void);
 typedef bool BoolCallback(void);
@@ -113,7 +112,6 @@ char *strtok(char *s, char d);
 
 char *strncat(char *to, const char *from, u16 num);
 u16 snprintf(char *buffer, u16 size, const char *fmt, ...) __attribute__ ((format (printf, 3, 4)));
-u16 printf(const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
 
 void *memmove(void *dest, const void *src, u32 n);
 s32 memcmp(const void *s1, const void *s2, u32 n);
@@ -137,8 +135,5 @@ const char *strchr(const char *str, int character);
 s16 strncmp(const char *str1, const char *str2, u32 n);
 
 void *realloc(void *ptr, u16 old_size, u16 new_size);
-
-void SetColor(u16 index, u16 value);
-void SetPalette(u16 numPal, const u16 *pal, TransferMethod tm);
 
 #endif // UTILS_H_INCLUDED

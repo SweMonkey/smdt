@@ -7,13 +7,15 @@
 #include "Terminal.h"
 #include "ConfigFile.h"
 #include "WinMgr.h"
+#include "Palette.h"
+#include "HTTP_Webserver.h"
 
 #include "devices/XP_Network.h"
 #include "devices/Keyboard_PS2.h"
 
 #include "misc/VarList.h"
 
-#include "system/Stdout.h"
+#include "system/PseudoFile.h"
 #include "system/Time.h"
 #include "system/File.h"
 #include "system/Filesystem.h"
@@ -56,6 +58,7 @@ SM_CMDList CMDList[] =
     {"uptime",  CMD_Uptime,         "- Show system uptime"},
     {"date",    CMD_Date,           "- Show/Set date and time"},
     {"psgbeep", CMD_PSGBeep,        "- Play PSG beep"},
+    {"webserv", CMD_HTTPWeb,        "- Start HTTP webserver"},
     {"about",   CMD_About,          "- About SMDT/Licenses"},
     {"help",    CMD_Help,           "- This command"},
     {0, 0, 0}  // List terminator
@@ -77,7 +80,7 @@ void CMD_LaunchGopher(u8 argc, char *argv[])
     #ifndef EMU_BUILD
     if (argc < 2)
     {
-        Stdout_Push("[91mNo address specified![0m\n");
+        printf("[91mNo address specified![0m\n");
         return;
     }
     #endif
@@ -87,36 +90,30 @@ void CMD_LaunchGopher(u8 argc, char *argv[])
 
 void CMD_SetAttr(u8 argc, char *argv[])
 {
-    char tmp[32];
-
     switch (argc)
     {
         case 2:
-            sprintf(tmp, "[%um\n", atoi(argv[1]));
-            Stdout_Push(tmp);
+            printf("[%um\n", atoi(argv[1]));
         break;
         case 3:
-            sprintf(tmp, "[%u;%um\n", atoi(argv[1]), atoi(argv[2]));
-            Stdout_Push(tmp);
+            printf("[%u;%um\n", atoi(argv[1]), atoi(argv[2]));
         break;
     
         default:
-            Stdout_Push("Set terminal attribute\n\nUsage:\n");
-            Stdout_Push(argv[0]);
-            Stdout_Push(" <number> <number>\n");
-            Stdout_Push(argv[0]);
-            Stdout_Push(" <number>\n");
+            printf("Set terminal attribute\n\nUsage:\n");
+            printf("%s <number> <number>\n", argv[0]);
+            printf("%s <number>\n", argv[0]);
         return;
     }
 
-    Stdout_Push("Attributes set.\n");
+    printf("Attributes set.\n");
 }
 
 void CMD_Echo(u8 argc, char *argv[]) 
 {
     if (argc < 2)
     {
-        Stdout_Push("Usage:\necho [string or $variable]... [> filename]\n");
+        printf("Usage:\necho [string or $variable]... [> filename]\n");
         return;
     }
 
@@ -126,30 +123,8 @@ void CMD_Echo(u8 argc, char *argv[])
 
     memset(buffer, 0, 256);
 
-    // Pointer for the output file, initially set to NULL.
-    SM_File *file = NULL;
-    int end_index = argc;
-
-    // Check if the second-to-last argument is ">" indicating file redirection.
-    if (argc >= 3 && strcmp(argv[argc - 2], ">") == 0)
-    {
-        // Open the file specified as the last argument for writing.
-        char *fn_buf = malloc(FILE_MAX_FNBUF);
-        FS_ResolvePath(argv[argc - 1], fn_buf);
-        file = F_Open(fn_buf, FM_CREATE | FM_WRONLY);
-        free(fn_buf);
-
-        if (file == NULL)
-        {
-            Stdout_Push("Error opening file");
-            return;
-        }
-        // Update the end index to exclude the ">" and filename arguments.
-        end_index = argc - 2;
-    }
-
-    // Iterate through the arguments and print them to the chosen output (screen or file).
-    for (int i = 1; i < end_index; i++)
+    // Iterate through the arguments and print them
+    for (int i = 1; i < argc; i++)
     {
         if (argv[i][0] == '$') 
         {
@@ -173,38 +148,25 @@ void CMD_Echo(u8 argc, char *argv[])
         }
 
         // Add a space between arguments, except for the last one.
-        if (i < end_index - 1)
+        if (i < argc - 1)
         {
             strncat(buffer, " ", 256);
         }
     }
 
-    if (file)
-    {
-        F_Write(buffer, strlen(buffer), 1, file);
-        F_Close(file);
-    }
-    else
-    {
-        Stdout_Push(buffer);
-        Stdout_Push("\n");
-        Stdout_Flush();
-    }
-
+    printf("%s\n", buffer);
     free(buffer);
+
     return;
 }
 
 void CMD_KeyboardSend(u8 argc, char *argv[])
 {
-    char tmp[64];
-
     if (argc < 2) 
     {
-        Stdout_Push("Send command to keyboard\n\nUsage:\n");
-        Stdout_Push(argv[0]);
-        Stdout_Push(" <byte 1> <byte 2> <...>\n\n");
-        Stdout_Push("Byte= decimal number between 0 and 255\n");
+        printf("Send command to keyboard\n\nUsage:\n");
+        printf("%s <byte 1> <byte 2> <...>\n\n", argv[0]);
+        printf("Byte= decimal number between 0 and 255\n");
         return;
     }
 
@@ -216,13 +178,11 @@ void CMD_KeyboardSend(u8 argc, char *argv[])
         kbcmd = atoi(argv[i]);
         ret = 0;
 
-        sprintf(tmp, "Sending command $%X to keyboard...\n", kbcmd);
-        Stdout_Push(tmp);
+        printf("Sending command $%X to keyboard...\n", kbcmd);
         
         ret = KB_PS2_SendCommand(kbcmd);
         
-        sprintf(tmp, "Recieved byte $%X from keyboard   \n", ret);
-        Stdout_Push(tmp);
+        printf("Recieved byte $%X from keyboard   \n", ret);
         waitMs(2);
     }
 }
@@ -231,7 +191,7 @@ void CMD_Help(u8 argc, char *argv[])
 {
     u16 i = 0;
     
-    Stdout_Push("Commands available:\n\n");
+    printf("Commands available:\n\n");
 
     while (CMDList[i].id != 0)
     {
@@ -245,7 +205,7 @@ void CMD_xport(u8 argc, char *argv[])
 {
     if (argc == 1)
     {
-        Stdout_Push("xPort debug\n\nUsage:\n\
+        printf("xPort debug\n\nUsage:\n\
 xport enter       - Enter monitor mode\n\
 xport exit        - Exit monitor mode\n\
 xport <string>    - Send string to xPort\n\
@@ -422,20 +382,16 @@ void CMD_UName(u8 argc, char *argv[])
 
 void CMD_SetConn(u8 argc, char *argv[])
 {
-    char tmp[64];
-
     if (argc < 2) 
     {
-        Stdout_Push("Set connection time out\n\nUsage:\nsetcon <number of ticks>\n\n");
-        sprintf(tmp, "Current time out: %lu ticks\n", sv_ConnTimeout);
-        Stdout_Push(tmp);
+        printf("Set connection time out\n\nUsage:\nsetcon <number of ticks>\n\n");
+        printf("Current time out: %lu ticks\n", sv_ConnTimeout);
         return;
     }
 
     sv_ConnTimeout = atoi32(argv[1]);
 
-    sprintf(tmp, "Connection time out set to %lu\n", sv_ConnTimeout);
-    Stdout_Push(tmp);
+    printf("Connection time out set to %lu\n", sv_ConnTimeout);
 }
 
 void CMD_ClearScreen(u8 argc, char *argv[])
@@ -450,10 +406,10 @@ void CMD_SetVar(u8 argc, char *argv[])
 {
     if ((argc < 3) && (strcmp(argv[1], "-list")))
     {
-        Stdout_Push("Set variable\n\nUsage:\n\n");
-        Stdout_Push("setvar <variable_name> <value>\n");
-        Stdout_Push("setvar -list\n");
-        Stdout_Push("setvar -list <variable_name>\n");
+        printf("Set variable\n\nUsage:\n");
+        printf("setvar <variable_name> <value>\n");
+        printf("setvar -list\n");
+        printf("setvar -list <variable_name>\n");
         return;
     }
     else if ((argc >= 2) && (strcmp(argv[1], "-list") == 0))
@@ -490,7 +446,7 @@ void CMD_SetVar(u8 argc, char *argv[])
             i++;
         }
 
-        Stdout_Push("\n[96mNote: Changes to variables may not take effect until you save and reboot.[0m\n");
+        printf("\n[96mNote: Changes to variables may not take effect until you save and reboot.[0m\n");
 
         return;
     }
@@ -590,13 +546,13 @@ void CMD_Free(u8 argc, char *argv[])
     if ((argc > 1) && (strcmp(argv[1], "-defrag") == 0))
     {
         MEM_pack();
-        Stdout_Push("Defrag complete.\n");
+        printf("Defrag complete.\n");
         return;
     }
 
     if (bMegaCD)
     {
-        Stdout_Push("\n─ Mega Drive ──────────────────────────\n");
+        printf("\n─ Mega Drive ──────────────────────────\n");
     }
 
     // May need an "else print \n" here?
@@ -610,13 +566,13 @@ void CMD_Free(u8 argc, char *argv[])
     u16 b = MEM_getAllocated()/1650;
     u16 c = (65536/1650)-a-b;
 
-    Stdout_Push("\n[32m");
-    for (u8 i = 0; i < a; i++) Stdout_Push("█");    // Total Free
-    Stdout_Push("[31m");
-    for (u8 i = 0; i < b; i++) Stdout_Push("█");    // Used
-    Stdout_Push("[94m");
-    for (u8 i = 0; i < c; i++) Stdout_Push("▒");    // System reserved
-    Stdout_Push("[0m\n");
+    printf("\n[32m");
+    for (u8 i = 0; i < a; i++) printf("█");    // Total Free
+    printf("[31m");
+    for (u8 i = 0; i < b; i++) printf("█");    // Used
+    printf("[94m");
+    for (u8 i = 0; i < c; i++) printf("▒");    // System reserved
+    printf("[0m\n");
 
 
     if (bMegaCD)
@@ -631,14 +587,14 @@ void CMD_Free(u8 argc, char *argv[])
         b = 0;
         c = (524288/13200)-a-b;
 
-        Stdout_Push("\n[32m");
-        for (u8 i = 0; i < a; i++) Stdout_Push("█");
-        Stdout_Push("[31m");
-        for (u8 i = 0; i < b; i++) Stdout_Push("█");
-        Stdout_Push("[0m\n");
+        printf("\n[32m");
+        for (u8 i = 0; i < a; i++) printf("█");
+        printf("[31m");
+        for (u8 i = 0; i < b; i++) printf("█");
+        printf("[0m\n");
     }
     
-    Stdout_Push("\n─ Info ────────────────────────────────\n");
+    printf("\n─ Info ────────────────────────────────\n");
 
     printf("Run \"%s -defrag\" for memory defrag.\n", argv[0]);
 }
@@ -657,7 +613,7 @@ void CMD_SaveCFG(u8 argc, char *argv[])
 
 void CMD_Test(u8 argc, char *argv[])
 {
-    Stdout_Push("[91mWarning: The test command may cause side effects on SMDT operation.\nIt may outright crash your system depending on the parameters given![0m\n");
+    printf("[91mWarning: The test command may cause side effects on SMDT operation.\nIt may outright crash your system depending on the parameters given![0m\n");
 
     /*if ((argc > 1) && (strcmp("-test1arg", argv[1]) == 0))
     {
@@ -669,8 +625,43 @@ void CMD_Test(u8 argc, char *argv[])
         return;
     }*/
 
+    if ((argc > 1) && (strcmp("-www_create", argv[1]) == 0))
+    {
+        char index200[] = "<!doctype html><html lang=\"en\"><head><meta http-equiv=\"Content-Type\" content=\"text/html;charset=ISO-8859-1\"><title>SMDT WebServer</title><style>body{min-height: 100vh;display: flex;flex-direction: column;}footer{margin-top: auto;text-align: center;}</style></head><body><h1>Hello world from a http webserver running on a Mega Drive!</h1><br><br><p>This is the default index page located at /sram/www/index.html</p><footer><p>SMDT HTTP WebServer v1.0</p></footer></body></html>";
+        char index404[] = "<!doctype html><html lang=\"en\"><head><meta http-equiv=\"Content-Type\" content=\"text/html;charset=ISO-8859-1\"><title>404 Page Not Found</title><style>body{min-height: 100vh;display: flex;flex-direction: column;}footer{margin-top: auto;text-align: center;}</style></head><body><center><h1><br><br>404 Page not found</h1></center><footer><p>SMDT HTTP WebServer v1.0</p></footer></body></html>";
+        SM_File *f;
+
+        FS_MkDir("/sram/www");
+
+        f = F_Open("/sram/www/index.html", FM_CREATE | FM_RDWR);
+        F_Write(index200, strlen(index200), 1, f);
+        F_Close(f);
+
+        f = F_Open("/sram/www/404.html", FM_CREATE | FM_RDWR);
+        F_Write(index404, strlen(index404), 1, f);
+        F_Close(f);
+
+        return;
+    }
+
+    if ((argc > 1) && (strcmp("-www_test", argv[1]) == 0))
+    {        
+        char index200[] = "<html><head><title>SMDT WebServer</title><style>body{min-height: 100vh;display: flex;flex-direction: column;}footer{margin-top: auto;text-align: center;}</style></head><body><h1>SMDT Webserver</h1><br><br><img src=\"favicon.ico\" alt=\"favicon goes here\"><footer><p>SMDT HTTP WebServer v1.0</p></footer></body></html>";
+        SM_File *f;
+
+        FS_MkDir("/sram/www");
+
+        f = F_Open("/sram/www/image_test.html", FM_CREATE | FM_RDWR);
+        F_Write(index200, strlen(index200), 1, f);
+        F_Close(f);
+
+        return;
+    }
+
     if ((argc > 1) && (strcmp("-force_xport", argv[1]) == 0))
     {
+        printf("Forcing xport...\n");
+
         DRV_UART.Id.sName = "xPort UART";
 
         *((vu8*) DRV_UART.SCtrl) = 0x38;
@@ -686,6 +677,56 @@ void CMD_Test(u8 argc, char *argv[])
         NET_SetPingFunc(XPN_PingIP);
     }
     
+    if ((argc > 1) && (strcmp("-bktxt", argv[1]) == 0))
+    {
+        Stdout_Flush();
+        sv_Font = 0;
+        sv_BoldFont = FALSE;
+        TTY_Init(TF_ClearScreen | TF_ReloadFont);
+        TRM_SetWinHeight(0);
+        SetColor( 0, 0x8E6);
+        SetColor( 4, 0);
+        SetColor(17, 0x8E6);
+        SetColor(50, 0x8E6);
+        SetColor(39, 0);
+        printf("────────────────────────────────────────\n\n");
+        printf(" SEGA SC-3000 BASIC Level 3 ver 1.0   \n\n");
+        printf("    Export Version With Diereses      \n\n");
+        printf("     Copyright 1983 (C) by NITEC      \n\n");
+        printf("────────────────────────────────────────\n\n");
+        printf(" %u Bytes free\n", MEM_getFree());
+        printf("Ready\n\r");
+
+        Stdout_Flush();
+
+        while (1)
+        {
+            SYS_doVBlankProcess();
+        }        
+
+        return;
+    }
+
+    if ((argc > 3) && (strcmp("-setcl", argv[1]) == 0))
+    {
+        u16 idx = atoi16(argv[2]);
+        u16 cl  = atoi16(argv[3]);
+        SetColor(idx, cl);
+        return;
+    }
+
+    if ((argc > 1) && (strcmp("-dmouse", argv[1]) == 0))
+    {
+        bMouse = FALSE;
+    }
+
+    if ((argc > 1) && (strcmp("-dmclock", argv[1]) == 0))
+    {
+        printf("Z80 & PSG clock set to 7.6 MHz\n\r");
+        *((vu32*) 0xC00018) = 0x100;   // Set 
+        *((vu16*) 0xC0001C) = 1;       // Set 
+    }
+
     if ((argc > 1) && (strcmp("-illegal", argv[1]) == 0))
     {
         asm("illegal");
@@ -703,9 +744,15 @@ void CMD_Test(u8 argc, char *argv[])
         return;
     }
 
-    if ((argc > 1) && (strcmp("-fprintf", argv[1]) == 0))
+    if ((argc > 1) && (strcmp("-fpstdout", argv[1]) == 0))
     {
         F_Printf(stdout, "Hello, is this thing on? %s\n", "maybe...");
+        return;
+    }
+
+    if ((argc > 1) && (strcmp("-fptx", argv[1]) == 0))
+    {
+        F_Printf(tty_out, "Hello, is this thing on? %s\n", "maybe...");
         return;
     }
 
@@ -715,8 +762,8 @@ void CMD_Test(u8 argc, char *argv[])
 
         kprintf("n= %u", n);
 
-        if (n == 1) Stdout_Push("[?1049h");
-        else Stdout_Push("[?1049l");
+        if (n == 1) printf("[?1049h");
+        else printf("[?1049l");
 
         Stdout_Flush();
 
@@ -727,45 +774,45 @@ void CMD_Test(u8 argc, char *argv[])
     {    
         if (!sv_Font)
         {
-            Stdout_Push("0123456789ABCDEF0123456789ABCDEF01234567\n");
+            printf("0123456789ABCDEF0123456789ABCDEF01234567\n");
             Stdout_Flush();
-            Stdout_Push("████████████████████████████████████████\n");
+            printf("████████████████████████████████████████\n");
             Stdout_Flush();
-            Stdout_Push("████████████████████████████████████████\n");
+            printf("████████████████████████████████████████\n");
             Stdout_Flush();
-            Stdout_Push("████████████████████████████████████████\n");
+            printf("████████████████████████████████████████\n");
             Stdout_Flush();
-            Stdout_Push("████████████████████████████████████████\n");
+            printf("████████████████████████████████████████\n");
             Stdout_Flush();
         }
         else
         {
-            Stdout_Push("0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF\n");
+            printf("0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF\n");
             Stdout_Flush();
-            Stdout_Push("████████████████████████████████████████████████████████████████████████████████\n");
+            printf("████████████████████████████████████████████████████████████████████████████████\n");
             Stdout_Flush();
-            Stdout_Push("████████████████████████████████████████████████████████████████████████████████\n");
+            printf("████████████████████████████████████████████████████████████████████████████████\n");
             Stdout_Flush();
-            Stdout_Push("████████████████████████████████████████████████████████████████████████████████\n");
+            printf("████████████████████████████████████████████████████████████████████████████████\n");
             Stdout_Flush();
-            Stdout_Push("████████████████████████████████████████████████████████████████████████████████\n");
+            printf("████████████████████████████████████████████████████████████████████████████████\n");
             Stdout_Flush();
         }
 
         // Erase from start to cursor
         TTY_MoveCursor(TTY_CURSOR_UP, 4);
         TTY_MoveCursor(TTY_CURSOR_RIGHT, 4);
-        Stdout_Push("[1K");
+        printf("[1K");
         Stdout_Flush();
 
         // Erase from cursor to end
         TTY_MoveCursor(TTY_CURSOR_DOWN, 1);
-        Stdout_Push("[0K");
+        printf("[0K");
         Stdout_Flush();
 
         // Erase entire line
         TTY_MoveCursor(TTY_CURSOR_DOWN, 1);
-        Stdout_Push("[2K");
+        printf("[2K");
         Stdout_Flush();
 
         TTY_MoveCursor(TTY_CURSOR_DOWN, 1);
@@ -781,44 +828,44 @@ void CMD_Test(u8 argc, char *argv[])
 
         if (!sv_Font)
         {
-            Stdout_Push("0123456789ABCDEF0123456789ABCDEF01234567\n");
+            printf("0123456789ABCDEF0123456789ABCDEF01234567\n");
             Stdout_Flush();
-            Stdout_Push("████████████████████████████████████████\n");
+            printf("████████████████████████████████████████\n");
             Stdout_Flush();
-            Stdout_Push("████████████████████████████████████████\n");
+            printf("████████████████████████████████████████\n");
             Stdout_Flush();
-            Stdout_Push("████████████████████████████████████████\n");
+            printf("████████████████████████████████████████\n");
             Stdout_Flush();
-            Stdout_Push("████████████████████████████████████████\n");
+            printf("████████████████████████████████████████\n");
             Stdout_Flush();
-            Stdout_Push("████████████████████████████████████████\n");
+            printf("████████████████████████████████████████\n");
             Stdout_Flush();
-            Stdout_Push("████████████████████████████████████████\n");
+            printf("████████████████████████████████████████\n");
             Stdout_Flush();
-            Stdout_Push("████████████████████████████████████████\n");
+            printf("████████████████████████████████████████\n");
             Stdout_Flush();
-            Stdout_Push("████████████████████████████████████████\n");
+            printf("████████████████████████████████████████\n");
             Stdout_Flush();
         }
         else
         {
-            Stdout_Push("0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF\n");
+            printf("0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF\n");
             Stdout_Flush();
-            Stdout_Push("0███████████████████████████████████████████████████████████████████████████████\n");
+            printf("0███████████████████████████████████████████████████████████████████████████████\n");
             Stdout_Flush();
-            Stdout_Push("1███████████████████████████████████████████████████████████████████████████████\n");
+            printf("1███████████████████████████████████████████████████████████████████████████████\n");
             Stdout_Flush();
-            Stdout_Push("2███████████████████████████████████████████████████████████████████████████████\n");
+            printf("2███████████████████████████████████████████████████████████████████████████████\n");
             Stdout_Flush();
-            Stdout_Push("3███████████████████████████████████████████████████████████████████████████████\n");
+            printf("3███████████████████████████████████████████████████████████████████████████████\n");
             Stdout_Flush();
-            Stdout_Push("4███████████████████████████████████████████████████████████████████████████████\n");
+            printf("4███████████████████████████████████████████████████████████████████████████████\n");
             Stdout_Flush();
-            Stdout_Push("5███████████████████████████████████████████████████████████████████████████████\n");
+            printf("5███████████████████████████████████████████████████████████████████████████████\n");
             Stdout_Flush();
-            Stdout_Push("6███████████████████████████████████████████████████████████████████████████████\n");
+            printf("6███████████████████████████████████████████████████████████████████████████████\n");
             Stdout_Flush();
-            Stdout_Push("7███████████████████████████████████████████████████████████████████████████████\n");
+            printf("7███████████████████████████████████████████████████████████████████████████████\n");
             Stdout_Flush();
         }
 
@@ -827,18 +874,18 @@ void CMD_Test(u8 argc, char *argv[])
             case 0:
                 // Clear screen from cursor down
                 TTY_MoveCursor(TTY_CURSOR_UP, 5);
-                Stdout_Push("[0J");
+                printf("[0J");
                 Stdout_Flush();
             break;
             case 1:
                 // Clear screen from cursor up
                 TTY_MoveCursor(TTY_CURSOR_UP, 5);
-                Stdout_Push("[1J");
+                printf("[1J");
                 Stdout_Flush();
             break;
             case 2:
                 // Clear screen
-                Stdout_Push("[2J");
+                printf("[2J");
                 Stdout_Flush();
             break;
         
@@ -853,14 +900,14 @@ void CMD_Test(u8 argc, char *argv[])
 
     if ((argc > 1) && (strcmp("-devinit", argv[1]) == 0))
     {
-        Stdout_Push("[97mReinitializing devmgr...[0m\n");
+        printf("[97mReinitializing devmgr...[0m\n");
         DeviceManager_Init();
         return;
     }
 
     if ((argc > 1) && (strcmp("-colour", argv[1]) == 0))
     {
-    Stdout_Push("\
+    printf("\
 [30m█[90m█\
 [91m█[31m█\
 [32m█[92m█\
@@ -871,7 +918,7 @@ void CMD_Test(u8 argc, char *argv[])
 [97m█[37m█\
 [30m\n\r");
 
-Stdout_Push("\n\
+printf("\n\
 [90m█[30m█\
 [31m█[91m█\
 [92m█[32m█\
@@ -882,7 +929,7 @@ Stdout_Push("\n\
 [37m█[97m█\
 [30m\n\r");
 
-Stdout_Push("\n\
+printf("\n\
 [30m █ [90m█\
 [31m █ [91m█\
 [32m █ [92m█\
@@ -893,7 +940,7 @@ Stdout_Push("\n\
 [37m █ [97m█\
 [30m\n");
 
-Stdout_Push(" \
+printf(" \
 [30m █ [90m█\
 [31m █ [91m█\
 [32m █ [92m█\
@@ -904,7 +951,7 @@ Stdout_Push(" \
 [37m █ [97m█\
 [30m\n");
 
-Stdout_Push("\n\
+printf("\n\
 [30m█[90m█\
 [31m█[91m█\
 [32m█[92m█\
@@ -915,7 +962,7 @@ Stdout_Push("\n\
 [37m█[97m█\
 [30m");
 
-Stdout_Push("\n\
+printf("\n\
 [90m█[30m█\
 [91m█[31m█\
 [92m█[32m█\
@@ -926,7 +973,7 @@ Stdout_Push("\n\
 [97m█[37m█\
 [0m\n\r");
 
-    Stdout_Push("\n\
+printf("\n\
 [30m█[31m█[32m█[33m█[34m█[35m█[36m█[37m█\
 [90m█[91m█[92m█[93m█[94m█[95m█[96m█[97m█[0m\n\r");
 
@@ -938,7 +985,7 @@ void CMD_FlushBuffer(u8 argc, char *argv[])
 {
     if (argc < 2) 
     {
-        Stdout_Push("Flush buffer and set to 0\n\nUsage:\nbflush <buffer>\n\nBuffers available: rx, tx, stdout\n");
+        printf("Flush buffer and set to 0\n\nUsage:\nbflush <buffer>\n\nBuffers available: rx, tx, stdout\n");
         return;
     }
 
@@ -974,29 +1021,26 @@ void CMD_FlushBuffer(u8 argc, char *argv[])
 }
 
 void CMD_PrintBuffer(u8 argc, char *argv[])
-{
-    if (argc < 3) 
+{    
+    if ((argc == 3) && strcmp(argv[1], "rx") == 0)
     {
-        Stdout_Push("Print byte at <position> in <buffer>\n\nUsage:\nbprint <buffer> <position>\n\nBuffers available: rx, tx, stdout\n");
+        printf("$%X\n", RxBuffer.data[atoi16(argv[2]) % BUFFER_LEN]);
+    }
+    else if ((argc == 3) && strcmp(argv[1], "tx") == 0)
+    {
+        printf("$%X\n", TxBuffer.data[atoi16(argv[2]) % BUFFER_LEN]);
+    }
+    else if ((argc == 3) && strcmp(argv[1], "stdout") == 0)
+    {
+        printf("$%X\n", StdoutBuffer.data[atoi16(argv[2]) % BUFFER_LEN]);
+    }
+    else
+    {
+        //Stdout_Push("Print byte at <position> in <buffer>\n\nUsage:\nbprint <buffer> <position>\n\nBuffers available: rx, tx, stdout\n");
+        printf("Print <buffer> to stdout or file\n\n");
+        printf("Usage:\nbprint <buffer> <position>\n");
+        printf("\nBuffers available: rx, tx, stdout\n");
         return;
-    }
-
-    char buf[8];
-
-    if (strcmp(argv[1], "rx") == 0)
-    {
-        sprintf(buf, "$%X\n", RxBuffer.data[atoi16(argv[2]) % BUFFER_LEN]);
-        Stdout_Push(buf);
-    }
-    else if (strcmp(argv[1], "tx") == 0)
-    {
-        sprintf(buf, "$%X\n", TxBuffer.data[atoi16(argv[2]) % BUFFER_LEN]);
-        Stdout_Push(buf);
-    }
-    else if (strcmp(argv[1], "stdout") == 0)
-    {
-        sprintf(buf, "$%X\n", StdoutBuffer.data[atoi16(argv[2]) % BUFFER_LEN]);
-        Stdout_Push(buf);
     }
 }
 
@@ -1004,7 +1048,7 @@ void CMD_Ping(u8 argc, char *argv[])
 {
     if (argc < 2) 
     {
-        Stdout_Push("Ping IP address\n\nUsage:\nping <address>\n");
+        printf("Ping IP address\n\nUsage:\nping <address>\n");
         return;
     }
 
@@ -1013,7 +1057,7 @@ void CMD_Ping(u8 argc, char *argv[])
     switch (r)
     {
         case 1:
-            Stdout_Push("Ping response timeout!\n");
+            printf("Ping response timeout!\n");
         break;
     
         default:
@@ -1072,20 +1116,6 @@ void CMD_ListDir(u8 argc, char *argv[])
 void CMD_MoveFile(u8 argc, char *argv[])
 {
     if (argc < 3) return;
-    
-    /* This is buggy
-    char *fn_buf1, *fn_buf2;
-
-    fn_buf1 = malloc(FILE_MAX_FNBUF);
-    fn_buf2 = malloc(FILE_MAX_FNBUF);
-
-    FS_ResolvePath(argv[1], fn_buf1);
-    FS_ResolvePath(argv[2], fn_buf2);
-
-    FS_Rename(fn_buf1, fn_buf2);
-    
-    free(fn_buf1);
-    free(fn_buf2);*/
 
     CMD_CopyFile(argc, argv);
 
@@ -1192,9 +1222,7 @@ void CMD_Concatenate(u8 argc, char *argv[])
             F_Seek(f, 0, SEEK_SET);
             F_Read(buf, size, 1, f);
 
-            Stdout_Push(buf);
-            Stdout_Push("\n");
-            Stdout_Flush();
+            F_Write(buf, size, 1, stdout);
         }
 
         free(buf);
@@ -1206,7 +1234,7 @@ void CMD_Touch(u8 argc, char *argv[])
 {
     if (argc < 2)
     {
-        Stdout_Push("Update file or create a new file if it does not exist\nNot enough arguments\n");
+        printf("Update file or create a new file if it does not exist\nNot enough arguments\n");
         return;
     }
 
@@ -1222,7 +1250,7 @@ void CMD_MakeDirectory(u8 argc, char *argv[])
 {
     if (argc < 2)
     {
-        Stdout_Push("Create a directory if it does not already exist\nNot enough arguments\n");
+        printf("Create a directory if it does not already exist\nNot enough arguments\n");
         return;
     }
 
@@ -1237,7 +1265,7 @@ void CMD_RemoveLink(u8 argc, char *argv[])
 {
     if (argc < 2)
     {
-        Stdout_Push("Remove a file/directory\nNot enough arguments\n");
+        printf("Remove a file/directory\nNot enough arguments\n");
         return;
     }
 
@@ -1310,7 +1338,7 @@ void CMD_Date(u8 argc, char *argv[])
     }
     else if ((argc > 1) && (strcmp("-help", argv[1]) == 0))
     {
-        Stdout_Push("Show/Set date and time\n\nUsage:\n\
+        printf("Show/Set date and time\n\nUsage:\n\
 date -sync  - Synchronize date & time\n\
 date -help  - This screen\n\
 date        - Show date and time\n");
@@ -1326,39 +1354,39 @@ void CMD_About(u8 argc, char *argv[])
 {
     if (sv_Font)
     {
-        Stdout_Push(" SMDT - a dumb project created by smds\n");
-        Stdout_Push(" Copyright (c) 2025 smds\n");
-        Stdout_Push(" See SMDT github for more info:\n");
-        Stdout_Push(" [36mgithub.com/SweMonkey/smdt[0m\n\n");
+        printf(" SMDT - a dumb project created by smds\n");
+        printf(" Copyright (c) 2025 smds\n");
+        printf(" See SMDT github for more info:\n");
+        printf(" [36mgithub.com/SweMonkey/smdt[0m\n\n");
 
-        Stdout_Push(" This project incorporates some code by b1tsh1ft3r\n");
-        Stdout_Push(" Copyright (c) 2023 B1tsh1ft3r\n");
-        Stdout_Push(" See retro.link github for more info:\n");
-        Stdout_Push(" [36mgithub.com/b1tsh1ft3r/retro.link[0m\n\n");
+        printf(" This project incorporates some code by b1tsh1ft3r\n");
+        printf(" Copyright (c) 2023 B1tsh1ft3r\n");
+        printf(" See retro.link github for more info:\n");
+        printf(" [36mgithub.com/b1tsh1ft3r/retro.link[0m\n\n");
 
-        Stdout_Push(" This project makes use of littleFS\n");
-        Stdout_Push(" Copyright (c) 2022, The littlefs authors.\n");
-        Stdout_Push(" Copyright (c) 2017, Arm Limited. All rights reserved.\n");
-        Stdout_Push(" See littleFS github for more info:\n");
-        Stdout_Push(" [36mgithub.com/littlefs-project/littlefs[0m\n");
+        printf(" This project makes use of littleFS\n");
+        printf(" Copyright (c) 2022, The littlefs authors.\n");
+        printf(" Copyright (c) 2017, Arm Limited. All rights reserved.\n");
+        printf(" See littleFS github for more info:\n");
+        printf(" [36mgithub.com/littlefs-project/littlefs[0m\n");
     }
     else
     {
-        Stdout_Push("SMDT - a dumb project created by smds\n");
-        Stdout_Push("Copyright (c) 2025 smds\n");
-        Stdout_Push("See SMDT github for more info:\n");
-        Stdout_Push("[36mgithub.com/SweMonkey/smdt[0m\n\n");
+        printf("SMDT - a dumb project created by smds\n");
+        printf("Copyright (c) 2025 smds\n");
+        printf("See SMDT github for more info:\n");
+        printf("[36mgithub.com/SweMonkey/smdt[0m\n\n");
 
-        Stdout_Push("This project incorporates some code -\n - by b1tsh1ft3r\n");
-        Stdout_Push("Copyright (c) 2023 B1tsh1ft3r\n");
-        Stdout_Push("See retro.link github for more info:\n");
-        Stdout_Push("[36mgithub.com/b1tsh1ft3r/retro.link[0m\n\n");
+        printf("This project incorporates some code -\n - by b1tsh1ft3r\n");
+        printf("Copyright (c) 2023 B1tsh1ft3r\n");
+        printf("See retro.link github for more info:\n");
+        printf("[36mgithub.com/b1tsh1ft3r/retro.link[0m\n\n");
 
-        Stdout_Push("This project makes use of littleFS\n");
-        Stdout_Push("Copyright (c) 2022, The littlefs authors");
-        Stdout_Push("Copyright (c) 2017, Arm Limited. -\n - All rights reserved\n");
-        Stdout_Push("See littleFS github for more info:\n");
-        Stdout_Push("[36mgithub.com/littlefs-project/littlefs[0m\n");
+        printf("This project makes use of littleFS\n");
+        printf("Copyright (c) 2022, The littlefs authors");
+        printf("Copyright (c) 2017, Arm Limited. -\n - All rights reserved\n");
+        printf("See littleFS github for more info:\n");
+        printf("[36mgithub.com/littlefs-project/littlefs[0m\n");
     }
 }
 
@@ -1385,7 +1413,13 @@ void CMD_PSGBeep(u8 argc, char *argv[])
     }
     else
     {
-        Stdout_Push("PSG Beep\n\nUsage:\n\
+        printf("PSG Beep\n\nUsage:\n\
 psgbeep <Time in ms><Volume><Frequency>\n");
     }
+}
+
+void CMD_HTTPWeb(u8 argc, char *argv[])
+{
+    HTTP_Listen();
+    return;
 }

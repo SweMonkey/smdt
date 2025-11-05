@@ -1,6 +1,7 @@
 #include "UI.h"
 #include "Utils.h"      // TRM_DrawChar()
 #include "Network.h"    // TxBuffer
+#include "Palette.h"
 
 // -- Window --
 static const u8 Frame[30][40] = 
@@ -58,10 +59,9 @@ void UI_ApplyTheme()
 
             SetColor(21, 0x820);    // Window shadow
             SetColor(22, 0xE80);    // Window border
-            SetColor(49, 0xE80);    // Cursor outline
         break;
         case 1: // Dark lime
-            SetColor( 2, 0x000);    // Window title FG (+Selected text colour)
+            SetColor( 2, 0xEEE);    // Window title FG (+Selected text colour)
             SetColor( 3, 0x084);    // Window title background
             SetColor( 5, 0x222);    // Icon background
             
@@ -70,7 +70,6 @@ void UI_ApplyTheme()
 
             SetColor(21, 0x062);    // Window shadow
             SetColor(22, 0x0C8);    // Window border
-            SetColor(49, 0x0C8);    // Cursor outline
         break;
         case 2: // Dark amber
             SetColor( 2, 0xEEE);    // Window title FG (+Selected text colour)
@@ -82,7 +81,6 @@ void UI_ApplyTheme()
 
             SetColor(21, 0x028);    // Window shadow
             SetColor(22, 0x08E);    // Window border
-            SetColor(49, 0x08E);    // Cursor outline
         break;
         case 3: // High contrast
             SetColor( 2, 0xEEE);    // Window title FG (+Selected text colour)
@@ -94,7 +92,6 @@ void UI_ApplyTheme()
 
             SetColor(21, 0x000);    // Window shadow
             SetColor(22, 0xEEE);    // Window border
-            SetColor(49, 0xEEE);    // Cursor outline
         break;
         case 4: // Aqua
             SetColor( 2, 0xEEE);    // Window title FG (+Selected text colour)
@@ -106,7 +103,6 @@ void UI_ApplyTheme()
 
             SetColor(21, 0x660);    // Window shadow
             SetColor(22, 0xCC0);    // Window border
-            SetColor(49, 0x880);    // Cursor outline
         break;
         case 5: // Hot pink
             SetColor( 2, 0xEEE);    // Window title FG (+Selected text colour)
@@ -118,7 +114,6 @@ void UI_ApplyTheme()
 
             SetColor(21, 0x606);    // Window shadow
             SetColor(22, 0xC0C);    // Window border
-            SetColor(49, 0xC0C);    // Cursor outline
         break;
     
         default:
@@ -183,6 +178,52 @@ void UI_RepaintWindow()
         TRM_DrawChar(Target->WinBuffer[y][x], x, y+1 - ((Target->Flags & WF_NoBorder) ? 3 : 0), (Target->WinAttribute[y][x] & 0x3));
     }
     }
+}
+
+/// @brief Repaint row on screen
+void UI_RepaintRow(u8 row, u8 num)
+{
+    if (Target == NULL) return;
+
+    if (row >= 30 || row+num >= 30) return;
+
+    for (u8 y = row; y < row+num; y++)
+    {
+    for (u8 x = 0; x < 40; x++)
+    {
+        if (Target->WinBuffer[y][x] == 0) continue;
+
+        TRM_DrawChar(Target->WinBuffer[y][x], x, y+1 - ((Target->Flags & WF_NoBorder) ? 3 : 0), (Target->WinAttribute[y][x] & 0x3));
+    }
+    }
+}
+
+/// @brief Repaint column on screen
+void UI_RepaintColumn(u8 column, u8 num)
+{
+    if (Target == NULL) return;
+
+    if (column >= 40 || column+num >= 40) return;
+
+    for (u8 y = 0; y < 30; y++)
+    {
+    for (u8 x = column; x < column+num; x++)
+    {
+        if (Target->WinBuffer[y][x] == 0) continue;
+
+        TRM_DrawChar(Target->WinBuffer[y][x], x, y+1 - ((Target->Flags & WF_NoBorder) ? 3 : 0), (Target->WinAttribute[y][x] & 0x3));
+    }
+    }
+}
+
+/// @brief Repaint tile on screen
+void UI_RepaintTile(u8 x, u8 y)
+{
+    if (Target == NULL) return;
+
+    if (x >= 40 || y >= 30) return;
+
+    TRM_DrawChar(Target->WinBuffer[y][x], x, y+1 - ((Target->Flags & WF_NoBorder) ? 3 : 0), (Target->WinAttribute[y][x] & 0x3));
 }
 
 /// @brief Set window title
@@ -291,6 +332,62 @@ void UI_FillRect(u8 x, u8 y, u8 width, u8 height, u8 fillbyte)
         Target->WinBuffer[_y+y][_x+x] = fillbyte;
     }
     }
+}
+
+/// @brief Set a single tile
+/// @param x X position
+/// @param y Y position
+/// @param attribute New tile
+void UI_SetTile(u8 x, u8 y, u8 tile)
+{
+    if (Target == NULL) return;
+
+    Target->WinBuffer[y][x] = tile;
+}
+
+/// @brief Fill attribute rectangle
+/// @param x X position of rectangle
+/// @param y Y position of rectangle
+/// @param width Width of rectangle
+/// @param height Height of rectangle
+/// @param attribute Attribute to fill the rectangle with
+void UI_FillAttributeRect(u8 x, u8 y, u8 width, u8 height, u8 attribute)
+{
+    if (Target == NULL) return;
+
+    for (u8 _y = 0; _y < height; _y++)
+    {
+    for (u8 _x = 0; _x < width; _x++)
+    {
+        Target->WinAttribute[_y+y][_x+x] = attribute;
+    }
+    }
+}
+
+/// @brief Fill attribute row
+/// @param x1 X start position
+/// @param x2 X end position
+/// @param y Y position
+/// @param attribute Attribute to fill row with
+void UI_FillAttributeRow(u8 x1, u8 x2, u8 y, u8 attribute)
+{
+    if (Target == NULL) return;
+
+    for (; x1 < x2; x1++)
+    {
+        Target->WinAttribute[y][x1] = attribute;
+    }
+}
+
+/// @brief Set attribute for a single tile
+/// @param x X position
+/// @param y Y position
+/// @param attribute New attribute value
+void UI_SetAttribute(u8 x, u8 y, u8 attribute)
+{
+    if (Target == NULL) return;
+
+    Target->WinAttribute[y][x] = attribute;
 }
 
 /// @brief Draw vertical line
@@ -482,7 +579,7 @@ void UI_DrawWindow(u8 x, u8 y, u8 width, u8 height, bool bChild, const char *tit
 /// @param min Min value of scrollbar
 /// @param max Max value of scrollbar
 /// @param pos Position of slider / Value of scrollbar
-void UI_DrawVScrollbar(u8 x, u8 y, u8 height, u16 min, u16 max, u16 pos)
+void UI_DrawVScrollbar(u8 x, u8 y, u8 height, u8 selected, u16 min, u16 max, u16 pos)
 {
     if (Target == NULL) return;
     if (max <= min) return;
@@ -494,8 +591,9 @@ void UI_DrawVScrollbar(u8 x, u8 y, u8 height, u16 min, u16 max, u16 pos)
 
     UI_ClearRect(x, y-3, 1, height);
 
-    Target->WinBuffer[y][x+1] = 0xBD;           // Up arrow
-    Target->WinBuffer[y+height-1][x+1] = 0xBE;  // Down arrow
+    // Tile
+    Target->WinBuffer[y][x+1] = (selected == 0 ? 0x9D : 0xBD);           // Up arrow
+    Target->WinBuffer[y+height-1][x+1] = (selected == 2 ? 0x9E : 0xBE);  // Down arrow
 
     if (pos < min) pos = min;
     if (pos > max) pos = max;
@@ -513,7 +611,8 @@ void UI_DrawVScrollbar(u8 x, u8 y, u8 height, u16 min, u16 max, u16 pos)
 
     for (u8 i = 0; i < sliderHeight; i++)
     {
-        Target->WinBuffer[y + 1 + sliderPos + i][x + 1] = 0xBF;
+        //Target->WinBuffer[y + 1 + sliderPos + i][x + 1] = (selected == 1 ? 0x9F : 0xBF);  // Show mouse pointer selection
+        Target->WinBuffer[y + 1 + sliderPos + i][x + 1] = 0xBF; // Force non selected slider
     }
 }
 
@@ -535,7 +634,7 @@ void UI_DrawItemList(u8 x, u8 y, u8 width, u8 height, char *list[], u16 item_cou
     u16 max = (item_count <= max_visible) ? 0 : (item_count-max_visible);
     u16 scroll_ = (scroll < max) ? scroll : max;
 
-    if (max != 0) UI_DrawVScrollbar(x+width-1, y, height, 0, max, scroll_);
+    if (max != 0) UI_DrawVScrollbar(x+width-1, y, height, 255, 0, max, scroll_);
     UI_ClearRect(x, y, width-1, height);
 
     char tmp[width-1];
@@ -624,7 +723,7 @@ void UI_DrawItemListSelect(u8 x, u8 y, u8 width, u8 height, const char *caption,
 
     if (item_count > max_visible)
     {
-        UI_DrawVScrollbar(x_+w_, y_, height, 0, item_count-1, pos);
+        UI_DrawVScrollbar(x_+w_, y_, height, selected_item, 0, item_count-1, pos);
     }
 
     pos -= (max_visible-1);
@@ -730,31 +829,20 @@ void UI_DrawTabs(u8 x, u8 y, u8 w, u8 num_tabs, u8 active_tab, u8 selected, cons
     {
         len = strlen(tab_text[i]);
 
-        Target->WinBuffer[y+3][x+o] = ((x+o) == 0 ? 0xA4 : 0xA7);    // Left tab side
+        Target->WinBuffer[y+3][x+o] = ((x+o) == 0 ? 0xA4 : 0xA7);               // Left tab side
+        Target->WinBuffer[y+3][x+len+1+o] = ((x+len+1+o) == 39 ? 0xA6 : 0xA9);  // Right tab side
 
         c = len; while (c--) Target->WinBuffer[y+2][x+1+c+o] = (y == 0) ? 0xA5 : 0xA8;    // Top tab side
 
-        Target->WinBuffer[y+3][x+len+1+o] = ((x+len+1+o) == 39 ? 0xA6 : 0xA9);    // Right tab side
-
-        //c = 1; while (c++ <= 38) Target->WinBuffer[y+4][x-1+c] = 0xA8-5;    // Bottom
-
-        if (active_tab != i) 
-        {
-            //c = len; while (c--) Target->WinBuffer[y+4][x+1+c+o] = 0xA3;    // Inactive tab bottom border
-        
-            UI_DrawText(x+o, y, PAL1, tab_text[i]);
-        }
-        else 
+        if (active_tab == i)
         {
             c = len; while (c--) Target->WinBuffer[y+4][x+1+c+o] = 0x20;    // Active tab bottom border (None, clear the line under it)
-            
-            UI_DrawText(x+o, y, (selected ? PAL1 : PAL0), tab_text[i]);
         }
+
+        UI_DrawText(x+o, y, (selected == i ? PAL0 : PAL1), tab_text[i]);
 
         o += len+2;
     }
-    
-    //c = o; while (c++ <= 38) Target->WinBuffer[y+4][x-1+c] = 0xA8-5;    // Bottom
 
     if (x ==  0) Target->WinBuffer[y+4][0]    = 0xA2;   // Point where the left window border meets the tab bar
     if (w >= 38) Target->WinBuffer[y+4][x+39] = 0xA1;   // Point where the right window border meets the tab bar

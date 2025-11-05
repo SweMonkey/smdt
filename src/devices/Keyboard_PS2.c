@@ -1,6 +1,7 @@
 #include "Keyboard_PS2.h"
 #include "Keyboard.h"
 #include "Utils.h"      // TRM_
+#include "system/PseudoFile.h"  // Temp, printf
 
 #define KB_CL 0 // Control pin shift
 #define KB_DT 1 // Data pin shift

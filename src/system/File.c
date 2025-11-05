@@ -2,10 +2,18 @@
 #include "Filesystem.h"
 #include "Utils.h"
 
+#include "system/PseudoFile.h"  // Temp, printf
+
 #define MAX_FD 64
 #define MAX_PRINTF_BUF 256
 
-static u16 FD_Count = 0;    // Open file descriptors
+static u16 FD_Count = 0;    // Open file descriptors - Not used for anything other than limiting the user/os to MAX_FD number of open files at once 
+
+extern SM_File *FILE_INTERNAL_tty_in;
+extern SM_File *FILE_INTERNAL_tty_out;
+extern SM_File *FILE_INTERNAL_stdin;
+extern SM_File *FILE_INTERNAL_stdout;
+extern SM_File *FILE_INTERNAL_stderr;
 
 
 SM_File *F_GetFreeFD()
@@ -30,6 +38,22 @@ SM_File *F_Open(const char *filename, FileMode openmode)
         printf("No free filedescriptors available!\n");
         return NULL;
     }
+    
+    u16 i = 0;
+    u16 p = 0;
+    while (filename[i] != '\0')
+    {
+        if (filename[i] == '/') p = i;
+        i++;
+    }
+    p++;    
+
+    // Map special I/O pseudo-files
+    if ((strcmp(filename+p, "stdin.io")   == 0) && (FILE_INTERNAL_stdin   != NULL)) return FILE_INTERNAL_stdin;
+    if ((strcmp(filename+p, "stdout.io")  == 0) && (FILE_INTERNAL_stdout  != NULL)) return FILE_INTERNAL_stdout;
+    if ((strcmp(filename+p, "stderr.io")  == 0) && (FILE_INTERNAL_stderr  != NULL)) return FILE_INTERNAL_stderr;
+    if ((strcmp(filename+p, "tty_in.io")  == 0) && (FILE_INTERNAL_tty_in  != NULL)) return FILE_INTERNAL_tty_in;
+    if ((strcmp(filename+p, "tty_out.io") == 0) && (FILE_INTERNAL_tty_out != NULL)) return FILE_INTERNAL_tty_out;
 
     s32 r = FS_OpenFile(filename, openmode, &file->f);
 
@@ -39,6 +63,8 @@ SM_File *F_Open(const char *filename, FileMode openmode)
         //printf("Error opening file \"%s\"\nError code $%lX (%ld)\n", filename, r, r);
         return NULL;
     }
+
+    file->io_buf = NULL;
 
     size_t len = strlen(filename);
     file->fname = malloc(len + 1);
@@ -58,6 +84,13 @@ u8 F_Close(SM_File *file)
     if (file == NULL) 
     {
         return -1; // EOF
+    }
+
+    // Dont unmap I/O pseudo-files
+    if (file->f.flags & FM_IO) 
+    {
+        //kprintf("Attempted to unmap IO file (%s)", file == FILE_INTERNAL_stdout ? "internal_stdout" : "other");
+        return 0;
     }
 
     int r = FS_Close(&file->f, file->fname);
@@ -81,16 +114,32 @@ u8 F_Close(SM_File *file)
 
 u16 F_Read(void *dest, u32 size, u32 count, SM_File *file)
 {
-    if (file == NULL) return 0;
+    if (file == NULL || !size || !count) return 0;
 
     if ((file->f.flags & FM_RDWR) || (file->f.flags & FM_RDONLY))
     {
-        if (file->f.flags & FM_IO)
+        if (file->f.flags & FM_IO && file->io_buf != NULL)
         {
-            // ... read from io here
-            kprintf("Attempting to read from IO file - Not implemented.");
+            //kprintf("Read from IO file");
+
+            Buffer *b = file->io_buf;
+
+            u8 *data = (u8 *)dest;
+            u32 total = size * count;
+            u32 read = 0;
+
+            if (dest == NULL) return 0;
+
+            for (u32 i = 0; i < total; i++)
+            {
+                if (!Buffer_Pop(b, &data[i])) break;  // stop if empty
+                
+                read++;
+            }
+
+            return read / size;
         }
-        else 
+        else
         {
             return FS_ReadFile(dest, size*count, &file->f, file->fname);
         }
@@ -101,14 +150,30 @@ u16 F_Read(void *dest, u32 size, u32 count, SM_File *file)
 
 u16 F_Write(void *src, u32 size, u32 count, SM_File *file)
 {
-    if (file == NULL) return 0;
+    if (file == NULL || !size || !count) return 0;
 
     if ((file->f.flags & FM_RDWR) || (file->f.flags & FM_WRONLY))
     {
-        if (file->f.flags & FM_IO)
+        if (file->f.flags & FM_IO && file->io_buf != NULL)
         {
-            // ... write to io here
-            kprintf("Attempting to write to IO file - Not implemented.");
+            Buffer *b = file->io_buf;
+
+            const u8 *data = (const u8 *)src;
+            u32 total = size * count;
+            u32 written = 0;
+
+            for (u32 i = 0; i < total; i++)
+            {
+                if (!Buffer_Push(b, data[i])) 
+                {
+                    Stdout_Flush();                    
+                    break;  // stop if full
+                }
+
+                written++;
+            }
+
+            return written / size;
         }
         else 
         {

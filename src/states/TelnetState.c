@@ -8,7 +8,7 @@
 #include "Cursor.h"             // bDoCursorBlink
 #include "Keyboard.h"           // bKB_ScrLock
 #include "devices/RL_Network.h"
-#include "system/Stdout.h"
+#include "system/PseudoFile.h"
 
 #ifdef DEBUG_STREAM
 #include "misc/DebugStream.h"
@@ -77,8 +77,10 @@ void Run_Telnet()
     {
         TELNET_ParseRX(rxdata);
 
-        if (it++ > 8) break;
+        if (it++ > 16) break;   // May need tweaking, 8 is too little (buffer will overflow)
     }
+
+    //Telnet_MouseTrack();
 }
 
 void Input_Telnet()

@@ -1,6 +1,6 @@
 #include "Filesystem.h"
 #include "FS_ROM.h"
-#include "Stdout.h"
+#include "PseudoFile.h"
 #include "../res/system.h"
 
 lfs_t lfs_ROM;

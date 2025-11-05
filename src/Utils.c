@@ -1,5 +1,5 @@
 #include "Utils.h"
-#include "system/Stdout.h"
+#include "system/PseudoFile.h"
 
 bool bPALSystem;
 bool bHardReset;
@@ -719,23 +719,6 @@ u16 snprintf(char *buffer, u16 size, const char *fmt, ...)
     return i;
 }
 
-u16 printf(const char *fmt, ...)
-{
-    va_list args;
-    u16 i;
-    char *buffer = malloc(256);
-
-    va_start(args, fmt);
-    i = vsnprintf(buffer, 256, fmt, args);
-    va_end(args);
-
-    Stdout_Push(buffer);
-
-    free(buffer);
-
-    return i;
-}
-
 // memmove using bytes...
 void *memmove(void *dest, const void *src, u32 n)
 {
@@ -850,54 +833,3 @@ void *realloc(void *ptr, u16 old_size, u16 new_size)
     return new_ptr;
 }
 
-
-// Color stuff
-s8 sv_CBrightness = 0;
-
-static u16 AdjustColor(u16 value)
-{
-    s8 r =  value       & 0xE;
-    s8 g = (value >> 4) & 0xE;
-    s8 b = (value >> 8) & 0xE;
-
-    if (sv_CBrightness > 0)
-    {
-        r = r > 0 ? r + sv_CBrightness : 0;
-        g = g > 0 ? g + sv_CBrightness : 0;
-        b = b > 0 ? b + sv_CBrightness : 0;
-
-        r = (r > 0xE) ? 0xE : r;
-        g = (g > 0xE) ? 0xE : g;
-        b = (b > 0xE) ? 0xE : b;
-    }
-    else if (sv_CBrightness < 0)
-    {
-        r += sv_CBrightness;
-        g += sv_CBrightness;
-        b += sv_CBrightness;
-
-        r = (r < 0) ? 0 : r & 0xE;
-        g = (g < 0) ? 0 : g & 0xE;
-        b = (b < 0) ? 0 : b & 0xE;
-    }
-    else return value;
-
-    return ((b << 8) | (g << 4) | r);
-}
-
-void SetColor(u16 index, u16 value)
-{
-    PAL_setColor(index, AdjustColor(value));
-}
-
-void SetPalette(u16 numPal, const u16 *pal, TransferMethod tm)
-{
-    u16 new_pal[16];
-
-    for (u8 i = 0; i < 16; i++)
-    {
-        new_pal[i] = AdjustColor(pal[i]);
-    }
-
-    PAL_setPalette(numPal, new_pal, tm);
-}

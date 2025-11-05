@@ -5,11 +5,14 @@
 #include "Screensaver.h"
 #include "DevMgr.h"             // bRLNetwork
 #include "Keyboard.h"
+#include "Mouse.h"
 #include "Utils.h"              // TRM_ResetStatusText
 #include "WinMgr.h"
 #include "Buffer.h"
 #include "Network.h"
+#include "Palette.h"
 
+#include "devices/MegaMouse.h"
 #include "devices/RL_Network.h"
 #include "system/Time.h"
 
@@ -32,22 +35,27 @@ static u8 kbdata;
 static bool LastRxState = FALSE;
 static bool LastTxState = FALSE;
 bool bWindowActive = FALSE;
+static u32 PreviousFrame = MAX_U32;
 
 
 void VBlank()
 {
     #ifdef SHOW_FRAME_USAGE
-    SetColor(0, 0x00A);
+    PAL_setColor(0, 0x00A);
     #endif
 
     while (KB_Poll(&kbdata))
     {
         KB_Interpret_Scancode(kbdata);
     }
-    
-    //if (CurrentState->VBlank) CurrentState->VBlank();
 
-    if (is_KeyDown(KEY_RWIN) || is_KeyDown(KEY_F8)) 
+    if (bMouse) Mouse_Poll();
+    
+    #ifndef SHOW_FRAME_USAGE
+    UploadPalette();
+    #endif
+
+    if (is_KeyDown(KEY_RWIN) || is_KeyDown(KEY_F8) || is_KeyUp(sv_MBind_Menu))
     {
         WinMgr_Open(W_QMenu, 0, NULL);  // Global quick menu
     }
@@ -66,37 +74,9 @@ void VBlank()
 
     bWindowActive = WinMgr_isWindowOpen();
 
-    if (LastRxState != Buffer_IsEmpty(&RxBuffer))
-    {
-        if (Buffer_IsEmpty(&RxBuffer))
-        {
-            TRM_SetStatusIcon(ICO_NET_IDLE_RECV, ICO_POS_1);
-            LastRxState = TRUE;
-        }
-        else
-        {
-            TRM_SetStatusIcon(ICO_NET_RECV, ICO_POS_1);
-            LastRxState = FALSE;
-        }
-    }
-    
-    // FixMe: Buffer will most likely always be empty at this point, thus upload icon will always be unlit
-    if (LastTxState != Buffer_IsEmpty(&TxBuffer))
-    {
-        if (Buffer_IsEmpty(&TxBuffer))
-        {
-            TRM_SetStatusIcon(ICO_NET_IDLE_SEND, ICO_POS_2);
-            LastTxState = TRUE;
-        }
-        else
-        {
-            TRM_SetStatusIcon(ICO_NET_IDLE_SEND, ICO_POS_2);
-            LastTxState = FALSE;
-        }
-    }
 
     #ifdef SHOW_FRAME_USAGE
-    SetColor(0, 0);
+    PAL_setColor(0, 0);
     #endif
 }
 
@@ -104,6 +84,7 @@ void ChangeState(State new_state, u8 argc, char *argv[])
 {
     if (new_state == CurrentStateEnum) return;
     
+    SYS_setVBlankCallback(NULL);
     bStateChanged = TRUE;
 
     PrevState = CurrentState;
@@ -168,7 +149,7 @@ void ChangeState(State new_state, u8 argc, char *argv[])
 
     SYS_enableInts();
 
-    SYS_setVBlankCallback(NULL);
+    //SYS_setVBlankCallback(NULL);
     SC_RetValue = CurrentState->Enter(argc, argv);
     ScreensaverInit();
     SYS_setVBlankCallback(VBlank);
@@ -185,6 +166,8 @@ void RevertState()
 {
     PRG_State *ShadowState = CurrentState;
     State ShadowStateEnum = CurrentStateEnum;
+
+    SYS_setVBlankCallback(NULL);
 
     bStateChanged = TRUE;
 
@@ -206,6 +189,7 @@ void RevertState()
     CurrentState->ReEnter();
     ScreensaverInit();
 
+    SYS_setVBlankCallback(VBlank);
     SYS_enableInts();
 }
 
@@ -237,19 +221,52 @@ bool StateHasChanged()
 void StateTick()
 {
     #ifdef SHOW_FRAME_USAGE
-    SetColor(0, 0xA00);
+    UploadPalette();
+    PAL_setColor(0, 0xA00);
     #endif
 
     bStateChanged = FALSE;
 
     CurrentState->Run();
 
-    if (bRLNetwork)
+    if (FrameElapsed(&PreviousFrame, 1))
     {
-        RLN_Update();
+        if (bRLNetwork)
+        {
+            RLN_Update();
+        }
+
+        if (LastRxState != Buffer_IsEmpty(&RxBuffer))
+        {
+            if (Buffer_IsEmpty(&RxBuffer))
+            {
+                TRM_SetStatusIcon(ICO_NET_IDLE_RECV, ICO_POS_1);
+                LastRxState = TRUE;
+            }
+            else
+            {
+                TRM_SetStatusIcon(ICO_NET_RECV, ICO_POS_1);
+                LastRxState = FALSE;
+            }
+        }
+        
+        if (TxUpdate)
+        {
+            if (LastTxState)
+            {
+                TRM_SetStatusIcon(ICO_NET_IDLE_SEND, ICO_POS_2);
+                LastTxState = FALSE;
+                TxUpdate = 0;
+            }
+            else
+            {
+                TRM_SetStatusIcon(ICO_NET_SEND, ICO_POS_2);
+                LastTxState = TRUE;
+            }
+        }
     }
 
     #ifdef SHOW_FRAME_USAGE
-    SetColor(0, 0x000);
+    PAL_setColor(0, 0x000);
     #endif
 }

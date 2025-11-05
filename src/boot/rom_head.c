@@ -9,7 +9,7 @@ const ROMHeader rom_header =
     "SMDT                                            ", // Overseas title
     "GM DSTC2017-33",                                   // Serial number
     0x000,                                              // Checksum
-    "JKRD            ",                                 // Device support
+    "JKRDM           ",                                 // Device support
     0x00000000,                                         // ROM start address
     0x000FFFFF,                                         // ROM end address
     0xE0FF0000,                                         // RAM start address

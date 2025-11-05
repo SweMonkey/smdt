@@ -25,12 +25,10 @@ extern Buffer RxBuffer;
 extern Buffer TxBuffer;
 extern SM_Device DRV_UART;      // Built-in UART
 
-extern SM_File *rxbuf;  // RxBuffer as an IO file
-extern SM_File *txbuf;  // TxBuffer as an IO file
-
 // Up/Down traffic byte count
 extern u32 RXBytes;
 extern u32 TXBytes;
+extern u16 TxUpdate;
 
 void NET_RxIRQ();
 void NET_SendChar(const u8 c);

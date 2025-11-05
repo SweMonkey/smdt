@@ -1,7 +1,7 @@
 #include "Keyboard_Saturn.h"
 #include "Keyboard.h"
 #include "Utils.h"      // TRM_
-#include "system/Stdout.h"
+#include "system/PseudoFile.h"  // Temp, printf
 
 #define TIMEOUT 128
 SM_Device DRV_KBSATURN;
@@ -40,7 +40,7 @@ bool KB_Saturn_Init()
 
 bool KB_Saturn_Poll(u8 *data)
 {
-    u32 timeout = 0;
+    u16 timeout = 0;
     u8 nibble[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
     /*
@@ -58,7 +58,11 @@ bool KB_Saturn_Poll(u8 *data)
         DEV_ClrData(DRV_KBSATURN);
         while ((DEV_GetData(DRV_KBSATURN, 0x10) & 0x10) != 0)
         {
-            if (timeout++ >= TIMEOUT) return FALSE;
+            if (timeout++ >= TIMEOUT) 
+            {
+                DEV_SetData(DRV_KBSATURN, 0x60);
+                return FALSE;
+            }
         }
 
         timeout = 0;
@@ -69,7 +73,11 @@ bool KB_Saturn_Poll(u8 *data)
         
         while (DEV_GetData(DRV_KBSATURN, 0x10) != 0x10)
         {
-            if (timeout++ >= TIMEOUT) return FALSE;
+            if (timeout++ >= TIMEOUT) 
+            {
+                DEV_SetData(DRV_KBSATURN, 0x60);
+                return FALSE;
+            }
         }
 
         timeout = 0;

@@ -1,6 +1,7 @@
 
-# SMD Terminal emulator, Telnet and IRC client
-A terminal emulator, telnet and IRC client for the Sega Mega Drive/Genesis with support for keyboards and RS-232 communication.<br>
+# SMD terminal emulator with builtin telnet and IRC client
+A terminal emulator with a unix like shell, telnet and IRC client for the Sega Mega Drive/Genesis with support for keyboards, mice and RS-232 communication.<br><br>
+## This README is outdated, while most of the information below remains accurate, it needs to be updated to include the many new additions not yet covered.<br><br>
 ![Screenshot of the telnet client in 80 column + 16 colour mode](/doc/images/telnet.png?raw=true)
 ![Screenshot of the IRC client](/doc/images/irc_02.png?raw=true)
 ![Screenshot of the terminal emulator showing dwarf fortress](/doc/images/dwarf_fortress.png?raw=true)
@@ -148,7 +149,8 @@ All detected devices can be viewed in the "Connected devices" list (Quick menu -
 ### List of autodetected devices
 PS/2 Keyboard.<br>
 Sega Saturn keyboard.<br>
-Sega 3/6 button joypad.<br>
+Sega 3 button joypad.<br>
+Mega Mouse (JP/EU Sega Mouse untested but should work).<br>
 xPort module connected to built in UART (May require you to set the correct serial port as described above)<br>
 RetroLink network adapter cartridge (Currently being worked on, support may be iffy)<br>
 <br>

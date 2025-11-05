@@ -1,6 +1,6 @@
 #include "ELF_ldr.h"
 #include "File.h"
-#include "Stdout.h"
+#include "PseudoFile.h"
 
 #define ELF_NIDENT	16
 
@@ -79,22 +79,22 @@ bool ELF_CheckFile(Elf32_Ehdr *hdr)
 
     if (hdr->e_ident[EI_MAG0] != ELFMAG0)
     {
-        Stdout_Push("ELF Header EI_MAG0 incorrect.\n");
+        printf("ELF Header EI_MAG0 incorrect.\n");
         return FALSE;
     }
     if (hdr->e_ident[EI_MAG1] != ELFMAG1)
     {
-        Stdout_Push("ELF Header EI_MAG1 incorrect.\n");
+        printf("ELF Header EI_MAG1 incorrect.\n");
         return FALSE;
     }
     if (hdr->e_ident[EI_MAG2] != ELFMAG2)
     {
-        Stdout_Push("ELF Header EI_MAG2 incorrect.\n");
+        printf("ELF Header EI_MAG2 incorrect.\n");
         return FALSE;
     }
     if (hdr->e_ident[EI_MAG3] != ELFMAG3)
     {
-        Stdout_Push("ELF Header EI_MAG3 incorrect.\n");
+        printf("ELF Header EI_MAG3 incorrect.\n");
         return FALSE;
     }
 
@@ -105,32 +105,32 @@ bool ELF_CheckSupported(Elf32_Ehdr *hdr)
 {
     if (!ELF_CheckFile(hdr))
     {
-        Stdout_Push("Invalid ELF File.\n");
+        printf("Invalid ELF File.\n");
         return FALSE;
     }
     if (hdr->e_ident[EI_CLASS] != ELFCLASS32)
     {
-        Stdout_Push("Unsupported ELF File Class.\n");
+        printf("Unsupported ELF File Class.\n");
         return FALSE;
     }
     if (hdr->e_ident[EI_DATA] != ELFDATA2MSB)
     {
-        Stdout_Push("Unsupported ELF File byte order.\n");
+        printf("Unsupported ELF File byte order.\n");
         return FALSE;
     }
     if (hdr->e_machine != EM_68K)
     {
-        Stdout_Push("Unsupported ELF File target.\n");
+        printf("Unsupported ELF File target.\n");
         return FALSE;
     }
     if (hdr->e_ident[EI_VERSION] != EV_CURRENT)
     {
-        Stdout_Push("Unsupported ELF File version.\n");
+        printf("Unsupported ELF File version.\n");
         return FALSE;
     }
     if (hdr->e_type != ET_REL && hdr->e_type != ET_EXEC)
     {
-        Stdout_Push("Unsupported ELF File type.\n");
+        printf("Unsupported ELF File type.\n");
         return FALSE;
     }
 

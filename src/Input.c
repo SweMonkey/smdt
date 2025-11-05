@@ -1,12 +1,13 @@
 #include "Input.h"
 #include "Keyboard.h"
+#include "Mouse.h"
 #include "Utils.h"
 #include "Screensaver.h"
 #include "WinMgr.h"
 
 #define KM_SZ 0x1FF
 
-static u8 KeyMap[KM_SZ];
+static u8 KeyMap[KM_SZ+1];
 void QMenu_Input();
 void HexView_Input();
 void FavView_Input();
@@ -34,6 +35,7 @@ void Input_Init()
     JOY_setSupport(PORT_2, JOY_SUPPORT_OFF);
 
     KB_Init();
+    Mouse_Init();
 }
 
 inline bool is_KeyDown(u16 key)
@@ -56,14 +58,15 @@ inline bool is_AnyKey()
     return FALSE;
 }
 
-u16 get_KeyPress(u8 KeyState)
+u8 get_KeyPress(u16 key)
 {
-    return 0;//KeyMap[KeyState & KM_SZ];
+    return KeyMap[key & KM_SZ];
 }
 
 inline void set_KeyPress(u16 key, u8 KeyState)
 {
-    KeyMap[key & KM_SZ] = KeyState;
+    if (KeyMap[key & KM_SZ] == KEYSTATE_NONE) KeyMap[key & KM_SZ] = KeyState;
+    else if (key > 0x1EF) KeyMap[key & KM_SZ] = KeyState;   // Don't remember the reason why the above if excludes KEYSTATE_NONE, but to play it safe I'll just leave it alone and add this line for mouse state change to NONE
 
     InactiveCounter = -1;
 }
@@ -72,5 +75,5 @@ inline void InputTick()
 {
     WinMgr_Input();
 
-    memset(KeyMap, KEYSTATE_NONE, KM_SZ);
+    memset(KeyMap, KEYSTATE_NONE, KM_SZ - 0xF); // Don't touch the last 16 states (mouse code will take care of it)
 }
