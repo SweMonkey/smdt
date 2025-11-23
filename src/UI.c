@@ -679,6 +679,82 @@ void UI_DrawTextInput(u8 x, u8 y, u8 width, const char *caption, char str[], boo
     }
 }
 
+/// @brief Draw a number input spinbox
+/// @param x X position
+/// @param y Y position
+/// @param width Width of input box
+/// @param caption Input box caption
+/// @param num Integer variable to output/input into
+/// @param bShowCaret Show caret in input box
+void UI_DrawSpinbox(u8 x, u8 y, u8 width, const char *caption, s32 *num, u16 selection)
+{
+    if (Target == NULL) return;
+    
+    UI_DrawPanel(x, y, width-1, 3);
+    UI_DrawText(x+1, y, PAL1, caption);
+
+    if (selection == 1)
+    {
+        Target->WinBuffer[y+3][x+width-1] = 0x95;
+        Target->WinBuffer[y+3][x+width  ] = 0x96;
+
+        Target->WinBuffer[y+4][x+width-1] = 0x97;
+        Target->WinBuffer[y+4][x+width  ] = 0x98;
+
+        Target->WinBuffer[y+5][x+width-1] = 0x99;
+        Target->WinBuffer[y+5][x+width  ] = 0x9A;
+    }
+    else if (selection == 2)
+    {
+        Target->WinBuffer[y+3][x+width-1] = 0xB5;
+        Target->WinBuffer[y+3][x+width  ] = 0xB6;
+
+        Target->WinBuffer[y+4][x+width-1] = 0xB7;
+        Target->WinBuffer[y+4][x+width  ] = 0xB8;
+
+        Target->WinBuffer[y+5][x+width-1] = 0xB9;
+        Target->WinBuffer[y+5][x+width  ] = 0xBA;
+    }
+    else
+    {
+        Target->WinBuffer[y+3][x+width-1] = 0xB5;
+        Target->WinBuffer[y+3][x+width  ] = 0xB6;
+
+        Target->WinBuffer[y+4][x+width-1] = 0x9B;
+        Target->WinBuffer[y+4][x+width  ] = 0x9C;
+
+        Target->WinBuffer[y+5][x+width-1] = 0x99;
+        Target->WinBuffer[y+5][x+width  ] = 0x9A;
+    }
+    
+    Target->WinAttribute[y+3][x+width-1] = PAL1;
+    Target->WinAttribute[y+3][x+width  ] = PAL1;
+    Target->WinAttribute[y+4][x+width-1] = PAL1;
+    Target->WinAttribute[y+4][x+width  ] = PAL1;
+    Target->WinAttribute[y+5][x+width-1] = PAL1;
+    Target->WinAttribute[y+5][x+width  ] = PAL1;
+
+    char snum[16];
+    itoa(*num, snum);
+
+    size_t len = strlen(snum);
+    u8 nwidth = width-3;
+
+    const char *visibleStr = snum;
+    if (len > nwidth) 
+    {
+        visibleStr = snum + (len - nwidth);
+    }
+
+    UI_DrawText(x+1, y+1, PAL1, visibleStr);
+
+    /*if (bShowCaret) 
+    {
+        size_t caretPos = len < nwidth ? len : nwidth;
+        Target->WinBuffer[y+4][x+2+caretPos] = 0x7C;
+    }*/
+}
+
 /// @brief Draw item list with selector
 /// @param x X position
 /// @param y Y position
@@ -802,6 +878,10 @@ void UI_DrawConfirmBox(u8 x, u8 y, UI_ConfirmModel model, u8 selected)
         case CM_Add_Remove:
             UI_DrawText(x    , y, (selected == 0 ? PAL0 : PAL1), " Add ");
             UI_DrawText(x + 8, y, (selected == 1 ? PAL0 : PAL1), " Remove ");
+        break;
+        case CM_Play_Stop:
+            UI_DrawText(x    , y, (selected == 0 ? PAL0 : PAL1), " Play ");
+            UI_DrawText(x + 6, y, (selected == 1 ? PAL0 : PAL1), " Stop ");
         break;
     
         default:

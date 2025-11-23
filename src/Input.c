@@ -8,6 +8,7 @@
 #define KM_SZ 0x1FF
 
 static u8 KeyMap[KM_SZ+1];
+static u16 JoyLastState;
 void QMenu_Input();
 void HexView_Input();
 void FavView_Input();
@@ -15,14 +16,16 @@ void FavView_Input();
 
 void Input_JP(u16 joy, u16 changed, u16 state)
 {
-    set_KeyPress(KEY_RETURN,   (changed & state & BUTTON_A)     ? KEYSTATE_DOWN : KEYSTATE_UP);
-    set_KeyPress(KEY_ESCAPE,   (changed & state & BUTTON_B)     ? KEYSTATE_DOWN : KEYSTATE_UP);
-    set_KeyPress(KEY_BACKSPACE,(changed & state & BUTTON_C)     ? KEYSTATE_DOWN : KEYSTATE_UP);
-    set_KeyPress(KEY_RWIN,     (changed & state & BUTTON_START) ? KEYSTATE_DOWN : KEYSTATE_UP);
-    set_KeyPress(KEY_UP,       (changed & state & BUTTON_UP)    ? KEYSTATE_DOWN : KEYSTATE_UP);
-    set_KeyPress(KEY_DOWN,     (changed & state & BUTTON_DOWN)  ? KEYSTATE_DOWN : KEYSTATE_UP);
-    set_KeyPress(KEY_LEFT,     (changed & state & BUTTON_LEFT)  ? KEYSTATE_DOWN : KEYSTATE_UP);
-    set_KeyPress(KEY_RIGHT,    (changed & state & BUTTON_RIGHT) ? KEYSTATE_DOWN : KEYSTATE_UP);
+    set_KeyPress(KEY_RETURN,    BTN_STATE(state, JoyLastState, BUTTON_A));
+    set_KeyPress(KEY_ESCAPE,    BTN_STATE(state, JoyLastState, BUTTON_B));
+    set_KeyPress(KEY_BACKSPACE, BTN_STATE(state, JoyLastState, BUTTON_C));
+    set_KeyPress(KEY_RWIN,      BTN_STATE(state, JoyLastState, BUTTON_START));
+    set_KeyPress(KEY_UP,        BTN_STATE(state, JoyLastState, BUTTON_UP));
+    set_KeyPress(KEY_DOWN,      BTN_STATE(state, JoyLastState, BUTTON_DOWN));
+    set_KeyPress(KEY_LEFT,      BTN_STATE(state, JoyLastState, BUTTON_LEFT));
+    set_KeyPress(KEY_RIGHT,     BTN_STATE(state, JoyLastState, BUTTON_RIGHT));
+    
+    JoyLastState = state;
 
     return;
 }
@@ -30,6 +33,8 @@ void Input_JP(u16 joy, u16 changed, u16 state)
 void Input_Init()
 {
     memset(KeyMap, KEYSTATE_NONE, KM_SZ);
+
+    JoyLastState = 0;
 
     JOY_setSupport(PORT_1, JOY_SUPPORT_OFF);
     JOY_setSupport(PORT_2, JOY_SUPPORT_OFF);

@@ -9,11 +9,6 @@ extern u8 sv_QCURCL;
 
 void QMenu_Input();
 void SetupQItemTags();
-void DrawMenu(u8 idx);
-void EnterMenu();
-void ExitMenu();
-void UpMenu();
-void DownMenu();
 u16 QMenu_Open();
 void QMenu_Close();
 void ChangeText(u8 menu_idx, u8 entry_idx, const char *new_text);

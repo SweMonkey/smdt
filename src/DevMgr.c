@@ -47,6 +47,7 @@ bool bXPNetwork = FALSE;            // Use XPort network adapter
 bool bMegaCD = FALSE;               // Mega/Sega CD detected flag
 bool bVRAM_128KB = FALSE;
 bool bMouse = FALSE;
+bool bKeyboard = FALSE;
 DevPort sv_ListenPort = DP_Port2;   // Default UART port to listen on
 
 
@@ -127,10 +128,12 @@ void SetDevicePort(SM_Device *d, DevPort p)
 /// @brief Detect and initialize found devices
 void DetectDevices()
 {
-    u8 bNoKeyboard = TRUE;
     u8 DevId0 = GetDeviceID(DP_Port1);
     u8 DevId1 = GetDeviceID(DP_Port2);
     u8 DevId2 = GetDeviceID(DP_Port3);
+
+    bKeyboard = FALSE;
+    bMouse = FALSE;
 
     // -- PS/2 Keyboard setup --------------------------
     bool ps2_r = FALSE;
@@ -143,11 +146,11 @@ void DetectDevices()
     {
         DevList[DevSeq++] = &DRV_KBPS2;
         TRM_SetStatusIcon(ICO_KB_OK, ICO_POS_0);
-        bNoKeyboard = FALSE;
+        bKeyboard = TRUE;
     }
 
     // -- Saturn Keyboard setup ------------------------
-    if (bNoKeyboard && ((DevId0 == DEVICE_SATURN_PERIPHERAL) || (DevId1 == DEVICE_SATURN_PERIPHERAL) || (DevId2 == DEVICE_SATURN_PERIPHERAL)))
+    if (!bKeyboard && ((DevId0 == DEVICE_SATURN_PERIPHERAL) || (DevId1 == DEVICE_SATURN_PERIPHERAL) || (DevId2 == DEVICE_SATURN_PERIPHERAL)))
     {
              if (DevId0 == DEVICE_SATURN_PERIPHERAL) SetDevicePort(&DRV_KBSATURN, DP_Port1);
         else if (DevId1 == DEVICE_SATURN_PERIPHERAL) SetDevicePort(&DRV_KBSATURN, DP_Port2);
@@ -157,7 +160,7 @@ void DetectDevices()
         {
             DevList[DevSeq++] = &DRV_KBSATURN;
             TRM_SetStatusIcon(ICO_KB_OK, ICO_POS_0);
-            bNoKeyboard = FALSE;
+            bKeyboard = TRUE;
         }
     }
 
@@ -169,25 +172,24 @@ void DetectDevices()
 
         if (MM_Mouse_Init())
         {
-            Stdout_Push(" [92mMega Mouse found[0m\n");
             DevList[DevSeq++] = &DRV_MMOUSE;
             bMouse = TRUE;
 
-            if (bNoKeyboard)
+            if (!bKeyboard)
             {
                 TRM_SetStatusIcon(ICO_MOUSE_OK, ICO_POS_0);
             }
         }
     }
 
-    if (bNoKeyboard)
+    if (!bKeyboard)
     {
         Stdout_Push(" [93mNo keyboard found.[0m\n");
         kprintf("No keyboard found - Press F1 to continue");
     }
 
     // -- Joypad setup ---------------------------------
-    if (!bMouse && (bNoKeyboard || ((DRV_KBPS2.PAssign != DP_Port1) && (DRV_KBSATURN.PAssign != DP_Port1))) ) // Only enable joypad if there is no keyboard detected, or if port 1 is free
+    if (!bMouse && (!bKeyboard || ((DRV_KBPS2.PAssign != DP_Port1) && (DRV_KBSATURN.PAssign != DP_Port1))) ) // Only enable joypad if there is no keyboard detected, or if port 1 is free
     {
         DRV_Joypad.Id.sName = "Joypad";
         DRV_Joypad.Id.Bitmask = 0x40;
@@ -204,7 +206,7 @@ void DetectDevices()
         JOY_setSupport(PORT_1, JOY_SUPPORT_3BTN);
         JOY_setEventHandler(Input_JP);
 
-        if (bNoKeyboard && (vKB_BATStatus == 0))
+        if (!bKeyboard && (vKB_BATStatus == 0))
         {
             TRM_SetStatusIcon(ICO_JP_OK, ICO_POS_0);
         }

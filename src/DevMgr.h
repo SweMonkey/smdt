@@ -82,6 +82,7 @@ extern bool bXPNetwork;
 extern bool bMegaCD;
 extern bool bVRAM_128KB;
 extern bool bMouse;
+extern bool bKeyboard;
 
 void SetDevicePort(SM_Device *d, DevPort p);
 void DeviceManager_Init();

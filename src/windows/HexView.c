@@ -23,7 +23,7 @@ static const MRect mrect_data[] =
     {304,  32, 8,   8, 0},   // Up
     {304,  40, 8, 168, 1},   // Slider area
     {304, 208, 8,   8, 2},   // Down
-    {255,   0, 0,   0, 0},   // Terminator
+    {320,   0, 0,   0, 0},   // Terminator
 };
 
 

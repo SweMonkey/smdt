@@ -1,3 +1,16 @@
+v0.33.3
+Telnet: The client will now set a default title when attempting to connect to a server.
+Telnet: The client will now inform the user when a connection failed when attempting to connect to a server.
+Telnet: Filtered out some nonsense escape sequences (ESC ESC, ESC \r etc).
+QuickMenu: Added support to select multiple options in a menu.
+System: malloc is no longer used in fprintf :).
+IRC: It is now possible to switch channels using the mouse by clicking on the channel number.
+IRC: Added options to individually disable JOIN, QUIT, PART and NICK message types. See QuickMenu ->  Settings -> Client settings -> IRC -> Message filters.
+IRC Bugfix: Received filtered message types won't show a channel as having new messages in them.
+Joypad bugfix: All keys mapped to the joypad got stuck as KEYSTATE_UP if no keyboard or mouse was connected (Joypad being the main input device). This was causing issues with windows listening to key up states and caused instant closing of windows for example.
+Pseudofile bugfix: Failed to create pseudofiles such as stdout if no SRAM is present. All subsequent writes to stdout was also lost causing a blank screen at the terminal shell.
+UI: Added spinbox widget.
+
 v0.33.2:
 Terminal: Removed BG colour attribute stuff, no point in parsing and interpreting it when it wont ever be used.
 Telnet: Initial mouse tracking code added, but for the most part disabled until completed.

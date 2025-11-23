@@ -4,6 +4,10 @@
 #include <genesis.h>
 #include "misc/KeyDef.h"
 
+#define BTN_STATE(curr, last, mask) \
+    ((curr & mask) ? KEYSTATE_DOWN :\
+    ((last & mask) ? KEYSTATE_UP : KEYSTATE_NONE))
+
 bool is_KeyDown(u16 key);
 bool is_KeyUp(u16 key);
 bool is_AnyKey();

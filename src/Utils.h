@@ -4,13 +4,13 @@
 #include <genesis.h>
 
 // Title bar prefix
-#define STATUS_VER_STR "v0.33.2"
+#define STATUS_VER_STR "v0.33.3"
 #define STATUS_TEXT "SMDT v33"
 #define STATUS_TEXT_SHORT "SMDT"
 
 #define SMDT_VMAJOR_INT 0
 #define SMDT_VMINOR_INT 33
-#define SMDT_VREV_INT 2
+#define SMDT_VREV_INT 3
 
 // VRAM memory addresses for various graphics, in tile units (/32)
 #define AVR_BGBLOCK 0       // $0000 - $01FF

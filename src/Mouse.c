@@ -12,15 +12,6 @@
 #define MOUSE_MIDDLE    0x4
 #define MOUSE_C         0x8
 
-/*  single tick "DOWN" state instead of continuous DOWN state for as long as its held down
-#define BTN_STATE(curr, last, mask) \
-    ((!(last & (mask)) &&  (curr & (mask))) ? KEYSTATE_DOWN : \
-      ((last & (mask)) && !(curr & (mask))) ? KEYSTATE_UP : KEYSTATE_NONE)*/
-
-#define BTN_STATE(curr, last, mask) \
-    ((curr & mask) ? KEYSTATE_DOWN :\
-    ((last & mask) ? KEYSTATE_UP : KEYSTATE_NONE))
-
 static u16 MouseButtons, MouseLastState;
 static s16 MouseX = 156, MouseY = 108;
 u8 sv_PointerStyle = 1;
@@ -50,7 +41,7 @@ void Mouse_Poll()
 {
     s16 dx = 0, dy = 0;
 
-    if (MM_Mouse_Poll(&dx, &dy, &MouseButtons))
+    if (MM_Mouse_Poll(&dx, &dy, &MouseButtons)) // TODO: Don't call MegaMouse poll function here. Call assigned mouse poll callback. 
     {
         MouseX += (dx > 1) | (dx < -1) ? dx >> MOUSE_SPEED : dx;
         MouseY -= (dy > 1) | (dy < -1) ? dy >> MOUSE_SPEED : dy;
@@ -82,7 +73,7 @@ void Mouse_Poll()
 u16 Mouse_GetRect(const MRect *r)
 {
     u8 i = 0;
-    while (r[i].x != 255 || i == 255)
+    while (r[i].x != 320 || i == 255)
     {
         if (MouseX >= r[i].x &&
             MouseX <= (r[i].x + r[i].w) && 

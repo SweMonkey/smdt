@@ -50,7 +50,7 @@ SM_VarList VarList[] =
     {ST_BYTE, &sv_TimeZone,         "timezone"},
     {ST_SARR, &sv_TimeServer,       "timeserver"},
     {ST_WORD, &sv_EpochStart,       "epoch"},
-    {ST_BYTE, &sv_ShowJoinQuitMsg,  "ircjqmsg"},
+    {ST_BYTE, &sv_MsgFilter,        "ircmsgfilter"},
     {ST_BYTE, &sv_WrapAtScreenEdge, "ircwrap"},
     {ST_BYTE, &sv_EnableUTF8,       "enableutf8"},
     {ST_BYTE, &sv_CBrightness,      "brightness"},

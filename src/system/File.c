@@ -6,6 +6,7 @@
 
 #define MAX_FD 64
 #define MAX_PRINTF_BUF 256
+static char Buffer_printf[MAX_PRINTF_BUF];
 
 static u16 FD_Count = 0;    // Open file descriptors - Not used for anything other than limiting the user/os to MAX_FD number of open files at once 
 
@@ -57,7 +58,7 @@ SM_File *F_Open(const char *filename, FileMode openmode)
 
     s32 r = FS_OpenFile(filename, openmode, &file->f);
 
-    if (r)
+    if (r && ((openmode & FM_IO) == 0))
     {
         F_Close(file);  // Close file to avoid leaking memory...
         //printf("Error opening file \"%s\"\nError code $%lX (%ld)\n", filename, r, r);
@@ -199,15 +200,14 @@ u16 F_Printf(SM_File *file, const char *fmt, ...)
 {
     va_list args;
     u16 i;
-    char *buffer = malloc(MAX_PRINTF_BUF);
+
+    Buffer_printf[0] = 0;
 
     va_start(args, fmt);
-    i = vsnprintf(buffer, MAX_PRINTF_BUF, fmt, args);
+    i = vsnprintf(Buffer_printf, MAX_PRINTF_BUF, fmt, args);
     va_end(args);
 
-    F_Write(buffer, i, 1, file);
-
-    free(buffer);
+    F_Write(Buffer_printf, i, 1, file);
 
     return i;
 }

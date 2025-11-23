@@ -13,7 +13,7 @@ typedef struct
 } SM_Window;
 
 typedef enum {WF_None = 0, WF_NoBorder = 1, WF_Modal = 2} UI_WindowFlags;
-typedef enum {CM_Ok_Cancel, CM_Yes_No, CM_Apply_Cancel, CM_Add_Remove} UI_ConfirmModel;
+typedef enum {CM_Ok_Cancel, CM_Yes_No, CM_Apply_Cancel, CM_Add_Remove, CM_Play_Stop} UI_ConfirmModel;
 typedef enum {IL_None = 0, IL_NoBorder = 1} UI_ItemListFlags;
 
 extern bool bModalWindowActive;
@@ -51,6 +51,7 @@ void UI_DrawWindow(u8 x, u8 y, u8 width, u8 height, bool bChild, const char *tit
 void UI_DrawVScrollbar(u8 x, u8 y, u8 height, u8 selected, u16 min, u16 max, u16 pos);
 void UI_DrawItemList(u8 x, u8 y, u8 width, u8 height, char *list[], u16 item_count, u16 scroll);
 void UI_DrawTextInput(u8 x, u8 y, u8 width, const char *caption, char str[], bool bShowCaret);
+void UI_DrawSpinbox(u8 x, u8 y, u8 width, const char *caption, s32 *num, u16 selection);
 void UI_DrawItemListSelect(u8 x, u8 y, u8 width, u8 height, const char *caption, char *list[], u8 item_count, u8 selected_item, UI_ItemListFlags flags);
 void UI_DrawColourPicker(u8 x, u8 y, u16 *rgb, u8 selected);
 void UI_DrawConfirmBox(u8 x, u8 y, UI_ConfirmModel model, u8 selected);

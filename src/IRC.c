@@ -37,6 +37,13 @@
 
 #define TTS_VRAMIDX 0x400
 
+// Message type filters (They can get quite spammy)
+#define MSG_FLAG_NONE 0
+#define MSG_FLAG_JOIN 1
+#define MSG_FLAG_QUIT 2
+#define MSG_FLAG_PART 4
+#define MSG_FLAG_NICK 8
+
 static struct s_linebuf
 {
     char prefix[B_PREFIX_LEN];
@@ -63,7 +70,7 @@ static const u16 pColors[16] =
 char sv_Username[32] = "smd_user";                   // Saved preferred IRC nickname
 char v_UsernameReset[32] = "ERROR_NOTSET";           // Your IRC nickname modified to suit the server (nicklen etc)
 char sv_QuitStr[32] = "SMDT IRC client quit";        // IRC quit message
-u8 sv_ShowJoinQuitMsg = 1;
+u8 sv_MsgFilter = MSG_FLAG_NONE;
 u8 sv_WrapAtScreenEdge = 1;
 
 u8 PG_CurrentIdx = 0;                                // Current active page/channel number
@@ -506,12 +513,14 @@ void IRC_DoCommand()
     }
     else if (strcmp(LineBuf->command, "JOIN") == 0)
     {
+        if (sv_MsgFilter & MSG_FLAG_JOIN) return;
+
         // Extract nickname from <nick>!<<hostname>
         u16 end = 1;
         while ((LineBuf->prefix[end++] != '!') && (end < B_SUBPREFIX_LEN));
         strncpy(subprefix, LineBuf->prefix, end-1);
 
-        if ((strcmp(subprefix, v_UsernameReset) != 0) && (sv_ShowJoinQuitMsg != 0))
+        if (strcmp(subprefix, v_UsernameReset) != 0)
         {
             snprintf(PrintBuf, B_PRINTSTR_LEN, "%s has joined this channel\n", LineBuf->prefix);
         }
@@ -520,7 +529,7 @@ void IRC_DoCommand()
     }
     else if (strcmp(LineBuf->command, "QUIT") == 0)  // Todo: figure out which channel this user is in
     {
-        if (sv_ShowJoinQuitMsg == 0) return;
+        if (sv_MsgFilter & MSG_FLAG_QUIT) return;
 
         // Extract nickname from <nick>!<<hostname>
         u16 end = 1;
@@ -581,6 +590,8 @@ void IRC_DoCommand()
     }
     else if (strcmp(LineBuf->command, "NICK") == 0)
     {
+        if (sv_MsgFilter & MSG_FLAG_NICK) return;
+
         // Extract nickname from <nick>!<<hostname>
         u16 end = 1;
         while ((LineBuf->prefix[end++] != '!') && (end < B_SUBPREFIX_LEN));
@@ -590,6 +601,8 @@ void IRC_DoCommand()
     }
     else if (strcmp(LineBuf->command, "PART") == 0)
     {
+        if (sv_MsgFilter & MSG_FLAG_PART) return;
+
         snprintf(PrintBuf, B_PRINTSTR_LEN, "%s left this channel\n", LineBuf->prefix);  // LineBuf->param[1] = ?
         strncpy(ChanBuf, LineBuf->param[0], 40);
     }

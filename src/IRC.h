@@ -12,7 +12,7 @@
 extern char sv_Username[];     // Saved preferred IRC nickname
 extern char v_UsernameReset[]; // Your IRC nickname modified to suit the server (nicklen etc)
 extern char sv_QuitStr[];      // IRC quit message
-extern u8 sv_ShowJoinQuitMsg;
+extern u8 sv_MsgFilter;
 extern u8 sv_WrapAtScreenEdge;
 extern u8 PG_CurrentIdx;
 

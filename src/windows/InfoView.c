@@ -19,13 +19,13 @@ static u32 Lastup = 0;
 
 static const MRect mrect_data[] =
 {
-    {  8,  32, 112, 8, 0},
-    {136,  32,  56, 8, 1},
-    {208,  32,  32, 8, 2},
-    {255,   0,   0, 0, 0},   // Terminator
+    {  8,  32, 112, 8, 0},  // Tab 1
+    {136,  32,  56, 8, 1},  // Tab 2
+    {208,  32,  32, 8, 2},  // Tab 3
+    {320,   0,   0, 0, 0},  // Terminator
 };
 
-static const char * const tab_text[3] =
+static const char * const tab_text[] =
 {
     "System Monitor", "Devices", "Info"
 };
@@ -276,7 +276,7 @@ static void UpdateView()
     {
         case 0: DrawSysMonTab(); break;
         case 1: DrawDeviceTab(); break;
-        case 2: DrawInfoTab(); break;    
+        case 2: DrawInfoTab(); break;
         default: break;
     }
 

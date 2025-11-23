@@ -462,16 +462,15 @@ void TTY_PrintChar(u8 c)
 
     switch (sv_Font)
     {
-        case FONT_8x8_16: // 8x8
+        case FONT_4x8_16: // 4x8 16 Colour
         {
-            addr = (((sx+BufferSelect) & 127) << 1) + YAddr_Table[sy & 31];
+            addr = ((sx+BufferSelect) & 254) + YAddr_Table[sy & 31];
             
-            *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(AVR_PLANE_B + addr);         // Set plane B VRAM address
-            *((vu16*) VDP_DATA_PORT) = 0x4000 + ColorFG;                                // Set plane B tilemap data
+            *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR((EvenOdd ? AVR_PLANE_B : AVR_PLANE_A) + addr);   // Set plane VRAM address
+            *((vu16*) VDP_DATA_PORT) = PF_Table[ColorFG & 0xF] + c;                                         // Set plane tilemap data
 
-            *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(AVR_PLANE_A + addr);         // Set plane A VRAM address
-            *((vu16*) VDP_DATA_PORT) = AVR_FONT0 + c + (bInverse ? 0x2000 : 0x2100);    // Set plane A tilemap data
-            
+            EvenOdd = sx & 1;
+
             break;
         }
         case FONT_4x8_8: // 4x8 8 Colour
@@ -494,20 +493,20 @@ void TTY_PrintChar(u8 c)
             EvenOdd = sx & 1;
             break;
         }
-        case FONT_4x8_16: // 4x8 16 Colour
+        case FONT_8x8_16: // 8x8
         {
-            addr = ((sx+BufferSelect) & 254) + YAddr_Table[sy & 31];
+            addr = (((sx+BufferSelect) & 127) << 1) + YAddr_Table[sy & 31];
             
-            *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR((EvenOdd ? AVR_PLANE_B : AVR_PLANE_A) + addr);   // Set plane VRAM address
-            *((vu16*) VDP_DATA_PORT) = PF_Table[ColorFG & 0xF] + c;                                         // Set plane tilemap data
+            *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(AVR_PLANE_B + addr);         // Set plane B VRAM address
+            *((vu16*) VDP_DATA_PORT) = 0x4000 + ColorFG;                                // Set plane B tilemap data
 
-            EvenOdd = sx & 1;
-
+            *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(AVR_PLANE_A + addr);         // Set plane A VRAM address
+            *((vu16*) VDP_DATA_PORT) = AVR_FONT0 + c + (bInverse ? 0x2000 : 0x2100);    // Set plane A tilemap data
+            
             break;
         }
     
-        default:
-        break;
+        default: break;
     }
 
     TTY_MoveCursor(TTY_CURSOR_RIGHT, 1);
@@ -687,102 +686,50 @@ void TTY_ClearPartialLine(u16 y, u16 from_x, u16 to_x)
 
 void TTY_SetAttribute(u8 v)
 {
-    // Normal intensity color
-    if ((v >= 30) && (v <= 37))
+    // Foreground color: 30–37 normal, 90–97 high intensity
+    if ((v >= 30 && v <= 37) || (v >= 90 && v <= 97))
     {
-        ColorFG = v - 30;
+        // Base color
+        ColorFG = (v >= 90 ? v - 82 : v - 30);
 
-        if (bIntense) ColorFG += 8;        
+        // Apply intensity if active
+        if (bIntense && v < 90) ColorFG += 8;
 
-        #ifdef ATT_LOGGING
-        kprintf("N ColorFG: $%X", ColorFG);
-        #endif
-    }
-    // Light intensity color
-    else if ((v >= 90) && (v <= 97))
-    {
-        ColorFG = v - 82;
-
-        #ifdef ATT_LOGGING
-        kprintf("L ColorFG: $%X", ColorFG);
-        #endif
+        return;
     }
 
     switch (v)
     {
-        case 0:     // Reset
-            ColorFG = CL_FG;//15;
-
-            bIntense = FALSE;
-            bInverse = FALSE;
-
-            #ifdef ATT_LOGGING
-            kprintf("Text reset at $%lX", RXBytes);
-            #endif
-        break;
-
-        case 1:     // Bold / Increased intensity
-            if (ColorFG <= 7) ColorFG += 8;
-
-            bIntense = TRUE;
-
-            #ifdef ATT_LOGGING
-            kprintf("Text increased intensity at $%lX", RXBytes);
-            #endif
-        break;
-
-        case 2:     // Decreased intensity
-            if (ColorFG >= 8) ColorFG -= 8;
-
-            bIntense = FALSE;
-
-            #ifdef ATT_LOGGING
-            kprintf("Text decreased intensity at $%lX", RXBytes);
-            #endif
-        break;
-
-        case 7:     // Inverse on
-            bInverse = TRUE;
-
-            #ifdef ATT_LOGGING
-            kprintf("Text inverse on at $%lX", RXBytes);
-            #endif
-        break;
-
-        case 22:     // Normal intensity
-            if (ColorFG >= 8) ColorFG -= 8;
-
-            bIntense = FALSE;
-
-            #ifdef ATT_LOGGING
-            kprintf("Text Normal intensity at $%lX", RXBytes);
-            #endif
-        break;
-
-        case 27:    // Inverse off
-            bInverse = FALSE;
-
-            #ifdef ATT_LOGGING
-            kprintf("Text inverse off at $%lX", RXBytes);
-            #endif
-        break;
-
-        case 38:    // Set foreground color
-            #ifdef ATT_LOGGING
-            kprintf("Text set foreground color at $%lX", RXBytes);
-            #endif
-        break;
-
-        case 39:    // Reset FG color
+        case 0:  // Reset
             ColorFG = CL_FG;
-
-            #ifdef ATT_LOGGING
-            kprintf("Text FG color reset at $%lX", RXBytes);
-            #endif
+            bIntense = FALSE;
+            bInverse = FALSE;
         break;
 
-        default:
+        case 1:  // Bold / increased intensity
+            if (ColorFG <= 7) ColorFG += 8;
+            bIntense = TRUE;
         break;
+
+        case 2:  // Dim / decreased intensity
+        case 22: // Normal intensity
+            if (ColorFG >= 8) ColorFG -= 8;
+            bIntense = FALSE;
+        break;
+
+        case 7:  // Inverse on
+            bInverse = TRUE;
+        break;
+
+        case 27: // Inverse off
+            bInverse = FALSE;
+        break;
+
+        case 39: // Reset FG color
+            ColorFG = CL_FG;
+        break;
+
+        default: break;
     }
 }
 

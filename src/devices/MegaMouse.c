@@ -16,7 +16,11 @@ bool MM_Mouse_Init()
     DEV_SetCtrl(DRV_MMOUSE, 0x60);
     DEV_SetData(DRV_MMOUSE, 0x60);
 
-    if (DEV_GetData(DRV_MMOUSE, 0xF) == 0) return TRUE;
+    if (DEV_GetData(DRV_MMOUSE, 0xF) == 0)
+    {
+        Stdout_Push(" [92mMega Mouse initialized[0m\n");
+        return TRUE;
+    } 
     
     return FALSE;
 }

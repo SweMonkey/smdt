@@ -34,23 +34,25 @@ void IO_CreatePseudoFiles()
     FILE_INTERNAL_stderr  = stderr  = NULL;
 
     FILE_INTERNAL_tty_in  = F_Open("/sram/system/tty_in.io", LFS_O_CREAT | LFS_O_RDONLY | LFS_O_IO);
-    FILE_INTERNAL_tty_in->io_buf = &RxBuffer;
+    if (FILE_INTERNAL_tty_in) FILE_INTERNAL_tty_in->io_buf = &RxBuffer;
     tty_in = FILE_INTERNAL_tty_in;
 
     FILE_INTERNAL_tty_out = F_Open("/sram/system/tty_out.io", LFS_O_CREAT | LFS_O_TRUNC | LFS_O_WRONLY | LFS_O_IO);
-    FILE_INTERNAL_tty_out->io_buf = &TxBuffer;
+    if (FILE_INTERNAL_tty_out) FILE_INTERNAL_tty_out->io_buf = &TxBuffer;
     tty_out = FILE_INTERNAL_tty_out;
     
     FILE_INTERNAL_stdin = F_Open("/sram/system/stdin.io", LFS_O_CREAT | LFS_O_RDONLY | LFS_O_IO);
-    FILE_INTERNAL_stdin->io_buf = &StdinBuffer;
+    if (FILE_INTERNAL_stdin) FILE_INTERNAL_stdin->io_buf = &StdinBuffer;
     stdin = FILE_INTERNAL_stdin;
     
     FILE_INTERNAL_stdout = F_Open("/sram/system/stdout.io", LFS_O_CREAT | LFS_O_TRUNC | LFS_O_WRONLY | LFS_O_IO); 
-    FILE_INTERNAL_stdout->io_buf = &StdoutBuffer;
+    if (FILE_INTERNAL_stdout) FILE_INTERNAL_stdout->io_buf = &StdoutBuffer;
     stdout = FILE_INTERNAL_stdout;
 
+    if (FILE_INTERNAL_stdout == NULL) kprintf("stdout is null!");
+
     FILE_INTERNAL_stderr = F_Open("/sram/system/stderr.io", LFS_O_CREAT | LFS_O_TRUNC | LFS_O_WRONLY | LFS_O_IO);
-    FILE_INTERNAL_stderr->io_buf = &StdoutBuffer;
+    if (FILE_INTERNAL_stderr) FILE_INTERNAL_stderr->io_buf = &StdoutBuffer;
     stderr = FILE_INTERNAL_stderr;
 }
 

@@ -22,7 +22,17 @@ u16 Enter_Telnet(u8 argc, char *argv[])
 {
     sv_Font = sv_TelnetFont;
     TELNET_Init(TF_Everything);
-    TRM_SetStatusText(STATUS_TEXT_SHORT);
+
+    // Set up initial title
+    u8 it = 0;
+    char title[38];
+    u8 len = strlen(argv[1]);
+    len = len >= 37 ? 37 : len;
+
+    while (it++ < len) if (argv[1][it] == ':') break;
+
+    snprintf(title, 37, "%s - %.*s", STATUS_TEXT_SHORT, it, argv[1]);
+    TRM_SetStatusText(title);
 
     Buffer_Flush(&TxBuffer);
     Buffer_Flush(&RxBuffer);
@@ -39,6 +49,7 @@ u16 Enter_Telnet(u8 argc, char *argv[])
         if (NET_Connect(argv[1]) == FALSE) 
         {
             // Connection failed; Inform the user here
+            printf("Connection to %s failed", argv[1]);
         }
     }
 

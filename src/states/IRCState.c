@@ -8,6 +8,7 @@
 #include "Network.h"
 #include "Screensaver.h"
 #include "WinMgr.h"
+#include "Mouse.h"
 
 #include "devices/RL_Network.h"
 #include "misc/ConfigFile.h"
@@ -36,6 +37,17 @@ static u16 BufferLastNum = 65535;
 
 u8 sv_IRCFont = FONT_4x8_1;
 extern u16 sv_EpochStart;
+
+static const MRect mrect_data[] =
+{
+    {240, 0, 8, 8, 0},   // Channel 1
+    {248, 0, 8, 8, 1},   // Channel 2
+    {256, 0, 8, 8, 2},   // Channel 3
+    {264, 0, 8, 8, 3},   // Channel 4
+    {272, 0, 8, 8, 4},   // Channel 5
+    {280, 0, 8, 8, 5},   // Channel 6
+    {320, 0, 0, 0, 0},   // Terminator
+};
 
 void IRC_PrintChar(u8 c);
 
@@ -437,6 +449,15 @@ u8 ParseTx()
 void Input_IRC()
 {
     if (bWindowActive) return;
+
+    if (bMouse)
+    {
+        if (is_KeyDown(sv_MBind_Click))
+        {
+            u16 r = Mouse_GetRect(mrect_data);
+            ChangePage(r);
+        }
+    }
     
     if (is_KeyDown(KEY_UP))
     {

@@ -1266,6 +1266,15 @@ static void DoEscape(u8 byte)
                     goto EndEscape;
                 }
 
+                case 0xD:   // ??? Unknown ESC[!0xD sequence
+                {
+                    #ifdef ESC_LOGGING
+                    kprintf("[91mRan into unknown ESC[! sequence at $%lX[0m", RXBytes);
+                    #endif
+
+                    goto EndEscape;
+                }
+
                 case 'p':   // Soft Reset (DECSTR) / Request Mode (RQM) / Alias: Save Rendition Attributes / ??? DECSR / Select VT-XXX Conformance Level (DECSCL)
                 {
                     ESC_Param[ESC_ParamSeq++] = atoi(ESC_Buffer);
@@ -3074,7 +3083,16 @@ static void DoEscape(u8 byte)
                 ESC_Type = byte;
 
                 switch (ESC_Type)
-                {        
+                {
+                    case 0x0D:   // ??? Unknown ESC sequence
+                    case 0x1B:   // ??? Unknown ESC ESC sequence
+                        #ifdef ESC_LOGGING
+                        kprintf("[91mRan into unknown ESC <$%X> sequence at $%lX[0m", ESC_Type, RXBytes);
+                        #endif
+
+                        goto EndEscape;
+                    break;
+
                     case '=':   // ESC =    Application Keypad (DECKPAM).
                         #ifdef ESC_LOGGING
                         kprintf("[91m\"ESC =\" NOT IMPLEMENTED! At $%lX[0m", RXBytes);

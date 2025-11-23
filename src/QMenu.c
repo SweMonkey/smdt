@@ -12,7 +12,6 @@
 #include "IRC.h"            // IRC_SetFontSize
 #include "WinMgr.h"
 #include "Palette.h"
-
 #include "misc/ConfigFile.h"
 
 // Forward decl.
@@ -20,33 +19,43 @@ void WINFN_Reset();
 void WINFN_Newline();
 void WINFN_BGColor();
 void WINFN_FGColor();
-void WINFN_TERMTYPE();
-void WINFN_SERIALSPEED();
-void WINFN_FONT_TERM();
-void WINFN_FONT_TELNET();
-void WINFN_FONT_IRC();
+void WINFN_TermType();
+void WINFN_SerialSpeed();
+void WINFN_Font_Term();
+void WINFN_Font_Telnet();
+void WINFN_Font_IRC();
 void WINFN_KBLayoutSel();
-void WINFN_RXTXSTATS();
-void WINFN_RXBUFSTATS();
-void WINFN_DEBUGSEL();
-void WINFN_SERIALPORTSEL();
-void WINFN_DEVLISTENTRY();
-void WINFN_HSCOFF();
+void WINFN_RxTxStats();
+void WINFN_RxBufStats();
+void WINFN_DebugSel();
+void WINFN_SerialPortSel();
+void WINFN_DevListEntry();
+void WINFN_HScOff();
 void WINFN_Echo();
 void WINFN_LineMode();
-void WINFN_CUSTOM_FGCL();
-void WINFN_SCREENSAVER();
-void WINFN_CURSOR_CL();
-void WINFN_UITHEME();
+void WINFN_Custom_FGCL();
+void WINFN_ScreenSaver();
+void WINFN_Cursor_CL();
+void WINFN_UI_Theme();
 void WINFN_Backspace();
 void WINFN_StartMenu();
 void WINFN_WrapAtScreenEdge();
-void WINFN_ShowJQMsg();
+void WINFN_IrcMsgFilter();
 void WINFN_CharSet();
 void WINFN_Brightness();
 void WINFN_Pointer();
 
+// Extern forward decl.
 void PrintCWD();
+
+// Local QMenu forward decl.
+static void DrawEntry(u8 idx);
+static void MarkEntry(u8 idx);
+static void DrawMenu(u8 idx);
+static void EnterMenu();
+static void ExitMenu();
+static void UpMenu();
+static void DownMenu();
 
 static const u8 QFrame[5][24] = 
 {
@@ -76,13 +85,13 @@ static struct s_menu
 {
     u8 num_entries;                 // Number of entries in menu
     u8 selected_entry;              // Saved selected entry (automatic, leave at 0)
-    u8 tagged_entry;                // Mark the tagged option/setting
+    u8 tagged_entry;                // Mark the tagged option/setting -- 0-7 = normal single entry tag -- upper 5 bits = multiple entry tags (max 5 seperate entries can be tagged!)
     u8 prev_menu;                   // Previous menu to return to when going back (automatic, leave at 0)
     VoidCallback *entry_function;   // Function callback which is called when entering an entry
     VoidCallback *activate_function;// Function callback which is called when trying to enter an entry without submenu (next_menu >= 254)
     VoidCallback *exit_function;    // Function callback which is called when exiting an entry
     const char *title;              // Window title text
-    u8 next_menu[8];                // Menu number selected entry leads to (255 = Do nothing/Do not tag - 254 = Do nothing/Do tag)
+    u8 next_menu[8];                // Menu number selected entry leads to (255 = Do nothing/Do not tag -- 254 = Do nothing/Do tag -- 253 = Do nothing/Do tag using the upper 5 bits of tagged_entry)
     char text[8][20];               // Entry text
 } MainMenu[] =
 {{//0
@@ -165,7 +174,7 @@ static struct s_menu
 {//7
     6,
     0, 255, 0,
-    WINFN_DEVLISTENTRY, NULL, NULL,
+    WINFN_DevListEntry, NULL, NULL,
     "Connected devices",
     {255, 255, 255, 255, 255, 255},
     {"P1:0= <?>",
@@ -190,7 +199,7 @@ static struct s_menu
 {//9
     5,
     0, 255, 0,
-    NULL, WINFN_TERMTYPE, NULL,
+    NULL, WINFN_TermType, NULL,
     "Terminal type",
     {254, 254, 254, 254, 254},
     {"Xterm",
@@ -202,7 +211,7 @@ static struct s_menu
 {//10
     4,
     0, 255, 0,
-    NULL, WINFN_SERIALSPEED, NULL,
+    NULL, WINFN_SerialSpeed, NULL,
     "Serial speed",
     {254, 254, 254, 254},
     {"4800 Baud",
@@ -213,7 +222,7 @@ static struct s_menu
 {//11
     5,
     0, 255, 0,
-    NULL, WINFN_FONT_TERM, NULL,
+    NULL, WINFN_Font_Term, NULL,
     "Terminal font",
     {254, 254, 254, 254, 254},
     {"8x8 16 Colour",
@@ -234,7 +243,7 @@ static struct s_menu
 {//13
     6,
     0, 255, 0,
-    NULL, WINFN_DEBUGSEL, NULL,
+    NULL, WINFN_DebugSel, NULL,
     "Debug",
     {15, 23, 255, 255, 255, 255},
     {"TX/RX stats",
@@ -256,7 +265,7 @@ static struct s_menu
 {//15
     2,
     0, 255, 0,
-    WINFN_RXTXSTATS, WINFN_RXTXSTATS, NULL,
+    WINFN_RxTxStats, WINFN_RxTxStats, NULL,
     "TX/RX stats",
     {255, 255},
     {"TX bytes: 0",
@@ -265,7 +274,7 @@ static struct s_menu
 {//16
     4,
     2, 255, 0,
-    NULL, WINFN_SERIALPORTSEL, NULL,
+    NULL, WINFN_SerialPortSel, NULL,
     "Select serial port",
     {254, 254, 254, 254},
     {"Disconnected",
@@ -298,7 +307,7 @@ static struct s_menu
 {//19
     5,
     0, 255, 0,
-    NULL, WINFN_HSCOFF, NULL,
+    NULL, WINFN_HScOff, NULL,
     "H Scroll offset",
     {254, 254, 254, 254, 254},
     {"None",
@@ -310,7 +319,7 @@ static struct s_menu
 {//20
     5,
     0, 255, 0,
-    NULL, WINFN_FONT_TELNET, NULL,
+    NULL, WINFN_Font_Telnet, NULL,
     "Telnet font",
     {254, 254, 254, 254, 254},
     {"8x8 16 Colour",
@@ -340,7 +349,7 @@ static struct s_menu
 {//23
     3,
     0, 255, 0,
-    WINFN_RXBUFSTATS, WINFN_RXBUFSTATS, NULL,
+    WINFN_RxBufStats, WINFN_RxBufStats, NULL,
     "RX Buffer stats",
     {255, 255, 255},
     {"Head: 0",
@@ -350,7 +359,7 @@ static struct s_menu
 {//24
     3,
     0, 255, 0,
-    NULL, WINFN_CUSTOM_FGCL, NULL,
+    NULL, WINFN_Custom_FGCL, NULL,
     "4x8 8 Colour set",
     {254, 254, 254},
     {"Normal",
@@ -360,7 +369,7 @@ static struct s_menu
 {//25
     2,
     0, 255, 0,
-    NULL, WINFN_SCREENSAVER, NULL,
+    NULL, WINFN_ScreenSaver, NULL,
     "Screensaver",
     {254, 254},
     {"Off",
@@ -378,7 +387,7 @@ static struct s_menu
 {//27
     3,
     0, 255, 0,
-    NULL, WINFN_FONT_IRC, NULL,
+    NULL, WINFN_Font_IRC, NULL,
     "IRC font",
     {254, 254, 254},
     {"8x8 16 Colour",
@@ -388,7 +397,7 @@ static struct s_menu
 {//28
     6,
     0, 255, 0,
-    NULL, WINFN_UITHEME, NULL,
+    NULL, WINFN_UI_Theme, NULL,
     "UI theme",
     {254, 254, 254, 254, 254, 254},
     {"Dark blue",
@@ -424,7 +433,7 @@ static struct s_menu
     "IRC",
     {32, 33},
     {"Word wrap",
-     "Show join/quit msg"}
+     "Message filters"}
 },
 {//32
     2,
@@ -436,13 +445,15 @@ static struct s_menu
      "On"}
 },
 {//33
-    2,
-    0, 255, 0,
-    NULL, WINFN_ShowJQMsg, NULL,
-    "Show join/quit msg",
-    {254, 254},
-    {"No",
-     "Yes"}
+    4,
+    0, 0xF9, 0,
+    NULL, WINFN_IrcMsgFilter, NULL,
+    "Message filters",
+    {253, 253, 253, 253},
+    {"Hide JOIN",
+     "Hide QUIT",
+     "Hide PART",
+     "Hide NICK"}
 },
 {//34
     2,
@@ -468,7 +479,7 @@ static struct s_menu
 {//36
     4,
     0, 255, 0,
-    NULL, WINFN_CURSOR_CL, NULL,
+    NULL, WINFN_Cursor_CL, NULL,
     "Terminal cursor",
     {254, 254, 254, 254},
     {"Green",
@@ -496,13 +507,13 @@ static const MRect qrect_data[] =
     {16, 72, 168, 8, 5},
     {16, 80, 168, 8, 6},
     {16, 88, 168, 8, 7},
-    {255, 0,   0, 0, 0},   // Terminator
+    {320, 0,   0, 0, 0},   // Terminator
 };
 
 
 void QMenu_Input()
 {
-    if (is_KeyDown(KEY_RETURN) || is_KeyUp(sv_MBind_Click))
+    if (is_KeyUp(KEY_RETURN) || is_KeyUp(sv_MBind_Click))
     {
         EnterMenu();
     }
@@ -521,7 +532,7 @@ void QMenu_Input()
         if (is_KeyDown(KEY_DOWN)) DownMenu();
     }
 
-    if (is_KeyDown(KEY_ESCAPE) || is_KeyUp(sv_MBind_AltClick)) ExitMenu();
+    if (is_KeyUp(KEY_ESCAPE) || is_KeyUp(sv_MBind_AltClick)) ExitMenu();
 }
 
 void SetupQItemTags()
@@ -539,10 +550,13 @@ void SetupQItemTags()
     MainMenu[28].tagged_entry = sv_ThemeUI;
     MainMenu[29].tagged_entry = vBackspace;
     MainMenu[32].tagged_entry = sv_WrapAtScreenEdge;
-    MainMenu[33].tagged_entry = sv_ShowJoinQuitMsg;
+    MainMenu[33].tagged_entry = sv_MsgFilter << 3;
     MainMenu[34].tagged_entry = sv_EnableUTF8;
     MainMenu[36].tagged_entry = sv_QCURCL;
     MainMenu[37].tagged_entry = sv_PointerStyle;
+
+    // Special case for IRC message filters, 0 = no selection, so do not tag entry 0
+    if (MainMenu[33].tagged_entry == 0) MainMenu[33].tagged_entry = 0xF9;
 
     switch (sv_TerminalFont)
     {
@@ -668,13 +682,59 @@ void SetupQItemTags()
     }
 }
 
-void DrawMenu(u8 idx)
-{    
-    TRM_SetWinHeight(MainMenu[idx].num_entries+5);
+static void DrawEntry(u8 idx)
+{
+    for (u8 i = 0; i < MainMenu[idx].num_entries; i++)
+    {
+        TRM_DrawText((char*)QFrame[3], 1, MenuPosY+4+i, PAL1);  // Draw left/right window border around menu item text
+        TRM_DrawText(MainMenu[idx].text[i], MenuPosX+2, MenuPosY+4+i, PAL1);    // Draw menu item text
+    }
+
+    // Redraw selected menu item text (highlight)
+    TRM_DrawText(MainMenu[idx].text[SelectedIdx], MenuPosX+2, MenuPosY+4+SelectedIdx, PAL0);
+}
+
+static void MarkEntry(u8 idx)
+{
+    DrawEntry(idx);
+
+    u8 entry = MainMenu[idx].tagged_entry;
+    u8 num   = MainMenu[idx].num_entries;
+
+    // Multiple active entries
+    if (entry > 7 && entry != 255)
+    {
+        u8 tags = entry >> 3;
+
+        for (u8 i = 0; i < num; i++)
+        {
+            if (tags & (1 << i))
+            {
+                int y = MenuPosY + 4 + i;
+
+                TRM_DrawChar('>', MenuPosX + 1, y, PAL1);
+                TRM_DrawChar('<', MenuPosX + 2 + strlen(MainMenu[idx].text[i]), y, PAL1);
+            }
+        }
+    }
+    // Single active entry
+    else if (entry < num)
+    {
+        u8 y = MenuPosY + 4 + entry;
+
+        TRM_DrawChar('>', MenuPosX + 1, y, PAL1);
+        TRM_DrawChar('<', MenuPosX + 2 + strlen(MainMenu[idx].text[entry]), y, PAL1);
+    }
+}
+
+static void DrawMenu(u8 idx)
+{
     MainMenu[MenuIdx].selected_entry = SelectedIdx;   // Mark previous menu selection entry
 
     MenuIdx = idx;
     SelectedIdx = MainMenu[MenuIdx].selected_entry;   // Get menu selection entry from new menu
+
+    TRM_SetWinHeight(MainMenu[idx].num_entries+5);
 
     TRM_DrawText((char*)QFrame[0], 1, 1, PAL1);    // Draw the top of the title bar frame
     TRM_DrawText((char*)QFrame[1], 1, 2, PAL1);    // Draw the middle of the title bar frame
@@ -684,30 +744,16 @@ void DrawMenu(u8 idx)
     // Insert the menu title into the title bar
     TRM_DrawText(MainMenu[MenuIdx].title, 2, 2, PAL0);
 
-    for (u8 i = 0; i < MainMenu[MenuIdx].num_entries; i++)
-    {
-        TRM_DrawText((char*)QFrame[3], 1, MenuPosY+4+i, PAL1); // Draw left/right window border around menu item text
-        TRM_DrawText(MainMenu[MenuIdx].text[i], MenuPosX+2, MenuPosY+4+i, PAL1);    // Draw menu item text
-    }
-
-    // Redraw selected menu item text (highlight)
-    TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+4+SelectedIdx, PAL0);
-
-    // Mark activated option
-    if (MainMenu[MenuIdx].tagged_entry < MainMenu[MenuIdx].num_entries)
-    {
-        TRM_DrawChar('>', MenuPosX+1, MenuPosY+4+MainMenu[MenuIdx].tagged_entry, PAL1);
-        TRM_DrawChar('<', MenuPosX+2+strlen(MainMenu[MenuIdx].text[MainMenu[MenuIdx].tagged_entry]), MenuPosY+4+MainMenu[MenuIdx].tagged_entry, PAL1);
-    }
+    MarkEntry(MenuIdx);
 }
 
-void EnterMenu()
+static void EnterMenu()
 {
     if (SelectedIdx == 255) return;
 
     u8 next = MainMenu[MenuIdx].next_menu[SelectedIdx];
 
-    if (next < 254)
+    if (next < 253)
     {
         VoidCallback *func = MainMenu[next].entry_function;
         if (func != NULL) func();
@@ -721,17 +767,25 @@ void EnterMenu()
         if (func != NULL) 
         {
             func();
-            
+
             if (next == 254) 
             {
                 MainMenu[MenuIdx].tagged_entry = SelectedIdx;
-                DrawMenu(MenuIdx);
+                MarkEntry(MenuIdx);
+            }
+            else if (next == 253) 
+            {
+                MainMenu[MenuIdx].tagged_entry ^= (1 << (SelectedIdx + 3));
+
+                if (MainMenu[MenuIdx].tagged_entry == 0) MainMenu[MenuIdx].tagged_entry = 0xF9;
+
+                MarkEntry(MenuIdx);
             }
         }
     }
 }
 
-void ExitMenu()
+static void ExitMenu()
 {
     VoidCallback *func = MainMenu[MenuIdx].exit_function;
     if (func != NULL) func();
@@ -740,14 +794,14 @@ void ExitMenu()
     else DrawMenu(MainMenu[MenuIdx].prev_menu);
 }
 
-void UpMenu()
+static void UpMenu()
 {
     TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+4+SelectedIdx, PAL1);
     SelectedIdx = (SelectedIdx == 0 ? MainMenu[MenuIdx].num_entries-1 : SelectedIdx-1);
     TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+4+SelectedIdx, PAL0);
 }
 
-void DownMenu()
+static void DownMenu()
 {
     TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+4+SelectedIdx, PAL1);
     SelectedIdx = (SelectedIdx == MainMenu[MenuIdx].num_entries-1 ? 0 : SelectedIdx+1);
@@ -893,12 +947,12 @@ void WINFN_FGColor()
     }
 }
 
-void WINFN_TERMTYPE()
+void WINFN_TermType()
 {
     sv_TermType = SelectedIdx;
 }
 
-void WINFN_SERIALSPEED()
+void WINFN_SerialSpeed()
 {
     vu8 *PSCTRL = (vu8 *)DRV_UART.SCtrl;
 
@@ -926,7 +980,7 @@ void WINFN_SERIALSPEED()
     }
 }
 
-void WINFN_FONT_TERM()
+void WINFN_Font_Term()
 {
     switch (SelectedIdx)
     {
@@ -963,7 +1017,7 @@ void WINFN_FONT_TERM()
     }
 }
 
-void WINFN_FONT_TELNET()
+void WINFN_Font_Telnet()
 {
     switch (SelectedIdx)
     {
@@ -992,7 +1046,7 @@ void WINFN_FONT_TELNET()
     if (getState() == PS_Telnet) TTY_SetFontSize(sv_TelnetFont);
 }
 
-void WINFN_FONT_IRC()
+void WINFN_Font_IRC()
 {
     switch (SelectedIdx)
     {
@@ -1032,7 +1086,7 @@ void WINFN_KBLayoutSel()
     }
 }
 
-void WINFN_RXTXSTATS()
+void WINFN_RxTxStats()
 {
     char buf1[32];
     char buf2[32];
@@ -1044,7 +1098,7 @@ void WINFN_RXTXSTATS()
     strncpy(MainMenu[15].text[1], buf2, 20);
 }
 
-void WINFN_RXBUFSTATS()
+void WINFN_RxBufStats()
 {
     char buf1[32];
     char buf2[32];
@@ -1059,7 +1113,7 @@ void WINFN_RXBUFSTATS()
     strncpy(MainMenu[23].text[2], buf3, 20);
 }
 
-void WINFN_DEBUGSEL()
+void WINFN_DebugSel()
 {
     switch (SelectedIdx)
     {
@@ -1102,7 +1156,7 @@ void WINFN_DEBUGSEL()
     }
 }
 
-void WINFN_SERIALPORTSEL()
+void WINFN_SerialPortSel()
 {
     SetDevicePort(&DRV_UART, (DevPort)SelectedIdx);
     sv_ListenPort = (DevPort)SelectedIdx;
@@ -1112,7 +1166,7 @@ void WINFN_SERIALPORTSEL()
     *SCtrl = 0x38;
 }
 
-void WINFN_DEVLISTENTRY()
+void WINFN_DevListEntry()
 {
     char buf[32];
     u8 p = 0, s = 0;
@@ -1154,7 +1208,7 @@ void WINFN_DEVLISTENTRY()
     MainMenu[7].num_entries = d;
 }
 
-void WINFN_HSCOFF()
+void WINFN_HScOff()
 {
     switch (SelectedIdx)
     {
@@ -1203,7 +1257,7 @@ void WINFN_LineMode()
     vLineMode = SelectedIdx;
 }
 
-void WINFN_CUSTOM_FGCL()
+void WINFN_Custom_FGCL()
 {
     switch (SelectedIdx)
     {
@@ -1223,12 +1277,12 @@ void WINFN_CUSTOM_FGCL()
     TTY_ReloadPalette();
 }
 
-void WINFN_SCREENSAVER()
+void WINFN_ScreenSaver()
 {
     sv_bScreensaver = SelectedIdx;
 }
 
-void WINFN_CURSOR_CL()
+void WINFN_Cursor_CL()
 {
     switch (SelectedIdx)
     {
@@ -1254,7 +1308,7 @@ void WINFN_CURSOR_CL()
     SetColor(4, sv_CursorCL);
 }
 
-void WINFN_UITHEME()
+void WINFN_UI_Theme()
 {
     sv_ThemeUI = SelectedIdx;
     UI_ApplyTheme();
@@ -1293,18 +1347,9 @@ void WINFN_WrapAtScreenEdge()
     }
 }
 
-void WINFN_ShowJQMsg()
-{
-    switch (SelectedIdx)
-    {
-        case 0:
-            sv_ShowJoinQuitMsg = 0;
-        break;
-    
-        default:
-            sv_ShowJoinQuitMsg = 1;
-        break;
-    }
+void WINFN_IrcMsgFilter()
+{    
+    sv_MsgFilter ^= (1 << SelectedIdx);
 }
 
 void WINFN_CharSet()

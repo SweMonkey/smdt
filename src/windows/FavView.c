@@ -64,7 +64,7 @@ static const MRect mrect_data[] =
     {152, 136,  64,   8, 91},   // ConfirmBox 1 Cancel
     {120, 152,  40,   8, 90},   // ConfirmBox 2 Yes
     {168, 152,  32,   8, 91},   // ConfirmBox 2 No
-    {255,   0,   0,   0,  0},   // Terminator
+    {320,   0,   0,   0,  0},   // Terminator
 };
 
 static const MRect mrect_data_add_edit[] =
@@ -73,7 +73,7 @@ static const MRect mrect_data_add_edit[] =
     { 68, 112, 183, 12, 0},   // TextInput
     {104, 136,  32,  8, 1},   // ConfirmBox 1 Ok
     {152, 136,  64,  8, 2},   // ConfirmBox 1 Cancel
-    {255,   0,   0,  0, 0},   // Terminator
+    {320,   0,   0,  0, 0},   // Terminator
 };
 
 static const MRect mrect_data_warning[] =
@@ -81,7 +81,7 @@ static const MRect mrect_data_warning[] =
 //     X    Y   W   H  Id
     {120, 152, 40,  8, 0},   // ConfirmBox 2 Yes
     {168, 152, 32,  8, 1},   // ConfirmBox 2 No
-    {255,   0,  0,  0, 0},   // Terminator
+    {320,   0,  0,  0, 0},   // Terminator
 };
 
 static u32 LastClick = 0;
