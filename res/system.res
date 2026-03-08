@@ -2,6 +2,9 @@
 TILESET GFX_ASCII_TERM_NORMAL "8x8_normal.png" FAST NONE
 TILESET GFX_ASCII_TERM_BOLD "8x8_bold.png" FAST NONE
 
+# 4x8 Font bitmap for software rendering
+BIN GFX_ASCII_TERM_SMALL_SW "4x8_sw.bin" 2 1 0 NONE
+
 # 4x8 Font glyps with antialiasing, using colour indices 15/16
 TILESET GFX_ASCII_TERM_SMALL_AA_16 "4x8_by_RKT_e16.png" FAST NONE
 

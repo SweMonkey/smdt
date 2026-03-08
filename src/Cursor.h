@@ -7,6 +7,7 @@ extern u16 sv_CursorCL;
 extern u8 bDoCursorBlink;
 extern u16 LastCursor;
 
+void CR_SetupSprite(u16 x, u16 y);
 void CR_Blink();
 
 #endif // CURSOR_H_INCLUDED

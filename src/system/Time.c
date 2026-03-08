@@ -212,14 +212,14 @@ u8 DoTimeSync(char *server)
 
 bool FrameElapsed(u32 *previous, u16 num)
 {
-    bool v = (FrameTick >= *previous+num);
+    bool v = (FrameTick - *previous) >= num;
     if (v) *previous = FrameTick;
     return v;
 }
 
 bool SecondElapsed(u32 *previous, u16 num)
 {
-    bool v = (SystemUptime >= *previous+num);
+    bool v = (SystemUptime - *previous) >= num;
     if (v) *previous = SystemUptime;
     return v;
 }

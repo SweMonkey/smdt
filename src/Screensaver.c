@@ -2,6 +2,7 @@
 #include "Utils.h"
 #include "Palette.h"
 #include "StateCtrl.h"
+#include "system/Sprite.h"
 
 bool sv_bScreensaver = TRUE;    // Screensaver enable
 s16 InactiveCounter = 0;
@@ -16,11 +17,13 @@ void ScreensaverInit()
 {
     InactiveCounter = 0;
     if (bPALSystem) InactiveUpper = 15000;   // NTSC = 18000 - PAL = 15000
+}
 
-    // Set up screensaver sprite here
-    SetSprite_Y(SPRITE_ID_SCRSAV, 0);
-    SetSprite_X(SPRITE_ID_SCRSAV, 0);
-    SetSprite_TILE(SPRITE_ID_SCRSAV, (0xE000 | AVR_SCRSAV));
+void ScrSetupSprite()
+{
+    SetSprite_Y(SPRITE_SCRSAV, 0);
+    SetSprite_X(SPRITE_SCRSAV, 0);
+    SetSprite_TILE(SPRITE_SCRSAV, (0xE000 | AVR_SCRSAV));
 }
 
 void ScreensaverTick()
@@ -44,13 +47,13 @@ void ScreensaverTick()
         ScrCy += ScrDy;
         ScrCx += ScrDx;
 
-        SetSprite_Y(SPRITE_ID_SCRSAV, ScrCy+128);
-        SetSprite_X(SPRITE_ID_SCRSAV, ScrCx+128);
+        SetSprite_Y(SPRITE_SCRSAV, ScrCy+128);
+        SetSprite_X(SPRITE_SCRSAV, ScrCx+128);
     }
     else if (InactiveCounter <= -1) // Turn off screensaver
     {
-        SetSprite_Y(SPRITE_ID_SCRSAV, 0);
-        SetSprite_X(SPRITE_ID_SCRSAV, 0);
+        SetSprite_Y(SPRITE_SCRSAV, 0);
+        SetSprite_X(SPRITE_SCRSAV, 0);
 
         InactiveCounter = 0;
     }

@@ -6,7 +6,7 @@
 #include "DevMgr.h"             // bRLNetwork
 #include "Keyboard.h"
 #include "Mouse.h"
-#include "Utils.h"              // TRM_ResetStatusText
+#include "Utils.h"
 #include "WinMgr.h"
 #include "Buffer.h"
 #include "Network.h"
@@ -15,6 +15,7 @@
 #include "devices/MegaMouse.h"
 #include "devices/RL_Network.h"
 #include "system/Time.h"
+#include "system/StatusBar.h"
 
 extern PRG_State DummyState;
 extern PRG_State TelnetState;
@@ -35,8 +36,6 @@ static u8 kbdata;
 static bool LastRxState = FALSE;
 static bool LastTxState = FALSE;
 bool bWindowActive = FALSE;
-static u32 PreviousFrame = MAX_U32;
-
 
 void VBlank()
 {
@@ -73,7 +72,6 @@ void VBlank()
     CR_Blink();         // Cursor blink
 
     bWindowActive = WinMgr_isWindowOpen();
-
 
     #ifdef SHOW_FRAME_USAGE
     PAL_setColor(0, 0);
@@ -141,10 +139,9 @@ void ChangeState(State new_state, u8 argc, char *argv[])
 
     CurrentStateEnum = new_state;
 
-    TRM_SetStatusText(STATUS_TEXT_SHORT);
-    TRM_ResetStatusText();
+    SB_SetStatusText(STATUS_TEXT_SHORT);
+    SB_ResetStatusText();
 
-    SetupQItemTags();
     SetColor(4, sv_CursorCL);
 
     SYS_enableInts();
@@ -152,6 +149,7 @@ void ChangeState(State new_state, u8 argc, char *argv[])
     //SYS_setVBlankCallback(NULL);
     SC_RetValue = CurrentState->Enter(argc, argv);
     ScreensaverInit();
+    SetupQItemTags();
     SYS_setVBlankCallback(VBlank);
 
     if (SC_RetValue == EXIT_FAILURE)
@@ -175,19 +173,20 @@ void RevertState()
 
     SYS_disableInts();
 
-    TRM_SetStatusText(STATUS_TEXT_SHORT);
-    TRM_ResetStatusText();
+    SB_SetStatusText(STATUS_TEXT_SHORT);
+    SB_ResetStatusText();
+    SB_ResetStatusBar();
 
     CurrentState = PrevState;
     CurrentStateEnum = PrevStateEnum;
     PrevState = ShadowState;
     PrevStateEnum = ShadowStateEnum;
 
-    SetupQItemTags();
     SetColor(4, sv_CursorCL);
 
     CurrentState->ReEnter();
     ScreensaverInit();
+    SetupQItemTags();
 
     SYS_setVBlankCallback(VBlank);
     SYS_enableInts();
@@ -227,44 +226,29 @@ void StateTick()
 
     bStateChanged = FALSE;
 
-    CurrentState->Run();
-
-    if (FrameElapsed(&PreviousFrame, 1))
+    if (bRLNetwork)
     {
-        if (bRLNetwork)
-        {
-            RLN_Update();
-        }
-
-        if (LastRxState != Buffer_IsEmpty(&RxBuffer))
-        {
-            if (Buffer_IsEmpty(&RxBuffer))
-            {
-                TRM_SetStatusIcon(ICO_NET_IDLE_RECV, ICO_POS_1);
-                LastRxState = TRUE;
-            }
-            else
-            {
-                TRM_SetStatusIcon(ICO_NET_RECV, ICO_POS_1);
-                LastRxState = FALSE;
-            }
-        }
-        
-        if (TxUpdate)
-        {
-            if (LastTxState)
-            {
-                TRM_SetStatusIcon(ICO_NET_IDLE_SEND, ICO_POS_2);
-                LastTxState = FALSE;
-                TxUpdate = 0;
-            }
-            else
-            {
-                TRM_SetStatusIcon(ICO_NET_SEND, ICO_POS_2);
-                LastTxState = TRUE;
-            }
-        }
+        RLN_Update();
     }
+
+    // Rx icon update
+    bool rxEmpty = Buffer_IsEmpty(&RxBuffer);
+    if (LastRxState != rxEmpty)
+    {
+        SB_SetStatusIcon(rxEmpty ? ICO_NET_IDLE_RECV : ICO_NET_RECV, ICO_POS_1);
+        LastRxState = rxEmpty;
+    }
+
+    // Tx icon update
+    bool txActive = TxUpdate;
+    if (LastTxState == txActive)
+    {
+        SB_SetStatusIcon(txActive ? ICO_NET_SEND : ICO_NET_IDLE_SEND, ICO_POS_2);
+        LastTxState = !txActive;
+    }
+    TxUpdate = 0;
+
+    CurrentState->Run();
 
     #ifdef SHOW_FRAME_USAGE
     PAL_setColor(0, 0x000);

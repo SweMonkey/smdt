@@ -56,10 +56,10 @@ bool FS_Mount_ROM()
 
     if (InitFail) 
     {
-        Stdout_Push(" [91mFilesystem error! Can't mount ROM_DSK[0m\n");
+        Stdout_Push(" \e[91mFilesystem error! Can't mount ROM_DSK\e[0m\n");
         return 1;
     }
 
-    Stdout_Push(" [92mROM_DISK successfully mounted[0m\n");
+    Stdout_Push(" \e[92mROM_DISK successfully mounted\e[0m\n");
     return 0;
 }

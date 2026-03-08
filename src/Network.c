@@ -1,9 +1,11 @@
 #include "Network.h"
 #include "Buffer.h"
 #include "DevMgr.h"
-#include "Terminal.h"           // vLineMode
+#include "Terminal.h"           // v_LineMode
 #include "Telnet.h"             // LMSM define
 #include "Utils.h"              // EMU_BUILD define, TRM
+
+#include "StateCtrl.h"
 
 // Statistics
 u32 RXBytes = 0;
@@ -27,8 +29,6 @@ void NET_RxIRQ()
     SYS_setInterruptMaskLevel(7);
     Buffer_Push(&RxBuffer, *(vu8*)DRV_UART.RxData);
     SYS_setInterruptMaskLevel(0);
-
-    //RXBytes++;
 }
 
 void NET_SendChar(const u8 c)
@@ -36,6 +36,9 @@ void NET_SendChar(const u8 c)
     #ifdef EMU_BUILD
     return;
     #endif
+    
+    // Flush any buffered data before sending new data
+    // if (Buffer_IsEmpty(&TxBuffer) == FALSE) NET_TransmitBuffer();
 
     if (bRLNetwork)
     {
@@ -62,7 +65,7 @@ void NET_SendChar(const u8 c)
 
 void NET_BufferChar(const u8 c)
 {    
-    if ((vLineMode & LMSM_EDIT) == 0) NET_SendChar(c);
+    if ((v_LineMode & LMSM_EDIT) == 0) NET_SendChar(c);
     else Buffer_Push(&TxBuffer, c);
 }
 

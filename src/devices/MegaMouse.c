@@ -18,7 +18,7 @@ bool MM_Mouse_Init()
 
     if (DEV_GetData(DRV_MMOUSE, 0xF) == 0)
     {
-        Stdout_Push(" [92mMega Mouse initialized[0m\n");
+        Stdout_Push(" \e[92mMega Mouse initialized\e[0m\n");
         return TRUE;
     } 
     

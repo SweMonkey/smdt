@@ -82,7 +82,7 @@ bool FS_Mount_SRAM()
     // This should only happen on the first boot
     if (InitFail) 
     {
-        printf(" [91mSRAM filesystem error: %d\n Reformatting partition...[0m\n", InitFail);
+        printf(" \e[91mSRAM filesystem error: %d\n Reformatting partition...\e[0m\n", InitFail);
         if (FS_Erase_SRAM())
         {
             lfs_format(&lfs_SRAM, &cfg_sram);
@@ -91,7 +91,7 @@ bool FS_Mount_SRAM()
             // Error, bail
             if (InitFail) 
             {
-                printf(" [91mSRAM reformatting error: %d[0m\n", InitFail);
+                printf(" \e[91mSRAM reformatting error: %d\e[0m\n", InitFail);
                 goto Error;
             }
 
@@ -105,11 +105,11 @@ bool FS_Mount_SRAM()
     }
 
     Success:
-    Stdout_Push(" [92mSRAM_DISK successfully mounted[0m\n");
+    Stdout_Push(" \e[92mSRAM_DISK successfully mounted\e[0m\n");
     return 0;
 
     Error:
-    Stdout_Push(" [91mFailed to mount SRAM_DISK[0m\n");
+    Stdout_Push(" \e[91mFailed to mount SRAM_DISK\e[0m\n");
     return 1;
 }
 
@@ -135,7 +135,7 @@ bool FS_Erase_SRAM()
     // Erase SRAM if present
     if ((u32)((r1 << 24) | (r2 << 16) | (r3 << 8) | (r4)) == 0xDEADBEEF)
     {
-        printf(" [92mSRAM detected[0m\n");
+        printf(" \e[92mSRAM detected\e[0m\n");
 
         for (u16 i = 0; i < SSize; i++)
         {
@@ -146,7 +146,7 @@ bool FS_Erase_SRAM()
         return TRUE;
     }
     
-    printf(" [91mNo SRAM detected!\n[0m");
+    printf(" \e[91mNo SRAM detected!\n\e[0m");
     SRAM_disable();
     return FALSE;
 }

@@ -10,12 +10,6 @@
 // Tx flags
 #define TXF_NOBUFFER 1
 
-#define ICO_NET_SEND      0x1A  // Up arrow
-#define ICO_NET_RECV      0x1B  // Down arrow
-#define ICO_NET_IDLE_SEND 0x18
-#define ICO_NET_IDLE_RECV 0x19
-#define ICO_NET_ERROR     0x1D
-
 typedef bool NET_Connect_CB(char *str);
 typedef void NET_Disconnect_CB();
 typedef u8 NET_GetIP_CB(char *str);     // Ret: 0= Success, 1= Generic error, 2= Timeout

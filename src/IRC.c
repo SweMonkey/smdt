@@ -9,22 +9,10 @@
 #include "Palette.h"
 #include "../res/system.h"
 
+#include "system/Sprite.h"
 #include "system/PseudoFile.h"
 #include "system/Time.h"
-
-/*
-    USERLIST WARNING:
-
-    DO NOT TRY TO DEBUG THE USER LIST WINDOW IN AN EMULATOR. IT WILL MISLEAD AND CAUSE YOU HARM.
-    IT WILL REPORT VERY WEIRD BEHAVIOURS WHEN ALLOCATING/FREEING MEMORY AND WHEN TRYING TO SHOW
-    THE USERLIST WINDOW.
-
-    IRC CMD 353 (START OF NAMES LIST FOLLOWED BY NICK LIST) AND IRC CMD 366 (END OF NAMES LIST)
-    REQUIRES SOME SPECIAL "ASYNCHRONUS" HANDLING, DUE TO BEING RECEIVED AT COMPLETELY DIFFERENT
-    TIMES SOME TIME AFTER A "NAMES" COMMAND HAS BEEN SENT TO THE REMOTE SERVER FROM SMDT.
-
-    THIS SEQUENCE OF EVENTS CANNOT BE EMULATED BY REPLAYING A LOGGED STREAM!
-*/
+#include "system/StatusBar.h"
 
 #define B_PRINTSTR_LEN 512
 #define B_SUBPREFIX_LEN 256
@@ -72,6 +60,7 @@ char v_UsernameReset[32] = "ERROR_NOTSET";           // Your IRC nickname modifi
 char sv_QuitStr[32] = "SMDT IRC client quit";        // IRC quit message
 u8 sv_MsgFilter = MSG_FLAG_NONE;
 u8 sv_WrapAtScreenEdge = 1;
+bool sv_bShowTime = FALSE;
 
 u8 PG_CurrentIdx = 0;                                // Current active page/channel number
 u8 PG_OpenPages = 1;                                 // Number of pages/channels in use
@@ -126,7 +115,7 @@ u16 IRC_Reset()
     TMB_SetColorFG(15);
 
     // Variable overrides
-    vDoEcho = 1;
+    bNoEcho = TRUE;
 
     bFirstRun = TRUE;
     NickReRegisterCount = 0;
@@ -150,7 +139,7 @@ u16 IRC_Reset()
             kprintf("Failed to allocate memory for PG_Buffer[%u]", ch);
             #endif
             
-            printf("[91mIRC Client: Failed to allocate memory for PG_Buf![0m\n");
+            printf("\e[91mIRC Client: Failed to allocate memory for PG_Buf!\e[0m\n");
             return EXIT_FAILURE;
         }
         TMB_SetActiveBuffer(PG_Buffer[ch]);
@@ -167,7 +156,7 @@ u16 IRC_Reset()
         kprintf("Failed to allocate memory for LineBuf");
         #endif
 
-        printf("[91mIRC Client: Failed to allocate memory for LineBuf![0m\n");
+        printf("\e[91mIRC Client: Failed to allocate memory for LineBuf!\e[0m\n");
         return EXIT_FAILURE;
     }
     memset(LineBuf, 0, sizeof(struct s_linebuf));
@@ -180,7 +169,7 @@ u16 IRC_Reset()
         kprintf("Failed to allocate memory for RXString");
         #endif
 
-        printf("[91mIRC Client: Failed to allocate memory for RXString![0m\n");
+        printf("\e[91mIRC Client: Failed to allocate memory for RXString!\e[0m\n");
         return EXIT_FAILURE;
     }
     memset(RXString, 0, B_RXSTRING_LEN);
@@ -199,8 +188,8 @@ u16 IRC_Reset()
                 kprintf("Failed to allocate memory for PG_UserList[%u]", i);
                 #endif
 
-                printf("[91mIRC Client: Failed to allocate memory for PG_UserList[%u]!\n", i);
-                printf("Free: %u - Needed: %u (Total: %u)[0m\n", MEM_getLargestFreeBlock(), IRC_MAX_USERNAME_LEN, IRC_MAX_USERNAME_LEN*IRC_MAX_USERLIST);
+                printf("\e[91mIRC Client: Failed to allocate memory for PG_UserList[%u]!\n", i);
+                printf("Free: %u - Needed: %u (Total: %u)\e[0m\n", MEM_getLargestFreeBlock(), IRC_MAX_USERNAME_LEN, IRC_MAX_USERNAME_LEN*IRC_MAX_USERLIST);
 
                 return EXIT_FAILURE;
             }
@@ -213,7 +202,7 @@ u16 IRC_Reset()
         kprintf("Failed to allocate memory for PG_UserList");
         #endif
 
-        printf("[91mFailed to allocate memory for PG_UserList![0m\n");
+        printf("\e[91mFailed to allocate memory for PG_UserList!\e[0m\n");
         return EXIT_FAILURE;
     }
 
@@ -229,30 +218,7 @@ u16 IRC_Reset()
     }
 
     // Setup the cursor for the typing input box at the bottom of the screen
-    s16 spr_x = 8 + 128;
-    s16 spr_y = (bPALSystem?232:216) + 128;
-
-    // First 9 textboxes
-    for (u8 i = 0; i < 9; i++)
-    {
-        SetSprite_Y(i+3, spr_y);
-        SetSprite_SIZELINK(i+3, SPR_WIDTH_4x1, i+4);
-        SetSprite_TILE(i+3, 0x6000+TTS_VRAMIDX+(i*4));  // 0x6000 = PAL3
-        SetSprite_X(i+3, spr_x+(i*32));
-    }
-
-    // Final 10th textbox
-    SetSprite_Y(12, spr_y);
-    SetSprite_SIZELINK(12, SPR_WIDTH_3x1, 0);
-    SetSprite_TILE(12, 0x6000+TTS_VRAMIDX+36);  // 0x6000 = PAL3
-    SetSprite_X(12, spr_x+288);
-
-    // Setup cursor sprite y position and tile
-    SetSprite_Y(SPRITE_ID_CURSOR, spr_y);
-    SetSprite_TILE(SPRITE_ID_CURSOR, LastCursor);
-
-    // Update mousepointer sprite link to first text box sprite (mousepointer being the last permanent sprite that is always active)
-    SetSprite_SIZELINK(SPRITE_ID_POINTER, SPR_SIZE_1x1, 3);
+    IRC_SetupSprite();
 
     return EXIT_SUCCESS;
 }
@@ -264,7 +230,7 @@ void IRC_Exit()
     NET_SendString(buf);
 
     // Revert mousepointer sprite link back to the start of the list (mousepointer being the last permanent sprite that is always active)
-    SetSprite_SIZELINK(SPRITE_ID_POINTER, SPR_SIZE_1x1, 0);
+    SetSprite_SIZELINK(SPRITE_POINTER, SPR_SIZE_1x1, 0);
 
     // Free previously allocated memory. DO NOT TRY TO DEBUG IN EMULATORS, IT WILL MISLEAD AND CAUSE YOU HARM.
     for (u8 ch = 0; ch < IRC_MAX_CHANNELS; ch++)
@@ -292,6 +258,34 @@ void IRC_Exit()
     PG_UserList = NULL;
 }
 
+void IRC_SetupSprite()
+{
+    s16 spr_x = 8 + 128;
+    s16 spr_y = (bPALSystem?232:216) + 128;
+
+    // First 9 textboxes
+    for (u8 i = 0; i < 9; i++)
+    {
+        SetSprite_Y(i+3, spr_y);
+        SetSprite_SIZELINK(i+3, SPR_WIDTH_4x1, i+4);
+        SetSprite_TILE(i+3, 0x6000+TTS_VRAMIDX+(i*4));  // 0x6000 = PAL3
+        SetSprite_X(i+3, spr_x+(i*32));
+    }
+
+    // Final 10th textbox
+    SetSprite_Y(12, spr_y);
+    SetSprite_SIZELINK(12, SPR_WIDTH_3x1, 0);
+    SetSprite_TILE(12, 0x6000+TTS_VRAMIDX+36);  // 0x6000 = PAL3
+    SetSprite_X(12, spr_x+288);
+
+    // Setup cursor sprite y position and tile
+    SetSprite_Y(SPRITE_CURSOR, spr_y);
+    SetSprite_TILE(SPRITE_CURSOR, LastCursor);
+
+    // Update mousepointer sprite link to first text box sprite (mousepointer being the last permanent sprite that is always active)
+    SetSprite_SIZELINK(SPRITE_POINTER, SPR_SIZE_1x1, 3);
+}
+
 // Text input at bottom of screen
 void PrintTextLine(const u8 *str)
 {
@@ -313,7 +307,7 @@ void PrintTextLine(const u8 *str)
     }
 
     // Update cursor X position
-    SetSprite_X(SPRITE_ID_CURSOR, (spr_x*8)+136);
+    SetSprite_X(SPRITE_CURSOR, (spr_x*8)+136);
 
     return;
 }
@@ -492,15 +486,26 @@ void IRC_DoCommand()
     {
         snprintf(PrintBuf, B_PRINTSTR_LEN, "[Error] %s %s\n", LineBuf->prefix, LineBuf->param[0]);
     }
-    else if (strcmp(LineBuf->command, "PRIVMSG") == 0)
+    else if (strcmp(LineBuf->command, "PRIVMSG") == 0)  // This is only for recieved messages, for sending messages, see states/IRCState.c
     {
         // Extract nickname from <nick>!<<hostname>
         u16 end = 1;
         while ((LineBuf->prefix[end++] != '!') && (end < B_SUBPREFIX_LEN));
         strncpy(subprefix, LineBuf->prefix, end-1);
 
-        snprintf(PrintBuf, B_PRINTSTR_LEN, "\5%s: \4%s\n", subprefix, LineBuf->param[1]);
-        NameOffset = strlen(subprefix) + 2;
+        if (sv_bShowTime)
+        {
+            char buf[40];
+            TimeToStr_TimeNoSec(&SystemTime, buf);
+
+            snprintf(PrintBuf, B_PRINTSTR_LEN, "[%s] \5%s: \4%s\n", buf, subprefix, LineBuf->param[1]);
+            NameOffset = strlen(subprefix) + 11;
+        }
+        else
+        {
+            snprintf(PrintBuf, B_PRINTSTR_LEN, "\5%s: \4%s\n", subprefix, LineBuf->param[1]);
+            NameOffset = strlen(subprefix) + 2;
+        }
 
         if (strcmp(LineBuf->param[0], v_UsernameReset) == 0)
         {
@@ -631,7 +636,7 @@ void IRC_DoCommand()
             }
             case 5:
             {
-                snprintf(PrintBuf, B_PRINTSTR_LEN, "[Support] %s %s %s %s %s %s %s %s %s %s %s %s %s %s\n", LineBuf->param[1], LineBuf->param[2], LineBuf->param[3], LineBuf->param[4], LineBuf->param[5], LineBuf->param[6], LineBuf->param[7], 
+                snprintf(PrintBuf, B_PRINTSTR_LEN, "[Support] %s %s %s %s %s %s %s %s %s %s %s %s %s %s\n", LineBuf->param[1], LineBuf->param[2], LineBuf->param[3],  LineBuf->param[4],  LineBuf->param[5],  LineBuf->param[6],  LineBuf->param[7], 
                                                                                                             LineBuf->param[8], LineBuf->param[9], LineBuf->param[10], LineBuf->param[11], LineBuf->param[12], LineBuf->param[13], LineBuf->param[14]);
 
                 // Check for NICKLEN < your_nickname_len. If true then resize the temporary v_UsernameReset to be smaller
@@ -829,7 +834,7 @@ void IRC_DoCommand()
             TMB_SetActiveBuffer(PG_Buffer[ch]);
 
             snprintf(TitleBuf, 35-IRC_MAX_CHANNELS, "%s %-*s", STATUS_TEXT_SHORT, 35-IRC_MAX_CHANNELS, PG_Buffer[PG_CurrentIdx]->Title); // 27-
-            TRM_SetStatusText(TitleBuf);
+            SB_SetStatusText(TitleBuf);
 
             if (PG_CurrentIdx != ch) 
             {

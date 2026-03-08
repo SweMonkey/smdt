@@ -42,7 +42,7 @@ bool KB_PS2_Init(DevPort port)
         // Did we receive an echo back from the keyboard?
         if ((ret == 0xFE) || (ret == 0xEE)) // FE = Fail+Resend, EE = Successfull echo back
         {
-            printf(" [92mFound PS/2 keyboard @ %u:%u ($%X)[0m\n", DRV_KBPS2.PAssign, s, ret);
+            printf(" \e[92mFound PS/2 keyboard @ %u:%u ($%X)\e[0m\n", DRV_KBPS2.PAssign, s, ret);
 
             KB_SetPoll_Func(&KB_PS2_Poll);
             KB_SetLED_Func(&KB_PS2_SetLED);

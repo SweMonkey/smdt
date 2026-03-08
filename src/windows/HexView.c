@@ -17,6 +17,7 @@ static bool bIOFILE = FALSE;
 static u8 NumLines = 23;
 static u16 ScrollMax = 0;
 static u16 r = 255;         // Mouse widget collision target
+extern u8 *scrbuf;          // Screen buffer (from SwRenderer.c)
 
 static const MRect mrect_data[] =
 {
@@ -223,7 +224,15 @@ u16 HexView_Open(const char *filename)
     bIOFILE = FALSE;
 
     // Open file, take special care of IO files
-    if (strcmp(fn_buf, "/sram/system/tty_in.io") == 0)
+    if (strcmp(fn_buf, "/sram/system/screen.io") == 0)
+    {
+        strcpy(WinTitle, "HexView - screen.io");
+        
+        bufptr = (char*)scrbuf;
+        bufsize = 80*32;
+        bIOFILE = TRUE;
+    }
+    else if (strcmp(fn_buf, "/sram/system/tty_in.io") == 0)
     {
         strcpy(WinTitle, "HexView - Rx Buffer");
         
@@ -281,7 +290,7 @@ u16 HexView_Open(const char *filename)
 
     if (HexWindow == NULL)
     {
-        printf("[91mFailed to allocate memory;\nCan't create HexWindow[0m\n");
+        printf("\e[91mFailed to allocate memory;\nCan't create HexWindow\e[0m\n");
         
         if (bIOFILE == FALSE)
         {

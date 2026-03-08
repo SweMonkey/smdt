@@ -26,7 +26,7 @@
 #define C_HTAB 8
 #define C_VTAB 2
 #define C_YSTART 1  // 0 if no window plane
-#define C_SYSTEM_YMAX (bPALSystem ? C_YMAX_PAL : C_YMAX_NTSC)
+#define C_SYSTEM_YMAX (bPALSystem ? C_YMAX_PAL : C_YMAX_NTSC)   // Uh... wat... fixme
 
 // Default X/Y Scroll
 #define D_VSCROLL 0
@@ -36,10 +36,11 @@
 #define CL_BG 0
 
 // Fonts
-#define FONT_8x8_16 0
-#define FONT_4x8_8  1
-#define FONT_4x8_1  2
-#define FONT_4x8_16 3
+#define FONT_8x8_16   0   // 8x8 Font with 16 foreground colours
+#define FONT_4x8_8    1   // 4x8 Font with 8 foreground colours
+#define FONT_4x8_1    2   // 4x8 Font with 1 foreground colour
+#define FONT_4x8_16   3   // 4x8 Font with 16 foreground colours
+#define FONT_SOFTWARE 4   // Software rendered 4x8 Font with 16 foreground colours + 16 background colours
 
 
 typedef enum 
@@ -50,6 +51,7 @@ typedef enum
     TF_ResetPalette     = 0x4,
     TF_ResetNetCount    = 0x8,
     TF_ReloadFont       = 0x10,
+    TF_ResetVariables   = 0x20,
 
     TF_Everything       = 0xFF,
 } TTY_InitFlags;
@@ -58,28 +60,31 @@ typedef enum
 extern s8 sv_HSOffset;
 extern u8 sv_TermType;
 extern char sv_Baud[];
-extern u8 vNewlineConv;
-extern u8 vDoEcho;
-extern u8 vLineMode;
-extern u8 vBackspace;
+extern bool bNoEcho;
+extern u8 v_LineMode;
+extern u8 v_Backspace;
 
 // TTY
 extern s16 sy;
 extern s16 HScroll;
-extern s16 VScroll;
 extern u8 C_XMAX;
 extern u8 C_YMAX;
 extern u8 C_XMIN;
 extern u8 C_YMIN;
-extern u8 sv_bWrapAround;
+extern bool bWrapMode;
+extern bool bReverseWrap;
+extern bool bExtReverseWrap;
+extern bool bInsertMode;
+extern bool bLinefeedMode;
 extern u8 sv_TermColumns;
 extern u16 BufferSelect;
 extern s16 Saved_VScroll;
-extern u8 PendingWrap;
+extern bool bPendingWrap;
 
 extern u16 sv_CBGCL;
 extern u16 sv_CFG0CL;   // Custom text colour for 4x8 font
 extern u16 sv_CFG1CL;   // Custom text antialiasing colour for 4x8 font 
+extern u8 sv_CLPalette;
 
 extern const char * const TermTypeList[];
 
@@ -109,7 +114,8 @@ s16 TTY_GetSY_A();          // Get SY without VScroll   (VScroll gets removed in
 void TTY_SetSY(s16 y);      // Set SY + VScroll         (VScroll does NOT get added in function)
 s16 TTY_GetSY();            // Get SY + VScroll         (VScroll does NOT get removed in function)
 
-void TTY_SetVScroll(s16 v);     // Set vscroll to relative value
+void TTY_SetVScroll(s16 v);     // Add to vscroll
+s16 TTY_GetVScroll();           // Get vscroll
 void TTY_SetVScrollAbs(s16 v);  // Set vscroll to absolute value
 void TTY_ResetVScroll();        // Reset vscroll to default value (0)
 

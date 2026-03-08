@@ -7,39 +7,49 @@
 #include "Cursor.h"
 #include "Screensaver.h"
 #include "Palette.h"
+#include "SwRenderer.h"
+
+#include "misc/VarList.h"
+#include "system/Sprite.h"
+#include "system/StatusBar.h"
 
 #define TTY_CURSOR_X (((sv_Font?(sx << 2):(sx << 3))) + HScroll + 128)
 #define TTY_CURSOR_Y ((sy << 3) - VScroll + 128)
+#define TTY_CURSOR_Yf(f) ((f << 3) - VScroll + 128)
 
 // Modifiable variables
-u8 vNewlineConv = 0;     // 0 = none (\n = \n) -- 1 = \n becomes \n\r
-u8 sv_TermType = 0;      // Terminal type. See TermType table further down
-u8 vDoEcho = 0;          // 0 = Do echo typed characters back to screen -- 1 = Rely on remote server to echo back typed characters
-u8 vLineMode = 0;        // Line edit mode - 1 = LMSM_EDIT
-u8 vBackspace = 0;       // 0 = DEL (0x7F) - 1 = ^H (0x8)
-char sv_Baud[5] = "4800";// Report this baud speed to remote servers if they ask
+u8 sv_TermType = 0;         // Terminal type. See TermType table further down
+bool bNoEcho = FALSE;       // False = Do echo typed characters back to screen -- True = Rely on remote server to echo back typed characters
+u8 v_LineMode = 0;          // Line edit mode - 1 = LMSM_EDIT
+u8 v_Backspace = 0;         // 0 = DEL (0x7F) - 1 = ^H (0x8)
+bool bLinefeedMode = FALSE; // Applications generally expect this mode to be unset - If set it inserts a carrige return (\r) after newline (\n)
+char sv_Baud[5] = "4800";   // Report this baud speed to remote servers if they ask
 
 // Font
-u8 sv_Font = FONT_4x8_8; // Font size. 0=8x8 16 colour - 1=4x8 8 colour AA - 2=4x8 monochrome AA - 3=4x8 16 colour AA
-u8 sv_BoldFont = FALSE;  // Use bold 8x8 font
-u8 EvenOdd = 0;          // Even/Odd character being printed
+u8 sv_Font = FONT_SOFTWARE; // Font size. 0 = 8x8 16 colour - 1 = 4x8 8 colour AA - 2 = 4x8 monochrome AA - 3 = 4x8 16 colour AA - 4 = Software rendered 4x8 font with support for 16 fg and 16 bg colours
+u8 sv_BoldFont = FALSE;     // Use bold 8x8 font
+u8 EvenOdd = 0;             // Even/Odd character being printed
+static u8 FontInit = 255;
 
 // TTY
 s16 sx = 0, sy = C_YSTART;              // Character x and y output position
 s8 sv_HSOffset = 0;                     // HScroll offset
 s16 HScroll = 0;                        // VDP horizontal scroll position
-s16 VScroll = 0;                        // VDP vertical scroll position
+static s16 VScroll = 0;                 // VDP vertical scroll position
 u8 C_XMAX = 63;                         // Cursor max X position
 u8 C_YMAX = C_YMAX_PAL;                 // Cursor max Y position
 u8 C_XMIN = 0;                          // Cursor min X position
 u8 C_YMIN = 0;                          // Cursor min Y position
 u8 ColorBG = CL_BG, ColorFG = CL_FG;    // Selected BG/FG colour
-u8 bIntense = FALSE;                    // Text highlighed
-u8 bInverse = FALSE;                    // Text BG/FG reversed
-u8 sv_bWrapAround = TRUE;               // Force wrap around at column 40/80
+bool bIntense = FALSE;                  // Text highlighed
+bool bInverse = FALSE;                  // Text BG/FG reversed
+bool bWrapMode = FALSE;                 // DECAWM - Wrap to next line when going beyond column 40/80 (default false)
+bool bReverseWrap = FALSE;              // Allow Cursor_Left to wrap from left to right margin
+bool bExtReverseWrap = FALSE;           // Extended reverse wrap mode (1045)
+bool bInsertMode = FALSE;               // Insert mode - don't move cursor right on input
 u8 sv_TermColumns = D_COLUMNS_80;       // Number of terminal character columns (40/80)
-u8 PendingWrap = FALSE;
-u8 PendingScroll = FALSE;
+bool bPendingWrap = FALSE;              // Line wrap pending
+bool bPendingScroll = FALSE;            // Not used
 u16 BufferSelect = 0;
 s16 Saved_VScroll = 0;
 
@@ -48,13 +58,26 @@ u16 sv_CBGCL = 0;       // Custom BG colour
 u16 sv_CFG0CL = 0x0AE;  // Custom text colour for 4x8 font
 u16 sv_CFG1CL = 0x046;  // Custom text antialiasing colour for 4x8 font
 u8 sv_bHighCL = TRUE;   // Use the upper 8 colours instead when using sv_Font=1
+u8 sv_CLPalette = 0;
 
 // Normal 4x8 and 8x8 font colours
-static const u16 pColors[16] =
+static const u16 pColors_Xterm[16] =
 {
-    0x222, 0x00c, 0x0c0, 0x0cc, 0xc00, 0xc0c, 0xcc0, 0xccc,   // Normal
+    0x000, 0x00c, 0x0c0, 0x0cc, 0xc00, 0xc0c, 0xcc0, 0xccc,   // Normal
     0x444, 0x66e, 0x6e6, 0x6ee, 0xe64, 0xe6e, 0xee6, 0xeee,   // Highlighted
 };
+static const u16 pColors_CGA[16] =
+{
+                        // 44a
+    0x000, 0x00a, 0x0a0, 0x04a, 0xa00, 0xa0a, 0xaa0, 0xaaa,   // Normal
+    0x444, 0x44e, 0x4e4, 0x4ee, 0xe44, 0xe4e, 0xee4, 0xeee,   // Highlighted
+};
+static const u16 pColors_Windows[16] =
+{
+    0x000, 0x008, 0x080, 0x088, 0x800, 0x808, 0x880, 0xccc,   // Normal
+    0x888, 0x00e, 0x0e0, 0x0ee, 0xe00, 0xe0e, 0xee0, 0xeee,   // Highlighted
+};
+static const u16 *pColors[] = {pColors_Xterm, pColors_CGA, pColors_Windows};
 
 // Inverted black/white 8x8 font colours
 static const u16 pInvColors[16] =
@@ -101,13 +124,70 @@ const char * const TermTypeList[] =
     "XTERM", "ANSI", "VT100", "MEGADRIVE", "UNKNOWN"
 };
 
+void TTY_InitVRAM()
+{
+    if (FontInit == sv_Font) return;
+
+    if (sv_Font == FONT_SOFTWARE)
+    {
+        AVR_HSCROLL = AVR_HSCROLL_START + 0x2000;
+        AVR_SAT     = AVR_SAT_START     + 0x2000;
+        AVR_WINDOW  = AVR_WINDOW_START  + 0x2000;
+
+        VDP_setHScrollTableAddress(AVR_HSCROLL);
+        VDP_setSpriteListAddress(AVR_SAT);
+        VDP_setWindowAddress(AVR_WINDOW);
+        VDP_setBGAAddress(AVR_PLANE_B);
+        VDP_setBGBAddress(AVR_PLANE_B);
+
+        SP_Setup();
+        SW_Setup(); // Clears plane B!
+    }
+    else
+    {
+        AVR_HSCROLL = AVR_HSCROLL_START;
+        AVR_SAT     = AVR_SAT_START;
+        AVR_WINDOW  = AVR_WINDOW_START;
+
+        VDP_setHScrollTableAddress(AVR_HSCROLL);
+        VDP_setSpriteListAddress(AVR_SAT);
+        VDP_setWindowAddress(AVR_WINDOW);
+        VDP_setBGAAddress(AVR_PLANE_A);
+        VDP_setBGBAddress(AVR_PLANE_B);
+
+        SP_Setup();
+        SW_Free();  // Clears plane A and B!
+    }
+
+    TTY_SetSX(0);
+    sy = C_YSTART;
+    TTY_SetVScrollAbs(0);
+    Buffer_Flush(&TxBuffer);
+
+    SB_ResetStatusBar();
+    FontInit = sv_Font;
+}
 
 void TTY_Init(TTY_InitFlags flags)
 {
+    FontInit = 255;
+    if (flags & TF_ReloadFont)
+    {
+        TTY_SetFontSize(sv_Font);
+    }
+
     if (flags & TF_ClearScreen)
     {
-        TRM_FillPlane(BG_A, 0);
-        TRM_FillPlane(BG_B, 0);
+        if (sv_Font == FONT_SOFTWARE)
+        {
+            SW_ResetProt();
+            SW_ClearScreen();
+        }
+        else
+        {
+            TRM_ClearPlane(BG_A);
+            TRM_ClearPlane(BG_B);
+        }
     }
 
     switch (sv_TermColumns)
@@ -132,28 +212,34 @@ void TTY_Init(TTY_InitFlags flags)
         }
     }
 
-    TTY_SetSX(0);
-    sy = C_YSTART;
-    C_YMAX = C_SYSTEM_YMAX;
-    HScroll = sv_HSOffset;
-    VScroll = D_VSCROLL;
-    ColorBG = CL_BG;
-    ColorFG = CL_FG;
-    bIntense = FALSE;
-    bInverse = FALSE;
-    bDoCursorBlink = TRUE;
-    PendingWrap = FALSE;
-    PendingScroll = FALSE;
-
-    BufferSelect = 0;
-    Saved_VScroll = 0;
-
-    VDP_setVerticalScroll(BG_A, VScroll);
-    VDP_setVerticalScroll(BG_B, VScroll);
-
-    if (flags & TF_ReloadFont)
+    //if (flags & TF_ResetVariables)
     {
-        TTY_SetFontSize(sv_Font);
+        TTY_SetSX(0);
+        sy = C_YSTART;
+        C_YMAX = C_SYSTEM_YMAX;
+        HScroll = sv_HSOffset;
+        VScroll = D_VSCROLL;
+        ColorBG = CL_BG;
+        ColorFG = CL_FG;
+        bIntense = FALSE;
+        bInverse = FALSE;
+        bDoCursorBlink = TRUE;
+        bPendingWrap = FALSE;
+        bPendingScroll = FALSE;
+
+        bReverseWrap = FALSE;
+        bExtReverseWrap = FALSE;
+        bInsertMode = FALSE;
+        bLinefeedMode = sv_bLinefeedMode;
+
+        BufferSelect = 0;
+        Saved_VScroll = 0;
+
+        TTY_SetVScrollAbs(VScroll);
+
+        #if ESC_LOGGING >= 4
+        kprintf("\e[92mTTY Flags reset\e[0m");
+        #endif
     }
 
     if (flags & TF_ResetPalette)
@@ -245,87 +331,91 @@ void TTY_ReloadPalette()
     {
         TTY_SetDarkColours();
     }
+    else if (sv_Font == FONT_SOFTWARE)   // Software rendered 4x8
+    {
+        SetPalette(PAL2, pColors[sv_CLPalette]);
+    }
     else if (sv_Font == FONT_4x8_16)   // 4x8
     {
         // Font glyph set 0 (Colours 0-3)
         SetColor(0x0A, pColorsHalf[0]);
-        SetColor(0x0B, pColors[0]);
+        SetColor(0x0B, pColors[sv_CLPalette][0]);
 
         SetColor(0x1A, pColorsHalf[1]);
-        SetColor(0x1B, pColors[1]);
+        SetColor(0x1B, pColors[sv_CLPalette][1]);
 
         SetColor(0x2A, pColorsHalf[2]);
-        SetColor(0x2B, pColors[2]);
+        SetColor(0x2B, pColors[sv_CLPalette][2]);
 
         SetColor(0x3A, pColorsHalf[3]);
-        SetColor(0x3B, pColors[3]);
+        SetColor(0x3B, pColors[sv_CLPalette][3]);
 
         // Font glyph set 1 (Colours 4-7)
         SetColor(0x08, pColorsHalf[4]);
-        SetColor(0x09, pColors[4]);
+        SetColor(0x09, pColors[sv_CLPalette][4]);
 
         SetColor(0x18, pColorsHalf[5]);
-        SetColor(0x19, pColors[5]);
+        SetColor(0x19, pColors[sv_CLPalette][5]);
 
         SetColor(0x28, pColorsHalf[6]);
-        SetColor(0x29, pColors[6]);
+        SetColor(0x29, pColors[sv_CLPalette][6]);
 
         SetColor(0x38, pColorsHalf[7]);
-        SetColor(0x39, pColors[7]);
+        SetColor(0x39, pColors[sv_CLPalette][7]);
 
         // Font glyph set 2 (Colours 12-15)
         SetColor(0x0C, pColorsHalf[8]);
-        SetColor(0x0D, pColors[8]);
+        SetColor(0x0D, pColors[sv_CLPalette][8]);
 
         SetColor(0x1C, pColorsHalf[9]);
-        SetColor(0x1D, pColors[9]);
+        SetColor(0x1D, pColors[sv_CLPalette][9]);
 
         SetColor(0x2C, pColorsHalf[10]);
-        SetColor(0x2D, pColors[10]);
+        SetColor(0x2D, pColors[sv_CLPalette][10]);
 
         SetColor(0x3C, pColorsHalf[11]);
-        SetColor(0x3D, pColors[11]);
+        SetColor(0x3D, pColors[sv_CLPalette][11]);
 
         // Font glyph set 3 (Colours 8-11)
         SetColor(0x0E, pColorsHalf[12]);
-        SetColor(0x0F, pColors[12]);
+        SetColor(0x0F, pColors[sv_CLPalette][12]);
 
         SetColor(0x1E, pColorsHalf[13]);
-        SetColor(0x1F, pColors[13]);
+        SetColor(0x1F, pColors[sv_CLPalette][13]);
 
         SetColor(0x2E, pColorsHalf[14]);
-        SetColor(0x2F, pColors[14]);
+        SetColor(0x2F, pColors[sv_CLPalette][14]);
 
         SetColor(0x3E, pColorsHalf[15]);
-        SetColor(0x3F, pColors[15]);
+        SetColor(0x3F, pColors[sv_CLPalette][15]);
     }
     else if (sv_Font == FONT_4x8_8)   // 4x8
     {
         // Font glyph set 0 (Colours 0-3)
         SetColor(0x0C, pColorsHalf[0]);
-        SetColor(0x0D, pColors[(sv_bHighCL ?  8 : 8)]);    // Always use the bright colour here
+        SetColor(0x0D, pColors[sv_CLPalette][(sv_bHighCL ?  8 : 8)]);    // Always use the bright colour here
 
         SetColor(0x1C, pColorsHalf[1]);
-        SetColor(0x1D, pColors[(sv_bHighCL ?  9 : 1)]);
+        SetColor(0x1D, pColors[sv_CLPalette][(sv_bHighCL ?  9 : 1)]);
 
         SetColor(0x2C, pColorsHalf[2]);
-        SetColor(0x2D, pColors[(sv_bHighCL ? 10 : 2)]);
+        SetColor(0x2D, pColors[sv_CLPalette][(sv_bHighCL ? 10 : 2)]);
 
         SetColor(0x3C, pColorsHalf[3]);
-        SetColor(0x3D, pColors[(sv_bHighCL ? 11 : 3)]);
+        SetColor(0x3D, pColors[sv_CLPalette][(sv_bHighCL ? 11 : 3)]);
 
         // Font glyph set 1 (Colours 4-7)
         SetColor(0x0E, pColorsHalf[4]);
-        SetColor(0x0F, pColors[(sv_bHighCL ? 12 : 4)]);
+        SetColor(0x0F, pColors[sv_CLPalette][(sv_bHighCL ? 12 : 4)]);
 
         SetColor(0x1E, pColorsHalf[5]);
-        SetColor(0x1F, pColors[(sv_bHighCL ? 13 : 5)]);
+        SetColor(0x1F, pColors[sv_CLPalette][(sv_bHighCL ? 13 : 5)]);
 
         SetColor(0x2E, pColorsHalf[6]);
-        SetColor(0x2F, pColors[(sv_bHighCL ? 14 : 6)]);
+        SetColor(0x2F, pColors[sv_CLPalette][(sv_bHighCL ? 14 : 6)]);
 
         SetColor(0x3E, pColorsHalf[7]);
-        SetColor(0x3F, pColors[(sv_bHighCL ? 15 : 7)]);
+        SetColor(0x3F, pColors[sv_CLPalette][(sv_bHighCL ? 15 : 7)]);
     }
     else if (sv_Font == FONT_4x8_1)   // 4x8 AA
     {
@@ -334,7 +424,7 @@ void TTY_ReloadPalette()
     }
     else        // 8x8
     {
-        SetPalette(PAL2, pColors);
+        SetPalette(PAL2, pColors[sv_CLPalette]);
     }
     
     SetColor( 0, sv_CBGCL); // VDP BG Colour
@@ -346,8 +436,20 @@ void TTY_ReloadPalette()
 void TTY_SetFontSize(u8 size)
 {
     sv_Font = size;
+    TTY_InitVRAM();
 
-    if (sv_Font == FONT_4x8_16)   // 4x8 16 colour AA
+    if (sv_Font == FONT_SOFTWARE)   // Software rendered 4x8 font
+    {
+        VDP_setHorizontalScroll(BG_A, HScroll);
+        VDP_setHorizontalScroll(BG_B, HScroll);
+        
+        LastCursor = 0x13;
+        EvenOdd = 1;
+
+        if (sv_TermColumns == D_COLUMNS_80) C_XMAX = DCOL4_128;
+        else C_XMAX = DCOL4_64;
+    }
+    else if (sv_Font == FONT_4x8_16)   // 4x8 16 colour AA
     {
         VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA_16, AVR_FONT0, DMA);
         VDP_loadTileSet(&GFX_ASCII_TERM_SMALL_AA_14, AVR_FONT1, DMA); 
@@ -439,38 +541,40 @@ void TTY_SetFontSize(u8 size)
     u16 sprx = TTY_CURSOR_X;
     u16 spry = TTY_CURSOR_Y;
 
-    // Clamp position
-    sprx = sprx >= 504 ? 504 : sprx;
-    spry = spry >= 504 ? 504 : spry;
-
     // Setup cursor sprite
-    SetSprite_Y(SPRITE_ID_CURSOR, spry);
-    SetSprite_X(SPRITE_ID_CURSOR, sprx);
-    SetSprite_TILE(SPRITE_ID_CURSOR, LastCursor);
+    CR_SetupSprite(sprx, spry);
 }
 
 void TTY_PrintChar(u8 c)
 {
     u16 addr = 0;
 
-    // I really don't want this here, but its required to work around a "complex" wraparound issue
-    if (sx >= C_XMAX)
+    // If a deferred wrap is pending, apply it BEFORE drawing the next printable
+    if (bPendingWrap)
     {
+        //kprintf("sx: %d -> 0    --  sy: %d + 1  -- bWrapMode: %s  --  Wrap pending", sx, sy, bWrapMode?"True":"False");
         sx = 0;
-        TTY_MoveCursor(TTY_CURSOR_DOWN, 1);
+        /*if (bWrapMode)*/ TTY_MoveCursor(TTY_CURSOR_DOWN, 1);
+
+        bPendingWrap = FALSE;
     }
 
     switch (sv_Font)
     {
+        case FONT_SOFTWARE:
+        {
+            SW_PrintChar(c);
+            EvenOdd = sx & 1;
+            break;
+        }
         case FONT_4x8_16: // 4x8 16 Colour
         {
             addr = ((sx+BufferSelect) & 254) + YAddr_Table[sy & 31];
             
             *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR((EvenOdd ? AVR_PLANE_B : AVR_PLANE_A) + addr);   // Set plane VRAM address
-            *((vu16*) VDP_DATA_PORT) = PF_Table[ColorFG & 0xF] + c;                                         // Set plane tilemap data
+            *((vu16*) VDP_DATA_PORT) = PF_Table[(bReverseColour ? ColorBG : ColorFG) & 0xF] + c;            // Set plane tilemap data
 
             EvenOdd = sx & 1;
-
             break;
         }
         case FONT_4x8_8: // 4x8 8 Colour
@@ -478,7 +582,17 @@ void TTY_PrintChar(u8 c)
             addr = ((sx+BufferSelect) & 254) + YAddr_Table[sy & 31];
             
             *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR((EvenOdd ? AVR_PLANE_B : AVR_PLANE_A) + addr);   // Set plane VRAM address
-            *((vu16*) VDP_DATA_PORT) = PF_Table[ColorFG & 0x7] + c + (bInverse ? 0 : 0x100);                // Set plane tilemap data
+
+            // Old colour handling:
+            //*((vu16*) VDP_DATA_PORT) = PF_Table[ColorFG & 0x7] + c + (bInverse ? 0 : 0x100);              // Set plane tilemap data
+
+            // New colour handling:
+            // Use background colour + inverted character if the background colour is not black
+            if (ColorBG != CL_BG)
+            {
+                *((vu16*) VDP_DATA_PORT) = PF_Table[(bReverseColour ? ColorFG : ColorBG) & 0x7] + c;                                     // Set plane tilemap data
+            }
+            else *((vu16*) VDP_DATA_PORT) = PF_Table[(bReverseColour ? ColorBG : ColorFG) & 0x7] + c + (bInverse ? 0 : 0x100);           // Set plane tilemap data
 
             EvenOdd = sx & 1;
             break;
@@ -498,7 +612,7 @@ void TTY_PrintChar(u8 c)
             addr = (((sx+BufferSelect) & 127) << 1) + YAddr_Table[sy & 31];
             
             *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(AVR_PLANE_B + addr);         // Set plane B VRAM address
-            *((vu16*) VDP_DATA_PORT) = 0x4000 + ColorFG;                                // Set plane B tilemap data
+            *((vu16*) VDP_DATA_PORT) = 0x4000 + (bReverseColour ? ColorBG : ColorFG);   // Set plane B tilemap data
 
             *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(AVR_PLANE_A + addr);         // Set plane A VRAM address
             *((vu16*) VDP_DATA_PORT) = AVR_FONT0 + c + (bInverse ? 0x2000 : 0x2100);    // Set plane A tilemap data
@@ -509,7 +623,7 @@ void TTY_PrintChar(u8 c)
         default: break;
     }
 
-    TTY_MoveCursor(TTY_CURSOR_RIGHT, 1);
+    if (bInsertMode == FALSE) TTY_MoveCursor(TTY_CURSOR_RIGHT, 1);
 }
 
 inline void TTY_PrintString(const char *str)
@@ -525,6 +639,11 @@ void TTY_ClearLine(u16 y, u16 line_count)
 
     switch (sv_Font)
     {
+        case FONT_SOFTWARE: // Software rendered 4x8
+        {
+            SW_ClearLine(y, line_count);
+            break;
+        }
         case FONT_8x8_16: // 8x8
         {
             while (i--)
@@ -587,6 +706,11 @@ void TTY_ClearLineSingle(u16 y)
 
     switch (sv_Font)
     {
+        case FONT_SOFTWARE: // Software rendered 4x8
+        {
+            SW_ClearLineSingle(y);
+            break;
+        }
         case FONT_8x8_16: // 8x8
         {
             *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR((u32) AVR_PLANE_B + YAddr_Table[y & 31] + (BufferSelect<<1));
@@ -639,6 +763,11 @@ void TTY_ClearPartialLine(u16 y, u16 from_x, u16 to_x)
 
     switch (sv_Font)
     {
+        case FONT_SOFTWARE: // Software rendered 4x8
+        {
+            SW_ClearPartialLine(y, from_x, to_x);
+            break;
+        }
         case FONT_8x8_16: // 8x8
         {
             *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR((u32) AVR_PLANE_B + (((from_x & 127) + ((y & 31) << 7)) << 1) + (BufferSelect<<1));
@@ -687,14 +816,35 @@ void TTY_ClearPartialLine(u16 y, u16 from_x, u16 to_x)
 void TTY_SetAttribute(u8 v)
 {
     // Foreground color: 30–37 normal, 90–97 high intensity
-    if ((v >= 30 && v <= 37) || (v >= 90 && v <= 97))
+    if (v >= 30 && v <= 37)
     {
         // Base color
-        ColorFG = (v >= 90 ? v - 82 : v - 30);
+        ColorFG = v - 30;
 
         // Apply intensity if active
-        if (bIntense && v < 90) ColorFG += 8;
+        if (bIntense) ColorFG += 8;
 
+        return;
+    }
+    if (v >= 90 && v <= 97)
+    {
+        // Base color
+        ColorFG = v - 82;
+        return;
+    }
+
+    // Background color: 40–47 normal, 100–107 high intensity
+    if (v >= 40 && v <= 47)
+    {
+        // Base color
+        ColorBG = v - 40;
+
+        return;
+    }
+    if (v >= 100 && v <= 107)
+    {
+        // Base color
+        ColorBG = v - 92;
         return;
     }
 
@@ -702,18 +852,21 @@ void TTY_SetAttribute(u8 v)
     {
         case 0:  // Reset
             ColorFG = CL_FG;
+            ColorBG = CL_BG;
             bIntense = FALSE;
             bInverse = FALSE;
         break;
 
         case 1:  // Bold / increased intensity
             if (ColorFG <= 7) ColorFG += 8;
+
             bIntense = TRUE;
         break;
 
         case 2:  // Dim / decreased intensity
         case 22: // Normal intensity
             if (ColorFG >= 8) ColorFG -= 8;
+
             bIntense = FALSE;
         break;
 
@@ -729,19 +882,25 @@ void TTY_SetAttribute(u8 v)
             ColorFG = CL_FG;
         break;
 
+        case 49: // Reset BG color
+            ColorBG = CL_BG;
+        break;
+
         default: break;
     }
 }
 
 inline void TTY_SetSX(s16 x)
 {
-    sx = x < C_XMIN ? C_XMIN : x;     // sx less than 0? set to 0
+    bPendingWrap = FALSE;
+
+    sx = x < C_XMIN ? C_XMIN : x;       // sx less than 0? set to 0
 
     // sx greater than max_x? set to max_x
-    if (sx >= C_XMAX-1)
+    if (sx >= C_XMAX-1) 
     {
         sx = C_XMAX-1;
-        PendingWrap = TRUE;
+        bPendingWrap = TRUE;
     }
 
     EvenOdd = !(sx & 1);
@@ -756,7 +915,7 @@ inline void TTY_SetSX_Relative(s16 v)
     if (sx >= C_XMAX-1)
     {
         sx = C_XMAX-1;
-        PendingWrap = TRUE;
+        bPendingWrap = TRUE;
     }
 
     EvenOdd = !(sx & 1);
@@ -775,7 +934,7 @@ inline void TTY_SetSY_A(s16 y)
     if (sy >= C_YMAX-1)
     {
         sy = C_YMAX-1;
-        PendingScroll = TRUE;
+        bPendingScroll = TRUE;
     }
 
     sy += ((VScroll >> 3) + C_YSTART);
@@ -794,31 +953,19 @@ inline void TTY_SetSY(s16 y)
     if (sy >= C_YMAX-1)
     {
         sy = C_YMAX-1;
-        PendingScroll = TRUE;
-    }
-}
-
-inline void TTY_SetSY_Relative(s16 v)
-{
-    s16 y = sy + v;
-    sy = y < C_YMIN ? C_YMIN : y;     // sy less than 0? set to 0
-    
-    // sy greater than max_y? set to max_y
-    if (sy >= C_YMAX-1)
-    {
-        sy = C_YMAX-1;
-        PendingScroll = TRUE;
+        bPendingScroll = TRUE;
     }
 }
 
 inline s16 TTY_GetSY()
 {
-    return sy;
+    return sy - C_YSTART;
 }
 
 inline void TTY_SetVScroll(s16 v)
 {
     VScroll += v;
+    VScroll &= 0x7FFF;
                             
     *((vu32*) VDP_CTRL_PORT) = 0x40000010;
     *((vu16*) VDP_DATA_PORT) = VScroll;
@@ -826,9 +973,15 @@ inline void TTY_SetVScroll(s16 v)
     *((vu16*) VDP_DATA_PORT) = VScroll;
 }
 
+inline s16 TTY_GetVScroll()
+{
+    return VScroll;
+}
+
 inline void TTY_SetVScrollAbs(s16 v)
 {
-    VScroll = v;
+    VScroll  = v;
+    VScroll &= 0x7FFF;
                             
     *((vu32*) VDP_CTRL_PORT) = 0x40000010;
     *((vu16*) VDP_DATA_PORT) = VScroll;
@@ -854,83 +1007,61 @@ void TTY_MoveCursor(u8 dir, u8 num)
     {
         case TTY_CURSOR_RIGHT:
         {
-            if (sx+num > C_XMAX)    // >=
+            if (sx + num > (C_XMAX - 1))
             {
-                if (sv_bWrapAround) 
+                sprx = TTY_CURSOR_X;
+                spry = sy;
+
+                //if (bWrapMode)
                 {
-                    if (BufferSelect == 0)
-                    {
-                        sy++;
-
-                        if (sy > (C_YMAX + (VScroll >> 3)))
-                        {
-                            TTY_ClearLineSingle(sy);
-
-                            // Update vertical scroll
-                            TTY_SetVScroll(8);
-                        }
-                    }
-                    else
-                    {
-                        if ((sy + 1) <= C_YMAX) sy++;
-                    }
-                    
-                    spry = TTY_CURSOR_Y;
-                    SetSprite_Y(SPRITE_ID_CURSOR, spry);
-
-                    // Disable line below and Enable line +6 below to allow cursor X to wrap back to 0
-                    //TTY_SetSX(num-1);
-                    sx = num-1;
+                    // Cursor would go off-screen so set the pending wrap flag
+                    bPendingWrap = TRUE;
                 }
-                else
-                {
-                    // Enable line below to allow cursor X to wrap back to 0
-                    //TTY_SetSX(num-1);
-    
-                    // Disable line below if line above is Enabled!
-                    //TTY_SetSX(C_XMAX);
-                    sx = C_XMAX;
-                }
+                
+                sx = C_XMAX - 1; // Keep sx at last column for the final visible character
+
+                SetSprite_Y(SPRITE_CURSOR, TTY_CURSOR_Yf(spry));
+                SetSprite_X(SPRITE_CURSOR, sprx);
             }
             else
             {
-                //TTY_SetSX(sx+num);
-                sx = sx+num;
-
-                if (sx > C_XMAX) PendingWrap = TRUE;
+                sx += num;
+                sprx = TTY_CURSOR_X;
+                SetSprite_X(SPRITE_CURSOR, sprx);
             }
 
-            sprx = TTY_CURSOR_X;
-            SetSprite_X(SPRITE_ID_CURSOR, sprx);
-            
             break;
         }
 
         case TTY_CURSOR_DOWN:
+        {
+            // Newline (or explicit down) must cancel deferred wrap
+            if (bPendingWrap) bPendingWrap = FALSE;
+
             if (BufferSelect == 0)
             {
                 sy += num;
+                sy &= 0x7FFF;
                 if (sy > (C_YMAX + (VScroll >> 3)))
                 {
-                    TTY_ClearLine((sy-num)+1, num); // This may not be needed if the statement below is true
-                    
+                    TTY_ClearLine((sy-num)+1, num);
                     if (C_YMAX < C_SYSTEM_YMAX)
                     {
                         TTY_ClearLineSingle(sy + (C_SYSTEM_YMAX - C_YMAX) + 1);
                     }
-
-                    // Update vertical scroll
                     TTY_SetVScroll(8 * num);
                 }
             }
-            else
+            else if ((sy + num) <= C_YMAX) 
             {
-                if ((sy + num) <= C_YMAX) sy += num;
+                sy += num;
+                sy &= 0x7FFF;
             }
 
             spry = TTY_CURSOR_Y;
-            SetSprite_Y(SPRITE_ID_CURSOR, spry);
-        break;
+            SetSprite_Y(SPRITE_CURSOR, spry);
+            break;
+        }
 
         case TTY_CURSOR_UP:
             if (sy-num <= 0)
@@ -941,39 +1072,76 @@ void TTY_MoveCursor(u8 dir, u8 num)
             else 
             {
                 sy -= num;
+                sy &= 0x7FFF;
                 spry = TTY_CURSOR_Y;
             }
 
-            SetSprite_Y(SPRITE_ID_CURSOR, spry);
+            SetSprite_Y(SPRITE_CURSOR, spry);
         break;
 
         case TTY_CURSOR_LEFT:
-            if (sx-num < 0)
-            {
-                if (sv_bWrapAround) 
-                {
-                    TTY_SetSX(C_XMAX-(sx-num));
+        {
+            // Moving left cancels any pending wrap
+            bPendingWrap = FALSE;
+            
+            s16 n     = sx - num;
+            u8 left   = vDECLRMM ? DMarginLeft    : 0;
+            u8 right  = vDECLRMM ? DMarginRight+1 : C_XMAX;
+            u8 top    = DMarginTop;
+            u8 bottom = DMarginBottom;
 
-                    if (sy > 0)
+            if (sx >= left && vDECLRMM) // Do not allow going beyond left margin
+            {
+                if (bReverseWrap && bWrapMode) // wrap to right margin here
+                {
+                    n = (((right-1) + left) - n) - 1;
+
+                    if (sy <= top)
+                    {
+                        sy = bottom;
+                    }
+                    else
                     {
                         sy--;
-                        spry = TTY_CURSOR_Y;
-                        SetSprite_Y(SPRITE_ID_CURSOR, spry);
                     }
                 }
-                else
+                else if (n < left)  // stay at left margin
                 {
-                    TTY_SetSX(0);
+                    n = left;
                 }
             }
-            else
+            else if (n < 0) // Do allow going beyond left margin
             {
-                TTY_SetSX(sx-num);
+                if (bReverseWrap && bWrapMode) // wrap to right margin here
+                {
+                    n = right + n;  // Double negative, thus +
+                    //if (bPendingWrap) n--;   // Test
+                    
+                    if (sy <= top)
+                    {
+                        sy = bottom;
+                    }
+                    else
+                    {
+                        sy--;
+                    }
+                }
+                else if (n < left)  // stay at left margin (0)
+                {
+                    n = left;
+                }
             }
+            
+            sx = n;
+
+            EvenOdd = !(sx & 1);
 
             sprx = TTY_CURSOR_X;
-            SetSprite_X(SPRITE_ID_CURSOR, sprx);
-        break;
+            spry = TTY_CURSOR_Y;
+            SetSprite_X(SPRITE_CURSOR, sprx);
+            SetSprite_Y(SPRITE_CURSOR, spry);
+            break;
+        }
 
         default:
             // Update visual cursor position
@@ -981,14 +1149,21 @@ void TTY_MoveCursor(u8 dir, u8 num)
             spry = TTY_CURSOR_Y;
 
             // Update sprite position
-            SetSprite_Y(SPRITE_ID_CURSOR, spry);
-            SetSprite_X(SPRITE_ID_CURSOR, sprx);
+            SetSprite_Y(SPRITE_CURSOR, spry);
+            SetSprite_X(SPRITE_CURSOR, sprx);
         break;
     }
 }
 
 void TTY_DrawScrollback(u8 num)
 {
+    if (sv_Font == FONT_SOFTWARE)
+    {
+        kprintf("Software scrollback - num: %u - top: %u - bottom: %u", num, DMarginTop, DMarginBottom);
+        SW_ShiftLineUp(num);
+        return;
+    }
+
     if ((DMarginTop == 0) && (DMarginBottom == C_SYSTEM_YMAX))
     {
         TTY_SetVScroll(8 * num);    // +
@@ -1003,7 +1178,7 @@ void TTY_DrawScrollback(u8 num)
     const u16 Dst     = (VScrOff + (DMarginTop*256)) % 0x2000; // Destination address for DMA copy
 
     #if ESC_LOGGING >= 3
-    kprintf("[93mScrollback Normal - num: %u[0m", num);
+    kprintf("\e[93mScrollback Normal - num: %u\e[0m", num);
     kprintf("VScrOff = $%X", VScrOff);
     kprintf("n       = %u ", n);
     kprintf("Rows    = %u ", Rows);
@@ -1049,9 +1224,15 @@ void TTY_DrawScrollback_RI(u8 num)
 
 u16 TTY_ReadCharacter(u8 x, u8 y)
 {
+    s16 ny = (VScroll>>3) + y + C_YSTART;
+
+    if (sv_Font == FONT_SOFTWARE)
+    {
+        return SW_GetChar(x, (u8)ny);
+    }
+
     const u16 plane = x & 1 ? AVR_PLANE_A : AVR_PLANE_B;
     u16 addr = 0;
-    s16 ny = (VScroll>>3) + y + C_YSTART;
     
     if (sv_Font)
     {
@@ -1065,15 +1246,11 @@ u16 TTY_ReadCharacter(u8 x, u8 y)
     *((vu32*) VDP_CTRL_PORT) = VDP_READ_VRAM_ADDR(plane + addr);
     u16 r = *((vu16*) VDP_DATA_PORT);
 
-    //kprintf("VRAM word: $%X - VS: %d - y: %u", r, (VScroll>>3), y);
-
     if (r)
     {
         r -= 0x40;  // Remove font offset
         r &= 0xFF;  // Mask off attributes and fontset - This should be done outside this function later on, in case a function needs to know the attributes
     }
-
-    //kprintf("Returning VRAM character: $%X", r);
 
     return r;
 }

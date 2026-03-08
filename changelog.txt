@@ -1,3 +1,41 @@
+v0.34.0:
+This update has taken way to long to get pushed due to bug fixing and me getting distracted by adding new shiny things...
+I know for a fact that all the modifications to the terminal parser has introduced new bugs and/or compatability issues, I have tried my best to iron out most obvious bugs.
+
+The main big new feature of this release is the new 4x8 font renderer, which is capable of doing both foreground and background colour text (16 FG, 16 BG).
+The new renderer is about 50% slower than the previous default renderer but it is capable of so much more, and on a 4800 baud connection it is still about 10 times faster than it needs to be.
+
+In the future I want to clean up SMDT, it is becoming a bit of a mess due to all the different text rendering modes (6 different ones!)
+
+Telnet: Added a ton of new escape sequences, many fixes and for sure introduced new bugs in a few of them...
+Telnet: Fixed leading zeroes in escape sequences.
+Terminal: Wrap mode can now be forced on or off.
+Terminal: Sequences can now be reset/restarted.
+Terminal: Dummy APC payload handling along with "special" byte handling. Special byte means that the last byte is one of these: # % ␣ (preceded by ESCAPE).
+Terminal: Added global reverse colour setting along with initial character protection attributes (only works on the main screen and only when using the software renderer for now).
+Terminal: A shitton of improvements and "deprovements" to the parser. I really can't be assed to list all tens of thousands of changes here. See diff of file "Telnet.c".
+
+Terminal: Software rendered 4x8 text mode added;
+          It can display 16 foreground colours and 16 independent background colours in the same character glyph.
+          The only drawback to this new mode is that its not possible to anti alias the glyphs anymore and that the printing speed is halved (74 characters per frame vs 156 characters per frame).
+          Still a work in progress but a lot of time has been spent debugging it. It is stable enough to be the default text mode in the terminal shell and telnet client from now on.
+
+Shell: History queue is now "partially" remembered between system resets (power cycle / rom reload kind of resets).
+IRC: Optional time stamp prefix for messages, defaults to OFF; To enable/disable, see Quickmenu -> Settings -> Client settings -> IRC -> Time stamp.
+Misc: Relevant states now have proper sprite init functions.
+Misc: Statusbar functions, string and icon handling has been moved to its own unit: system/StatusBar.c
+Misc: 16 colour palette selection, choose from xterm, CGA/EGA and windows colour palette.
+Misc: "Temporary" shortcut to view the main screen in hexviewer, see Quickmenu -> Debug -> HexView - Screen.
+Misc: Saved variables can now be overriden during use by the user, but they are always reverted back to their saved state during boot.
+Misc: Minimal ANSI.SYS emulation (only enabled when running the "type" command).
+
+v0.33.4
+Telnet: Previous release filtered out nonsense byte sequences, this change makes sure to not drop bytes which clearly isnt a part of an escape sequence and instead reinsert them back into the stream and cancel escape sequence parsing.
+        For example, in the invalid sequence "$1B $5B $0D $0A" only $0D and $0A will be reinserted into the stream while the rest is dropped.
+Terminal: A fair few fixes to line wrapping along with CUF/CUB etc. Wrap pending flag now works. Todo: I know for sure some cursor movement code somewhere may still ignore the wrap pending flag and thus break, I'll get around to fixing those as I encounter them.
+Terminal: Re-added BG attributes.
+Misc: Added the "type" command.
+
 v0.33.3
 Telnet: The client will now set a default title when attempting to connect to a server.
 Telnet: The client will now inform the user when a connection failed when attempting to connect to a server.

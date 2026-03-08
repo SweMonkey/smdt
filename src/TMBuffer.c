@@ -212,7 +212,7 @@ void TMB_MoveCursor(u8 dir, u8 num)
             if (TMB_Ptr->sx-num < 0)
             {
                 TMB_SetSX(C_XMAX-(TMB_Ptr->sx-num));
-                if (sv_bWrapAround && (TMB_Ptr->sy > 0)) TMB_Ptr->sy--;
+                if (bWrapMode && (TMB_Ptr->sy > 0)) TMB_Ptr->sy--;
             }
             else
             {
@@ -223,7 +223,7 @@ void TMB_MoveCursor(u8 dir, u8 num)
         case TTY_CURSOR_RIGHT:
             if (TMB_Ptr->sx+num > C_XMAX)
             {
-                if (sv_bWrapAround) 
+                if (bWrapMode) 
                 {
                     TMB_ClearLine(TMB_Ptr->sy+1, 1);
                     TMB_Ptr->sy++;

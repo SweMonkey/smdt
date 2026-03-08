@@ -6,8 +6,13 @@
 #include "DevMgr.h"
 #include "WinMgr.h"
 #include "Mouse.h"
+#include "SwRenderer.h"
+
+#include "misc/VarList.h"
 #include "system/PseudoFile.h"
 #include "system/Time.h"
+#include "system/Sprite.h"
+#include "system/StatusBar.h"
 
 // https://vt100.net/docs/vt100-ug/chapter3.html
 // https://invisible-island.net/xterm/ctlseqs/ctlseqs.html
@@ -92,7 +97,10 @@
 #define ICON_LABEL_OFFSET (MAX_LABEL_STACK_SIZE/2)
 
 // Forward decl.
+static void DoSpecialByte(u8 byte);
+static void DoAPC(u8 byte);
 static void DoEscape(u8 byte);
+static void ResetSequence();
 static void DoIAC(u8 byte);
 
 // Next "expected" type of byte to be received
@@ -100,11 +108,12 @@ NextCommand NextByte = NC_Data;
 
 // Telnet modifiable variables
 static u8 vDoGA = 0;            // Use Go-Ahead
-static u8 vDECLRMM = 0;         // This control function defines whether or not the set left and right margins (DECSLRM) control function can set margins.
+u8 vDECLRMM = 0;                // This control function defines whether or not the set left and right margins (DECSLRM) control function can set margins.
 u8 vDECCKM = 0;                 // Cursor Key Format (DECCKM) - 0 = OFF - 1 = ON (TLDR: Numlock)
 u8 sv_AllowRemoteEnv = FALSE;   // Allow remote server to access/modify local enviroment variables
 u8 vBracketedPaste = FALSE;     // In bracketed paste mode (Unused/unimplemented)
-u8 sv_EnableUTF8 = TRUE;
+bool bEnableUTF8 = TRUE;
+bool bANSI_SYS_Emulation = FALSE;
 static u8 vMinimized = FALSE;
 
 // DECSTBM
@@ -116,9 +125,10 @@ s16 DMarginLeft = 0;     // Region left margin
 s16 DMarginRight = 0;    // Region right margin
 
 // DECOM
-static u8 vDECOM = FALSE;       // DEC Origin Mode enabled
-static s16 Saved_OrgTop[2] = {0, 0}, Saved_OrgBottom[2] = {29, 29}; // Saved cursor origin
-static s16 Saved_sx[2] = {0, 0}, Saved_sy[2] = {C_YSTART, C_YSTART};        // Saved cursor position
+u8 vDECOM = FALSE;       // DEC Origin Mode enabled
+static u8 Saved_DECOM = FALSE;
+static s16 Saved_OrgTop[2] = {0, 0}, Saved_OrgBottom[2] = {29, 29};     // Saved cursor origin
+static s16 Saved_sx[2] = {0, 0}, Saved_sy[2] = {C_YSTART, C_YSTART};    // Saved cursor position
 
 // XTCHECKSUM
 static u8 XTCHECKSUM = 1;
@@ -131,6 +141,7 @@ static u16 ESC_Param16 = 0xFFFF;
 static u8 ESC_ParamSeq = 0;
 static char ESC_Buffer[4] = {'\0','\0','\0','\0'};
 static u8 ESC_BufferSeq = 0;
+static char SpecialCharacter = 0;
 
 // Mode parser
 static u8 ESC_QBuffer[6];
@@ -185,6 +196,17 @@ static s16 TermPosX = 0, TermPosY = 0;  // Dummy terminal position
 static char FakeWindowLabel[40], FakeIconLabel[40]; // Faked window and icon title string. This can only be set by the remote server, thus it can only contain strings which the server already knows about.
 static char **LabelStack;                           // Pushed/Popped window and icon label strings. 0-3 = Window, 4-7 = Icon
 static u8 WindowNum, IconNum;                       // Number of window/icon labels on stack
+
+static bool bDisplayControls = FALSE;   // Display Control Characters
+bool bReverseColour = FALSE;            // Reverse Display Colors (DECSCNM)
+u8 CharProtAttr = 0;                    // Character Protection Attribute (DECSCA)
+u8 Saved_Prot[2] = {0, 0};
+u8 C1_7Bit = 1;                         // 1 = S7C1T - 0/2 = S8C1T (7bit vs 8bit control characters)
+bool bCursorSaved[2] = {FALSE, FALSE};
+
+// Terminal functions
+void TF_DECSC();
+void TF_CUB(u8 num);
 
 static const u8 CharMap1[256] =
 {   // DEC Special Character and Line Drawing Set
@@ -278,6 +300,8 @@ void TELNET_Init(TTY_InitFlags tty_flags)
     DMarginLeft = 0;
     DMarginRight = C_XMAX;
 
+    Saved_DECOM = FALSE;
+
     Saved_OrgTop[0] = DMarginTop;
     Saved_OrgTop[1] = DMarginTop;
 
@@ -304,7 +328,7 @@ void TELNET_Init(TTY_InitFlags tty_flags)
                 if (LabelStack[i] == NULL)
                 {
                     #ifdef TRM_LOGGING
-                    kprintf("[91mError: Failed to allocate label #%u[0m", i);
+                    kprintf("\e[91mError: Failed to allocate label #%u\e[0m", i);
                     #endif
                 }
 
@@ -314,7 +338,7 @@ void TELNET_Init(TTY_InitFlags tty_flags)
         else
         {
             #ifdef TRM_LOGGING
-            kprintf("[91mError: Failed to allocate label stack![0m");
+            kprintf("\e[91mError: Failed to allocate label stack!\e[0m");
             #endif
         }
     }
@@ -339,11 +363,12 @@ void TELNET_Init(TTY_InitFlags tty_flags)
     Saved_sy[1] = C_YSTART;
 
     // Variable overrides
-    vDoEcho = 0;
-    vLineMode = 0;
-    vBackspace = 0;
-    vNewlineConv = 0;
-    sv_bWrapAround = TRUE;
+    bNoEcho = sv_bNoEcho;
+    v_LineMode = sv_LineMode;
+    v_Backspace = sv_Backspace;
+    bLinefeedMode = sv_bLinefeedMode;
+    bWrapMode = sv_bWrapMode;
+    bEnableUTF8 = sv_bEnableUTF8;
     bDoCursorBlink = TRUE;
 
     // OSC
@@ -359,6 +384,15 @@ void TELNET_Init(TTY_InitFlags tty_flags)
     // Mouse tracking
     MTrackMode = MT_ClickOnly;
     MReportFormat = MR_Default;
+
+    SpecialCharacter = 0;
+    bDisplayControls = FALSE;
+    bReverseColour = FALSE;
+    CharProtAttr = 0;
+    Saved_Prot[0] = 0;
+    Saved_Prot[1] = 0;
+    bCursorSaved[0] = FALSE;
+    bCursorSaved[1] = FALSE;
 }
 
 void Telnet_Quit()
@@ -389,7 +423,6 @@ void Telnet_MouseTrack()
         switch (MTrackMode)
         {
             case MT_ClickOnly:
-                
             break;
 
             case MT_DownUp:
@@ -413,7 +446,7 @@ void Telnet_MouseTrack()
         switch (MReportFormat)
         {
             case MR_Default:        
-                len = sprintf(str, "[M%u%u%u", btn, column, row);
+                len = sprintf(str, "\e[M%u%u%u", btn, column, row);
                 NET_SendStringLen(str, len);
             break;
             
@@ -491,16 +524,36 @@ void TELNET_ParseRX(u8 byte)
 
         case NC_IAC:
             DoIAC(byte);
-        break;    
+        break;
+
+        case NC_SpecialByte:
+            DoSpecialByte(byte);
+        break;
+
+        case NC_APC:
+            DoAPC(byte);
+        break;
     }
 
     return;
 
     Data:
 
-    //if (sv_EnableUTF8 == FALSE) goto SkipUTF;
+    if (bDisplayControls)
+    {
+        bEnableUTF8 = FALSE;
 
-    if (sv_EnableUTF8)
+        if ((byte > 0 && byte < 8) ||   // 1-7
+            (byte == 9) ||              // 9
+            (byte == 11) ||             // 11
+            (byte > 15 && byte < 27) || // 16-26 
+            (byte > 27 && byte < 32)    // 28-31 
+           )
+        {
+            goto print;
+        }
+    }
+    else if (bEnableUTF8)
     {
         switch (byte & 0xF0)
         {
@@ -537,12 +590,30 @@ void TELNET_ParseRX(u8 byte)
             break;
         }
     }
+    // Only display a limited set of control characters when bDisplayControls and bEnableUTF8 are both false
+    else
+    {
+        if ((byte > 0  && byte < 7) ||  // 1-6
+            (byte > 15 && byte < 24) || // 16-23 
+            (byte > 27 && byte < 32)    // 28-31 
+           )
+        {
+            goto print;
+        }
+    }
 
     SkipUTF:
 
     switch (byte)
     {
         default:
+            if (C1_7Bit == 0 && byte == 0x9F)
+            {
+                NextByte = NC_APC;
+                return;
+            }
+
+            print:
             switch (CharMapSelection)
             {
                 default:
@@ -557,11 +628,11 @@ void TELNET_ParseRX(u8 byte)
                     LastPrintedChar = CharMap2[byte];
                 break;*/
             }
-                        
+
             TTY_PrintChar(LastPrintedChar);
             
             #ifdef TRM_LOGGING
-            if ((byte < 0x20) /*|| (byte > 0x7E)*/) kprintf("[91mTTY_ParseRX: Caught unhandled byte: $%X at position $%lX[0m", byte, RXBytes);
+            if ((byte < 0x20) /*|| (byte > 0x7E)*/) kprintf("\e[91mTTY_ParseRX: Caught unhandled byte: $%X at position $%lX\e[0m", byte, RXBytes-1);
             #endif
         break;
         case 0x1B:  // Escape 1
@@ -572,21 +643,25 @@ void TELNET_ParseRX(u8 byte)
         break;
         case 0x0A:  // Line feed (new line)
         case 0x0B:  // Vertical tab
-            if (vNewlineConv == 1) TTY_SetSX(0);  // Convert \n to \n\r
+            if (bLinefeedMode) TTY_SetSX(0);  // Convert \n to \n\r
 
             TTY_MoveCursor(TTY_CURSOR_DOWN, 1);
+            bPendingWrap = FALSE;
         break;
         case 0x0D:  // Carriage return
-            TTY_SetSX(0);
+            if (vDECOM) TTY_SetSX(DMarginLeft); // -1?
+            else TTY_SetSX(0);
+
             TTY_MoveCursor(TTY_CURSOR_DUMMY);   // Dummy
+            bPendingWrap = FALSE;
         break;
-        case 0x08:  // Backspace
-            TTY_MoveCursor(TTY_CURSOR_LEFT, 1);
-            //kprintf("[93mBackspace: sx = %d[0m", TTY_GetSX());
+        case 0x08:  // Backspace - Should be the same as CUB(1)
+            //TTY_MoveCursor(TTY_CURSOR_LEFT, 1);
+            TF_CUB(1);
         break;
         case 0x09:  // Horizontal tab
             #ifdef TRM_LOGGING
-            //kprintf("[93mHorizontal tab: %u -> %u[0m", (TTY_GetSX() % 80), Find_NextTabStop());
+            //kprintf("\e[93mHorizontal tab: %u -> %u\e[0m", (TTY_GetSX() % 80), Find_NextTabStop());
             #endif
             
             TTY_SetSX(Find_NextTabStop());
@@ -597,17 +672,24 @@ void TELNET_ParseRX(u8 byte)
 
             TTY_ResetVScroll();
 
-            TRM_FillPlane(BG_A, 0);
-            TRM_FillPlane(BG_B, 0);
+            if (sv_Font == FONT_SOFTWARE)
+            {
+                SW_ClearScreen();
+            }
+            else
+            {
+                TRM_ClearPlane(BG_A);
+                TRM_ClearPlane(BG_B);
+            }
 
             TTY_MoveCursor(TTY_CURSOR_DUMMY);   // Dummy
         break;
-        case 0x0E:  // Shift Out
+        /*case 0x0E:  // Shift Out
             CharMapSelection = 1;
         break;
         case 0x0F:  // Shift In
             CharMapSelection = 0;
-        break;
+        break;*/
         case 0x00:  // Null
         break;
         case 0x05:  // Enquiry
@@ -629,7 +711,7 @@ void TELNET_ParseRX(u8 byte)
         case 0x06:  // Acknowledge
         case 0x15:  // NAK (negative acknowledge)
             #ifdef TRM_LOGGING
-            kprintf("[91mUnimplemented VT100 mode single-character function: $%X at $%lX[0m", byte, RXBytes);
+            kprintf("\e[91mUnimplemented VT100 mode single-character function: $%X at $%lX\e[0m", byte, RXBytes-1);
             #endif
         break;
     }
@@ -640,7 +722,171 @@ void ChangeTitle(const char *str)
     char TitleBuf[36];
 
     snprintf(TitleBuf, 36, "%s - %-27s", STATUS_TEXT_SHORT, str);
-    TRM_SetStatusText(TitleBuf);
+    SB_SetStatusText(TitleBuf);
+}
+
+static void DoSpecialByte(u8 byte)
+{
+
+    switch (SpecialCharacter)
+    {
+        case '#':
+        {
+            switch (byte)
+            {
+                case '3': // Set Double Height Line Top Half (DECDHL)
+                    #if ESC_LOGGING >= 3
+                    kprintf("\e[91mNot implemented: ESC # 3 at $%lX\e[0m", RXBytes-1);
+                    #endif
+                break;
+                case '4': // Set Double Height Line Bottom Half (DECDHL)
+                    #if ESC_LOGGING >= 3
+                    kprintf("\e[91mNot implemented: ESC # 4 at $%lX\e[0m", RXBytes-1);
+                    #endif
+                break;
+                case '5': // Set Single Width Line (DECSWL)
+                    #if ESC_LOGGING >= 3
+                    kprintf("\e[91mNot implemented: ESC # 5 at $%lX\e[0m", RXBytes-1);
+                    #endif
+                break;
+                case '6': // Set Double Width Line (DECDWL)
+                    #if ESC_LOGGING >= 3
+                    kprintf("\e[91mNot implemented: ESC # 6 at $%lX\e[0m", RXBytes-1);
+                    #endif
+                break;
+                case '8': // Fill Screen with E (DECALN)
+                    vDECOM = FALSE;
+
+                    DMarginTop = 0;
+                    DMarginBottom = C_YMAX;
+                    DMarginLeft = 0;
+                    DMarginRight = C_XMAX;
+
+                    if (sv_Font == FONT_SOFTWARE)
+                    {
+                        SW_FillScreen('E');
+                    }
+                    else
+                    {
+                        TRM_FillPlane(BG_A, 0x6000 + AVR_FONT0 + 0x45);
+                        TRM_FillPlane(BG_B, 0x6000 + AVR_FONT0 + 0x45);
+                    }
+                    
+                    //urxvt - Does not reset margins.
+                    //vte - Does not set the cursor position, does not reset margins.
+
+                    TTY_SetSX(0);
+                    TTY_SetSY_A(0);  // Using C_YSTART (1) results in row being reported as 3 instead of 1
+                break;
+            
+                default:
+                    #if ESC_LOGGING >= 3
+                    kprintf("\e[91mNot implemented: Unknown ESC # %c at $%lX\e[0m", byte, RXBytes-1);
+                    #endif
+                break;
+            }
+            break;
+        }
+
+        case '%':
+        {
+            switch (byte)
+            {
+                case '8': // Alias: Enable UTF-8 mode
+                case 'G': // Enable UTF-8 mode
+                    #if ESC_LOGGING >= 3
+                    kprintf("\e[92mEnabling UTF-8 mode at $%lX\e[0m", RXBytes-1);
+                    #endif
+
+                    bEnableUTF8 = TRUE;
+                break;
+                case '@': // Disable UTF-8 mode
+                    #if ESC_LOGGING >= 3
+                    kprintf("\e[92mDisabling UTF-8 mode at $%lX\e[0m", RXBytes-1);
+                    #endif
+
+                    bEnableUTF8 = FALSE;
+                break;
+            
+                default:
+                    #if ESC_LOGGING >= 3
+                    kprintf("\e[91mNot implemented: Unknown ESC %% %c at $%lX\e[0m", byte, RXBytes-1);
+                    #endif
+                break;
+            }
+            break;
+        }
+
+        case ' ':
+        {
+            switch (byte)
+            {
+                case 'F': // Use 7-bit controls (S7C1T)
+                    C1_7Bit = 1;
+
+                    #if ESC_LOGGING >= 3
+                    kprintf("\e[91mNot implemented: ESC ␣ F at $%lX\e[0m", RXBytes-1);
+                    #endif
+                break;
+                case 'G': // Use 8-bit controls (S8C1T)
+                    C1_7Bit = 0;
+
+                    #if ESC_LOGGING >= 3
+                    kprintf("\e[91mNot implemented: ESC ␣ G at $%lX\e[0m", RXBytes-1);
+                    #endif
+                break;
+                case 'L': // ANSI Charset Level 1 (ANSI_LEVEL_1)
+                    #if ESC_LOGGING >= 3
+                    kprintf("\e[91mNot implemented: ESC ␣ L at $%lX\e[0m", RXBytes-1);
+                    #endif
+                break;
+                case 'M': // ANSI Charset Level 2 (ANSI_LEVEL_2)
+                    #if ESC_LOGGING >= 3
+                    kprintf("\e[91mNot implemented: ESC ␣ M at $%lX\e[0m", RXBytes-1);
+                    #endif
+                break;
+                case 'N': // ANSI Charset Level 3 (ANSI_LEVEL_3)
+                    #if ESC_LOGGING >= 3
+                    kprintf("\e[91mNot implemented: ESC ␣ N at $%lX\e[0m", RXBytes-1);
+                    #endif
+                break;
+            
+                default:
+                    #if ESC_LOGGING >= 3
+                    kprintf("\e[91mNot implemented: Unknown ESC # %c at $%lX\e[0m", byte, RXBytes-1);
+                    #endif
+                break;
+            }
+            break;
+        }
+    
+        default:
+            #if ESC_LOGGING >= 3
+            kprintf("Got Unknown special character '%c' ending with '%c'", SpecialCharacter, byte);
+            #endif
+        break;
+    }
+    
+    ResetSequence();
+    return;
+}
+
+static void DoAPC(u8 byte)
+{
+    switch (byte)
+    {
+        case 0x1B:
+        {
+            NextByte = NC_Escape;
+            break;
+        }
+    
+        default:
+            #if ESC_LOGGING >= 3
+            kprintf("Caught APC byte: $%X", byte);
+            #endif
+        break;
+    }
 }
 
 // https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797
@@ -648,10 +894,32 @@ void ChangeTitle(const char *str)
 // https://terminalguide.namepad.de/seq/
 static void DoEscape(u8 byte)
 {
+    u8 RestartByte = 0;
     ESC_Seq++;
 
     switch (ESC_Type)
     {
+        case 0x9F:
+        {
+            #if ESC_LOGGING >= 3
+            kprintf("Got $9F APC payload byte ($%X)", byte);
+            #endif
+
+            switch (byte)
+            {
+                case 0x1B:
+                {
+                    NextByte = NC_Escape;
+
+                    break;
+                }
+            
+                default:
+                break;
+            }
+            return;
+        }
+
         case '[':
         {
             switch (byte)
@@ -664,7 +932,7 @@ static void DoEscape(u8 byte)
 
                     ESC_Param[ESC_ParamSeq++] = atoi(ESC_Buffer);
                     //kprintf("ESC_ParamSeq[%u] = %u (%s)", ESC_ParamSeq-1, ESC_Param[ESC_ParamSeq-1], ESC_Buffer);
-                    ////kprintf("Got an ';' : ESC_Param[%u] = $%X", ESC_ParamSeq-1, ESC_Param[ESC_ParamSeq-1]);
+                    //kprintf("Got a ';' : ESC_Param[%u] = $%X", ESC_ParamSeq-1, ESC_Param[ESC_ParamSeq-1]);
 
                     ESC_Buffer[0] = '\0';
                     ESC_Buffer[1] = '\0';
@@ -679,8 +947,17 @@ static void DoEscape(u8 byte)
                 {
                     u8 n = atoi(ESC_Buffer);
                     n = (n ? n : 1);
-                    TTY_SetSY_A(TTY_GetSY_A() - n);
-                    TTY_MoveCursor(TTY_CURSOR_DUMMY);
+
+                    if (TTY_GetSY_A() - n >= DMarginTop)
+                    {
+                        TTY_SetSY_A(TTY_GetSY_A() - n);
+                        TTY_MoveCursor(TTY_CURSOR_DUMMY);
+                    }
+                    else
+                    {
+                        TTY_SetSY_A(DMarginTop);
+                    }
+
                     goto EndEscape;
                 }
 
@@ -688,54 +965,79 @@ static void DoEscape(u8 byte)
                 {
                     u8 n = atoi(ESC_Buffer);
                     n = (n ? n : 1);
-                    TTY_SetSY_A(TTY_GetSY_A() + n);   
-                    TTY_MoveCursor(TTY_CURSOR_DUMMY);         
-                    goto EndEscape;
-                }
-
-                case 'C':   // Cursor Right (CUF)
-                {
-                    u8 n = atoi(ESC_Buffer);
-                    n = (n ? n : 1);
-
-                    if (vDECLRMM || vDECOM)
-                    {
-                        if (n > DMarginRight) n = DMarginRight;
-                    }
-                    else
-                    {
-                        n = (n > C_XMAX ? C_XMAX: n);
-                    }
+                    TTY_SetSY_A(TTY_GetSY_A() + n);
+                    TTY_MoveCursor(TTY_CURSOR_DUMMY);
                     
-                    TTY_SetSX(TTY_GetSX() + n);
-                    TTY_MoveCursor(TTY_CURSOR_DUMMY);
+                    #if ESC_LOGGING >= 4
+                    kprintf("ESC[%uB - SY_A: %d", n, TTY_GetSY_A());
+                    #endif
+
                     goto EndEscape;
                 }
 
-                case 'D':   // Cursor Left (CUB)
+                case 'C':   // Cursor Forward (CUF)
                 {
-                    u8 n = atoi(ESC_Buffer);
-                    n = (n ? n : 1);
+                    /*
+                        A Few ANSII images expect CUF to wrap, however no where is it specified that CUF can or should wrap... quite the opposite; Its explicitly stated that it should NEVER wrap...
+                        Comparing the output of SMDT and other terminals seem to match up, neither prints these ANSII images correctly.
+                    */
 
-                    if (vDECLRMM || vDECOM)
+                    u16 n = atoi16(ESC_Buffer);
+                    s16 right = DMarginRight;
+                    s16 cx = TTY_GetSX()+1;
+
+                    #if ESC_LOGGING >= 4
+                    kprintf("ESC[%uC - SX: %d", n, TTY_GetSX());
+                    #endif
+
+                    n = n == 0 ? 1 : n;
+                    n += cx;
+
+                    if (bANSI_SYS_Emulation)
                     {
-                        if (n < DMarginLeft) n = DMarginLeft;
+                        if (n >= C_XMAX)
+                        {
+                            bPendingWrap = TRUE;
+                            u8 ax = n - C_XMAX;
+                            TTY_MoveCursor(TTY_CURSOR_DOWN, 1);
+                            n = ax + 1;
+                        }
+
                     }
                     else
                     {
-                        if ((TTY_GetSX() == 0) && (sv_bWrapAround))
-                        {
-                            TTY_MoveCursor(TTY_CURSOR_LEFT, 1);
-                            goto EndEscape;
-                        }
-                        else if (TTY_GetSX() == 0)
-                        {
-                            n = (TTY_GetSX() == 0 ? 0: n);
-                        }
+                        if (cx > right) right = C_XMAX;
+
+                        if (n > right) n = right;
                     }
 
-                    TTY_SetSX(TTY_GetSX() - n);
+                    TTY_SetSX(n-1);
                     TTY_MoveCursor(TTY_CURSOR_DUMMY);
+
+                    bPendingWrap = FALSE;
+
+                    #if ESC_LOGGING >= 4
+                    kprintf("n: %u - SX: %d - right: %d", n, TTY_GetSX(), right);
+                    #endif
+                    goto EndEscape;
+                }
+
+                case 'D':   // Cursor Backward (CUB)
+                {
+                    /*
+                    This unsets the pending wrap state without wrapping.
+
+                    If not both of reverse wrap mode and wraparound mode are set:
+                        Move the cursor amount cells left. If it would cross the left-most column of the scrolling region, stop at the left-most column of the scrolling region. If the cursor would move left of the left-most column of the screen, move to the left most column of the screen.
+                    Else:
+                        If the pending wrap state is set, reduce amount by one.
+                    */
+
+                    u8 n = atoi(ESC_Buffer);
+                    n = n == 0 ? 1 : n;
+
+                    TF_CUB(n);
+
                     goto EndEscape;
                 }
                 
@@ -750,31 +1052,57 @@ static void DoEscape(u8 byte)
                 
                 case 'F':   // Cursor Previous Line (CPL) - "ESC[ Ⓝ F" -- Todo: take care of margins/scroll regions
                 {
+                    s16 y = TTY_GetSY_A();
                     u8 n = atoi(ESC_Buffer);
                     n = (n ? n : 1);
+
+                    #if ESC_LOGGING >= 3
+                    kprintf("\e[93mESC[%uF Cursor Previous Line (CPL) - sy: %d - result: $%2X ($%X)\e[0m", n, y, (u8)y-n, (n > y)?y:n);
+                    #endif
+
+                    // Cap n to avoid underflowing / going beyond top line (See test_CPL_StopsAtTopLine)
+                    n = n > y ? y : n;
+
+                    if (vDECOM)
+                    {
+                        if (y >= DMarginTop)
+                        {
+                            if (y - n < DMarginTop) n = DMarginTop - y;
+                        }
+                    }
+
                     TTY_MoveCursor(TTY_CURSOR_UP, n);
                     TTY_SetSX(0);
                     goto EndEscape;
                 }
 
-                case 'G':   // Cursor Horizontal Position Absolute (HPA)
+                case 0x60:  // 0x60 = ` - Cursor Horizontal Position Absolute (HPA)
+                case 'G':   // Alias
                 {
-                    u8 n = atoi(ESC_Buffer) - 1;
+                    // This sequence performs cursor position (CUP) with x set to the parameterized value and y set to the current cursor position. 
+                    // There is no additional or different behavior for using HPA.
 
-                    if (vDECOM == FALSE) n = (n >= C_XMAX ? C_XMAX-1 : n);   // Cap X to within the screen if origin mode is off
+                    if (ESC_Buffer[0] != '\0') ESC_Param[ESC_ParamSeq++] = atoi(ESC_Buffer);
+                    
+                    // Setup params for CUP, which have [y;x while HPA only have [x - Swap X and insert cursor Y
+                    ESC_Param[1] = ESC_Param[0];
+                    ESC_Param[0] = TTY_GetSY_A()+1;
+                    
+                    #if ESC_LOGGING >= 4
+                    kprintf("HPA - X: %u (Y: %u)", ESC_Param[1], ESC_Param[0]);
+                    #endif
 
-                    TTY_SetSX(n);
-
-                    goto EndEscape;
+                    goto CUP;
                 }
                 
                 case 'I':   // Cursor Horizontal Forward Tabulation (CHT) - "ESC[ Ⓝ I" -- Same as Horizontal Tab (TAB) times Ⓝ
                 {
                     u8 n = atoi(ESC_Buffer);
                     n = (n ? n : 1);
+                    n = n == 255 ? 1 : n;
 
-                    #ifdef TRM_LOGGING
-                    kprintf("[93mHorizontal tab %u times[0m", n);
+                    #if ESC_LOGGING >= 3
+                    kprintf("\e[93mHorizontal tab %u times\e[0m", n);
                     #endif
                     
                     while (n--) TTY_SetSX(Find_NextTabStop());
@@ -785,23 +1113,47 @@ static void DoEscape(u8 byte)
                 case 'J':   // Erase Display [Dispatch] (ED)
                 {
                     u8 n = atoi(ESC_Buffer);
+                    n = n == 255 ? 0 : n;
 
                     switch (n)
-                    {
+                    {                    
+                        case 0: // Clear screen from cursor down (Keep cursor position)
+                            TTY_ClearLine(TTY_GetSY()+2, C_YMAX - TTY_GetSY_A());
+                            bPendingWrap = FALSE;
+                        break;
+
                         case 1: // Clear screen from cursor up (Keep cursor position)
-                            TTY_ClearLine(TTY_GetSY(), TTY_GetSY_A());
+                            //TTY_ClearLine(TTY_GetSY(), TTY_GetSY_A());
+                            TTY_ClearLine(TTY_GetSY() - TTY_GetSY_A(), TTY_GetSY_A());  // linecount+1 = inclusive
+                            bPendingWrap = FALSE;
                         break;
 
                         case 2: // Clear screen (move cursor to top left only if emulating ANSI.SYS otherwise keep cursor position)
-                        case 3: // Clear screen and delete all lines saved in the scrollback buffer (Keep cursor position)
-                            TRM_FillPlane(BG_A, 0);
-                            TRM_FillPlane(BG_B, 0);
+                            if (sv_Font == FONT_SOFTWARE)
+                            {
+                                SW_ClearScreen();
+                            }
+                            else
+                            {
+                                TRM_ClearPlane(BG_A);
+                                TRM_ClearPlane(BG_B);
+                            }
+                            bPendingWrap = FALSE;
                         break;
-                    
-                        case 0: // Clear screen from cursor down (Keep cursor position)
-                        default:
-                            TTY_ClearLine(TTY_GetSY(), C_YMAX - TTY_GetSY_A());
+
+                        case 3: // Erase only the scrollback region (Keep cursor position)
+                            if (sv_Font == FONT_SOFTWARE)
+                            {
+                                SW_ClearScreen();
+                            }
+                            else
+                            {
+                                TRM_ClearPlane(BG_A);
+                                TRM_ClearPlane(BG_B);
+                            }
                         break;
+
+                        default: break;
                     }            
 
                     goto EndEscape;
@@ -810,22 +1162,82 @@ static void DoEscape(u8 byte)
                 case 'K':   // Erase Line [Dispatch] (EL) - "ESC[ Ⓝ K"
                 {
                     u8 n = atoi(ESC_Buffer);
+                    n = n == 255 ? 0 : n;
 
                     switch (n)
                     {
+                        case 0: // Erase from cursor to end of line (Keep cursor position)
+                            TTY_ClearPartialLine(sy % 32, TTY_GetSX(), C_XMAX);
+                            bPendingWrap = FALSE;
+                        break;
+
                         case 1: // Erase start of line to the cursor (Keep cursor position)
                             TTY_ClearPartialLine(sy % 32, 0, TTY_GetSX()+1);
+                            bPendingWrap = FALSE;
                         break;
 
                         case 2: // Erase the entire line (Keep cursor position)
                             TTY_ClearLine(sy % 32, 1);
+                            bPendingWrap = FALSE;
                         break;
-                    
-                        case 0: // Erase from cursor to end of line (Keep cursor position)
-                        default:
-                            TTY_ClearPartialLine(sy % 32, TTY_GetSX(), C_XMAX);
-                        break;
+
+                        default: break;                    
                     }            
+
+                    goto EndEscape;
+                }
+
+                case 'L':   // Insert Line (IL) - "ESC[ Ⓝ L"
+                {
+                    u8 n = atoi(ESC_Buffer);
+
+                    // Default param
+                    n = n == 0   ? 1 : n;
+                    n = n == 255 ? 1 : n;
+
+                    s16 x = TTY_GetSX()   +1;
+                    s16 y = TTY_GetSY_A() +1;
+
+                    #if ESC_LOGGING >= 3
+                    kprintf("\e[93mInsert Line (IL) %u times\e[0m", n);
+
+                    kprintf("x: %d - y: %d - l: %d - r: %d - t: %d - b: %d", x, y, DMarginLeft, DMarginRight, DMarginTop, DMarginBottom);
+                    #endif
+
+
+                    // If outside margins then do nothing
+                    if (x < DMarginLeft || x > DMarginRight) goto EndEscape;
+
+                    if (y < DMarginTop || y > DMarginBottom) goto EndEscape;
+
+                    // Insert blank line / shift lines downward (only available with software renderer)
+                    if (sv_Font == FONT_SOFTWARE)
+                    {
+                        SW_ShiftLineDown(n);
+                    }
+
+                    // Move cursor to left margin
+                    TTY_SetSX(DMarginLeft); // -1 ?
+
+                    bPendingWrap = FALSE;
+
+                    goto EndEscape;
+                }
+
+                case 'M':   // Delete Line (DL) - "ESC[ Ⓝ M"
+                {
+                    u8 n = atoi(ESC_Buffer);
+                    n = (n ? n : 1);
+
+                    TTY_ClearLine(sy % 32, (n % (bPALSystem?29:27)) + 1);
+
+                    if (vDECLRMM) TTY_SetSX(DMarginLeft);
+                    else TTY_SetSX(0);
+
+                    
+                    #if ESC_LOGGING >= 2
+                    kprintf("\e[93mESC[%uM (Delete Line) - sy: %d\e[0m", n, sy % 32);
+                    #endif
 
                     goto EndEscape;
                 }
@@ -848,7 +1260,7 @@ static void DoEscape(u8 byte)
                     TTY_ClearPartialLine(sy % 32, cx, cx + n);
 
                     #if ESC_LOGGING >= 2
-                    kprintf("[93mESC[%uP (Delete Character) - Not fully implemented; TODO: Move characters right of DCH to the left[0m", n);
+                    kprintf("\e[93mESC[%uP (Delete Character) - Not fully implemented; TODO: Move characters right of DCH to the left\e[0m", n);
                     #endif
 
                     goto EndEscape;
@@ -864,28 +1276,36 @@ static void DoEscape(u8 byte)
                     goto EndEscape;
                 }
 
-                case 'T':   // 	Scroll Down (SD) / 	Track Mouse / Unset Title Mode
+                case 'T':   // 	Scroll Down (SD) / Track Mouse / Unset Title Mode   -- Only handles Unset Title Mode (>..T)
                 {
-                    u8 n = atoi(ESC_Buffer);
-                    n = (n ? n : 1);
+                    ESC_Param[ESC_ParamSeq++] = atoi(ESC_Buffer);
+                    u8 n = ESC_Param[0];
 
-                    if (ESC_Buffer[0] == '>')
-                    {
-                        #if ESC_LOGGING >= 2
-                        kprintf("[91mNot implemented: Unset Title Mode[0m");
-                        #endif
+                    /*
+                        Param1: ESC_Buffer[1]
+                        Param2: ESC_Param[1]
+                    */
 
-                        goto EndEscape;
-                    }
+                    #if ESC_LOGGING >= 3
+                    if (ESC_Param[1] <= 9 && ESC_Buffer[1] >= 0 && ESC_Buffer[1] <= 9)
+                        kprintf("\e[91mNot implemented: Unset title mode: %u;%u\e[0m", ESC_Buffer[1], ESC_Param[1]);
                     else
-                    {
-                        // for [T (default 1), or [xT (scroll up x times)
-                        // Scroll up n times; shift all lines down n times and blank new lines at top
-                    }
-
-                    #if ESC_LOGGING >= 2
-                    kprintf("[91mUnknown 'T' control character - BUFFER: 0: %u, 1: %u, 2: %u, 3: %u -- 0: '%c', 1: '%c', 2: '%c', 3: '%c'[0m", ESC_Buffer[0], ESC_Buffer[1], ESC_Buffer[2], ESC_Buffer[3], ESC_Buffer[0], ESC_Buffer[1], ESC_Buffer[2], ESC_Buffer[3] == '\0' ? ' ' : ESC_Buffer[3]);
+                        kprintf("\e[91mNot implemented: Unset title mode: ALL\e[0m");
                     #endif
+
+                    switch (n)
+                    {
+                        // Reset all title modes
+                        case 0:
+                        {
+                            break;
+                        }
+
+                        default:
+                        {                        
+                            break;
+                        }
+                    }
 
                     goto EndEscape;
                 }
@@ -896,7 +1316,7 @@ static void DoEscape(u8 byte)
                     n = (n ? n : 1);     // If n == 0 then adjust to n to 1
 
                     s16 oldsx = TTY_GetSX();
-                    s16 oldsy = TTY_GetSY();
+                    s16 oldsy = TTY_GetSY_A();
                     
                     TTY_MoveCursor(TTY_CURSOR_LEFT, 1);
 
@@ -906,7 +1326,7 @@ static void DoEscape(u8 byte)
                     }
 
                     TTY_SetSX(oldsx);
-                    TTY_SetSY(oldsy);
+                    TTY_SetSY_A(oldsy);
 
                     TTY_MoveCursor(TTY_CURSOR_DUMMY);
 
@@ -915,13 +1335,49 @@ static void DoEscape(u8 byte)
 
                 case 'Z':   // Cursor Horizontal Backward Tabulation (CBT) - "ESC[ Ⓝ Z"
                 {
-                    #ifdef TRM_LOGGING
                     u8 n = atoi(ESC_Buffer);
                     n = (n ? n : 1);
-                    kprintf("[93mHorizontal tab: %u <- %u (n = %u)[0m", Find_LastTabStop(), (TTY_GetSX() % 80), n);
+                    n = n == 255 ? 1 : n;
+
+                    #if ESC_LOGGING >= 3
+                    kprintf("\e[93mHorizontal tab: %u <- %u (n = %u)\e[0m", Find_LastTabStop(), (TTY_GetSX() % 80), n);
                     #endif
 
-                    TTY_SetSX(Find_LastTabStop());
+                    while (n--) TTY_SetSX(Find_LastTabStop());
+
+                    goto EndEscape;
+                }
+
+                case 'a':   // Cursor Horizontal Position Relative (HPR)
+                {
+                    u8 n = atoi(ESC_Buffer);
+                    //n = (n ? n : 1);
+                    s16 x = TTY_GetSX() + n;
+
+                    // If cursor origin mode is set the cursor row will be forced inside the current scroll region.
+                    // If cursor origin mode is set and left and right margin mode is set the cursor adjusted to be on or left of the right-most column of the scrolling region.
+                    if (vDECOM && vDECLRMM)
+                    {
+                        if (x > DMarginRight) x = DMarginRight;
+                        else if (x < DMarginLeft) x = DMarginLeft;
+                    }
+                    else if (vDECOM)
+                    {
+                        if (x > C_XMAX) x = C_XMAX;
+                        else if (x < 0) x = 0;
+                    }
+                    else
+                    {
+                        if (x > C_XMAX) x = C_XMAX;
+                        else if (x < 0) x = 0;
+                    }
+
+                    TTY_SetSX(x);
+                    bPendingWrap = FALSE;
+                    
+                    #if ESC_LOGGING >= 4
+                    kprintf("\e[93mESC[%ua - x: %d\e[0m", n, x);
+                    #endif
 
                     goto EndEscape;
                 }
@@ -951,11 +1407,11 @@ static void DoEscape(u8 byte)
                             char str[16];
                             u16 len = 0;
         
-                            len = sprintf(str, "[>%u;%u;0c", model, version);
+                            len = sprintf(str, "\e[>%u;%u;0c", model, version);
                             NET_SendStringLen(str, len);
         
-                            #ifdef ESC_LOGGING
-                            kprintf("[93mDA2: p0 = %u -- Sending \"ESC[>%u;%u;0c\" regardless of p0[0m", ESC_Buffer[1], model, version);
+                            #if ESC_LOGGING >= 4
+                            kprintf("\e[93mDA2: p0 = %u -- Sending \"ESC[>%u;%u;0c\" regardless of p0\e[0m", ESC_Buffer[1], model, version);
                             #endif
 
                             break;
@@ -965,16 +1421,16 @@ static void DoEscape(u8 byte)
                         {
                             if (ESC_Buffer[1] == '0')
                             {
-                                NET_SendString("P!|00000000\\");
+                                NET_SendString("\eP!|00000000\e\\");
         
-                                #ifdef ESC_LOGGING
-                                kprintf("[93mDA3: p0 = %u -- Sending \"ESCP!|00000000ESC\\\"[0m", ESC_Buffer[1]);
+                                #if ESC_LOGGING >= 4
+                                kprintf("\e[93mDA3: p0 = %u -- Sending \"ESCP!|00000000ESC\\\"\e[0m", ESC_Buffer[1]);
                                 #endif
                             }
                             else
-                            {        
-                                #ifdef ESC_LOGGING
-                                kprintf("[93mDA3: p0 = %u -- Ignoring because p0 is non zero[0m", ESC_Buffer[1]);
+                            {
+                                #if ESC_LOGGING >= 4
+                                kprintf("\e[93mDA3: p0 = %u -- Ignoring because p0 is non zero\e[0m", ESC_Buffer[1]);
                                 #endif
                             }
 
@@ -983,10 +1439,10 @@ static void DoEscape(u8 byte)
                     
                         default:    // Primary Device Attributes (DA1) - ""
                         {
-                            NET_SendString("[?1;2c");
-        
-                            #ifdef ESC_LOGGING
-                            kprintf("[93mDA1: p0 = %u -- Sending \"ESC[?1;2c\" regardless of p0[0m", ESC_Buffer[0]);
+                            NET_SendString("\e[?1;2c");
+
+                            #if ESC_LOGGING >= 4
+                            kprintf("\e[93mDA1: p0 = %u -- Sending \"ESC[?1;2c\" regardless of p0\e[0m", ESC_Buffer[0]);
                             #endif
 
                             break;
@@ -1001,16 +1457,9 @@ static void DoEscape(u8 byte)
                     u8 n = atoi(ESC_Buffer);
                     //n = (n ? n : 1);
 
-                    #if ESC_LOGGING >= 3
+                    #if ESC_LOGGING >= 4
                     kprintf("ESC[%ud", n);
                     #endif
-
-                    /* Why is this here?
-                    if ((n >= DMarginBottom) && (DMarginBottom < 24))
-                    {
-                        u8 lines = n - DMarginBottom;
-                        TTY_DrawScrollback(lines+1);
-                    }*/
 
                     if (vDECOM)
                     {
@@ -1020,7 +1469,7 @@ static void DoEscape(u8 byte)
 
                     TTY_MoveCursor(TTY_CURSOR_DUMMY);
 
-                    PendingWrap = FALSE;
+                    bPendingWrap = FALSE;
 
                     goto EndEscape;
                 }
@@ -1045,75 +1494,49 @@ static void DoEscape(u8 byte)
                     goto EndEscape;
                 }
 
+                CUP:
                 case 'H':   // Set Cursor Position (CUP) - "ESC[ Ⓝ ; Ⓝ H" -- Move cursor to upper left corner if no parameters or to yy;xx
                 case 'f':   // Alias: Set Cursor Position - "ESC[ Ⓝ ; Ⓝ f"
                 {
                     if (ESC_Buffer[0] != '\0') ESC_Param[ESC_ParamSeq++] = atoi(ESC_Buffer);
-                    
-                    //for (u8 i = 0; i < ESC_ParamSeq; i++) kprintf("ESC_ParamSeq[%u] = %u", i, ESC_Param[i]);
 
-                    if ((ESC_Param[0] == 0xFF) && (ESC_Param[1] == 0xFF))
+                    u8 nx = ESC_Param[1];
+                    u8 ny = ESC_Param[0];
+
+                    // Bounds check (255 param missing, 0 = invalid/default)
+                    nx = nx == 255 ? 1 : nx;    // x
+                    nx = nx == 0   ? 1 : nx;
+                    ny = ny == 255 ? 1 : ny;    // y
+                    ny = ny == 0   ? 1 : ny;
+                    
+                    #if ESC_LOGGING >= 4
+                    kprintf("CUP - X: %u - Y: %u", nx, ny);
+                    #endif
+                    
+                    if (vDECOM)
                     {
-                        TTY_SetSX(DMarginLeft);
-                        TTY_SetSY_A(DMarginTop);
+                        // Cap against margins
+                        nx += DMarginLeft;
+                        ny += DMarginTop;
+
+                        nx = nx > DMarginRight  ? DMarginRight  : nx;
+                        ny = ny > DMarginBottom ? DMarginBottom : ny;
                     }
                     else
                     {
-                        if (ESC_Param[0] == 0) ESC_Param[0] = 1;
-
-                        if (ESC_Param[1] == 0) ESC_Param[1] = 1;
-
-                        if (ESC_Param[1] != 0xFF)
-                        {
-                            u8 x = ESC_Param[1]-1;
-                            
-                            if (vDECOM)
-                            {
-                                if ((x >= DMarginLeft) && (x <= DMarginRight))
-                                {
-                                    TTY_SetSX(x);
-                                }
-                                else if (x >= DMarginRight)
-                                {
-                                    TTY_SetSX(DMarginRight);
-                                }
-                                else if (x <= DMarginLeft)
-                                {
-                                    TTY_SetSX(DMarginLeft);
-                                }
-                            }
-                            else
-                            {
-                                TTY_SetSX(x);
-                            }
-
-                            /*if (ESC_Param[1]-1 < DMarginRight) TTY_SetSX(ESC_Param[1]-1);
-                            else TTY_SetSX(DMarginRight);
-                            
-                            if (ESC_Param[1]-1 > DMarginLeft) TTY_SetSX(ESC_Param[1]-1);
-                            else TTY_SetSX(DMarginLeft);*/
-
-                            //kprintf("[92mCUP cursor X: %d - (p1: %u -- ML: %u -- MR: %u)[0m", TTY_GetSX(), ESC_Param[1], DMarginLeft, DMarginRight);
-                        }
-                        
-                        if (ESC_Param[0] != 0xFF)
-                        {
-                            u8 y = ESC_Param[0]-1;
-
-                            //if (vDECOM)
-                            //{
-                                if (y <= DMarginTop) y = DMarginTop;
-
-                                if (y >= DMarginBottom) y = DMarginBottom;
-                            //}
-
-                            TTY_SetSY_A(y);
-
-                            //kprintf("[94mCUP cursor Y: %d - (p0: %u -- MT: %u -- MB: %u)[0m", TTY_GetSY_A(), ESC_Param[0], DMarginTop, DMarginBottom);
-                        }
+                        // Cap against screen
+                        nx = nx > C_XMAX ? C_XMAX : nx;
+                        ny = ny > C_YMAX ? C_YMAX : ny;
                     }
 
+                    nx--;
+                    ny--;
+
+                    TTY_SetSX(nx);
+                    TTY_SetSY_A(ny);
+
                     TTY_MoveCursor(TTY_CURSOR_DUMMY);   // Dummy
+                    bPendingWrap = FALSE;
 
                     goto EndEscape;
                 }
@@ -1128,7 +1551,7 @@ static void DoEscape(u8 byte)
                         case 0:
                             HTS_Column[c] = 0;
 
-                            #ifdef TRM_LOGGING
+                            #if ESC_LOGGING >= 4
                                 kprintf("Clearing tab stop in column %u (CMD = %u)", c, n);
                             #endif
                         break;
@@ -1138,14 +1561,14 @@ static void DoEscape(u8 byte)
                         case 5:
                             memset(HTS_Column, 0, 80);
 
-                            #ifdef TRM_LOGGING
+                            #if ESC_LOGGING >= 4
                                 kprintf("Clearing tab stops in all columns. (CMD = %u)", n);
                             #endif
                         break;
                     
                         default:
-                            #ifdef TRM_LOGGING
-                                kprintf("[91mUnknown TBC (CMD = %u)[0m", n);
+                            #if ESC_LOGGING >= 3
+                                kprintf("\e[91mUnknown TBC (CMD = %u)\e[0m", n);
                             #endif
                         break;
                     }
@@ -1153,18 +1576,95 @@ static void DoEscape(u8 byte)
                     goto EndEscape;
                 }
 
-                case 'l':   // Insert Line (IL)
+                case 'h':   // Mode set ( Not prefixed with ? )
                 {
                     u8 n = atoi(ESC_Buffer);
 
-                    // This is not correct, but I have no good way to scroll previously printed lines other than reading back from VRAM -.-
-                    // Before clearing the lines in question, they should be scrolled down n rows first!
+                    switch (n)
+                    {
+                        case 3:     // Display Control Characters
+                            bDisplayControls = TRUE;
+                            
+                            #if ESC_LOGGING >= 3
+                            kprintf("\e[92mEnabling display of control characters at $%lX\e[0m", RXBytes-1);
+                            #endif
+                        break;
 
-                    TTY_ClearLine(sy % 32, n-1);
+                        case 4:     // Insert Mode (IRM)
+                            bInsertMode = TRUE;
+                            
+                            #if ESC_LOGGING >= 3
+                            kprintf("\e[92mEnabling Insert Mode (IRM) at $%lX\e[0m", RXBytes-1);
+                            #endif
+                        break;
 
-                    #ifdef ESC_LOGGING
-                    kprintf("Moving/Erasing lines; %d to %d", (sy % 32), ((sy % 32)+n)-1);
-                    #endif
+                        case 20:    // Linefeed mode
+                            bLinefeedMode = TRUE;
+                            
+                            #if ESC_LOGGING >= 3
+                            kprintf("\e[92mEnabling Linefeed Mode at $%lX\e[0m", RXBytes-1);
+                            #endif
+                        break;
+
+                        default:
+                            #if ESC_LOGGING >= 2
+                            kprintf("\e[91mUnknown mode %u (%c) enable at $%lX\e[0m", n, n, RXBytes-1);
+                            #endif
+                        break;
+                    }
+                
+                    goto EndEscape;
+                }
+
+                case 'l':   // Mode reset ( Not prefixed with ? )
+                {                    
+                    u8 n = atoi(ESC_Buffer);
+
+                    switch (n)
+                    {
+                        case 3:     // Display Control Characters
+                            bDisplayControls = FALSE;
+                            
+                            #if ESC_LOGGING >= 3
+                            kprintf("\e[92mDisabling display of control characters at $%lX\e[0m", RXBytes-1);
+                            #endif
+                        break;
+
+                        case 4:     // Insert Mode (IRM)
+                            
+                            /* This used to be \e[4l "Insert Line (IL)" - No idea what created this... but its moved in here and disabled for now...
+
+                            // This is not correct, but I have no good way to scroll previously printed lines other than reading back from VRAM -.-
+                            // Before clearing the lines in question, they should be scrolled down n rows first!
+
+                            TTY_ClearLine(sy % 32, n-1);
+
+                            #ifdef ESC_LOGGING
+                            kprintf("Moving/Erasing lines; %d to %d", (sy % 32), ((sy % 32)+n)-1);
+                            #endif
+                            */
+
+                            bInsertMode = FALSE;
+                            
+                            #if ESC_LOGGING >= 3
+                            kprintf("\e[92mDisabling Insert Mode (IRM) at $%lX\e[0m", RXBytes-1);
+                            #endif
+                        break;
+
+                        case 20:    // Linefeed mode
+                            bLinefeedMode = FALSE;                            
+                            
+                            #if ESC_LOGGING >= 3
+                            kprintf("\e[92mDisabling Linefeed Mode at $%lX\e[0m", RXBytes-1);
+                            #endif
+                        break;
+
+                        default:
+                            #if ESC_LOGGING >= 2
+                            kprintf("\e[91mUnknown mode %u (%c) disable at $%lX\e[0m", n, n, RXBytes-1);
+                            #endif
+                        break;
+                    }
 
                     goto EndEscape;
                 }
@@ -1172,61 +1672,236 @@ static void DoEscape(u8 byte)
                 case 'm':   // Select Graphic Rendition (SGR)
                 {
                     ESC_Param[ESC_ParamSeq++] = atoi(ESC_Buffer);
-                    u8 rgb;
+                    u8 rgb = 0;
                     u8 base = 0;
 
-                    DoSecondSet:                    
-                    switch (ESC_Param[base+1])
+                    //kprintf("Ran into an m at $%X", RXBytes-1);
+
+                    #ifdef ATT_LOGGING
+                    //kprintf("0:<%u> 1:<%u> 2:<%u> 3:<%u> 4:<%u> 5:<%u> 6:<%u> 7:<%u> 8:<%u> 9:<%u> - Sq: %u -  at $%lX", ESC_Param[0], ESC_Param[1], ESC_Param[2], ESC_Param[3], ESC_Param[4], ESC_Param[5], ESC_Param[6], ESC_Param[7], ESC_Param[8], ESC_Param[9], ESC_ParamSeq, RXBytes-1);
+                    //kprintf("0:<%u> 1:<%u> 2:<%u> 3:<%u> 4:<%u> 5:<%u> 6:<%u> - S: %u at $%lX", ESC_Param[0], ESC_Param[1], ESC_Param[2], ESC_Param[3], ESC_Param[4], ESC_Param[5], ESC_Param[6], ESC_ParamSeq, RXBytes-1);
+                    #endif
+
+                    DoSecondSet:
+                    switch (ESC_Param[base])
                     {
-                        case 5:     // 0-7: standard colors (as in ESC [ 30–37 m) and 8-15: high intensity colors (as in ESC [ 90–97 m)
-                            if (ESC_Param[base+0] == 38)
+                        //Select foreground color
+                        case 38:
+                        {
+                            switch (ESC_Param[base+1])
                             {
-                                if (ESC_Param[base+2] <= 15) TTY_SetAttribute(ESC_Param[base+2] + (ESC_Param[base+2] <= 7 ? 30 : 90));
-                                #ifdef ESC_LOGGING
-                                else
-                                    kprintf("Attempted to set attribute colour > 15");
-                                #endif
-                            }
-                            else if (ESC_Param[base+0] == 48)
+                                // 8 bit foreground
+                                case 5:
+                                {
+                                    // 0-15: Standard 16 colours (Normal and high intensity)
+                                    if (ESC_Param[base+2] <= 15) 
+                                    {
+                                        u8 v = ESC_Param[base+2] + (ESC_Param[base+2] <= 7 ? 30 : 82);
+                                        TTY_SetAttribute(v);
+                                    }
+                                    // 16-231:  6 × 6 × 6 cube (216 colors)
+                                    else if (ESC_Param[base+2] <= 216) 
+                                    {
+                                        // ESC_Param[2] = 216-cube color index (16..231)
+                                        u8 t  = ESC_Param[base+2] - 16;
+                                        u8 r6 = t / 36;
+                                        u8 g6 = (t % 36) / 6;
+                                        u8 b6 = t % 6;
+
+                                        // Convert to 1-bit RGB
+                                        u8 R = r6 >= 3;
+                                        u8 G = g6 >= 3;
+                                        u8 B = b6 >= 3;
+
+                                        // Use upper 8 colours (high intensity) ?
+                                        u8 bright = (r6 + g6 + b6) >= 8;
+
+                                        // Final 0–15 ANSI color
+                                        u8 result = (bright ? 90 : 30) + (B << 2) + (G << 1) + R;
+
+                                        TTY_SetAttribute(result);
+
+                                        #ifdef ATT_LOGGING
+                                            kprintf("Setting truncated 6x6x6 RGB cube colour - Idx: %u - R: %u - G: %u - B: %u - Result: %u", ESC_Param[base+2], R, G, B, result);
+                                        #endif
+                                    }
+                                    // 232-255:  grayscale from dark to light in 24 steps
+                                    else
+                                    {
+                                        u8 level = ESC_Param[base+2] - 232;   // 0..23
+                                        TTY_SetAttribute(level >= 16 ? 97 : (level >= 8 ? 90 : 30));
+
+                                        #ifdef ATT_LOGGING
+                                            kprintf("Setting truncated grayscale colour - Idx: %u - Level: %u - Result: %u", ESC_Param[base+2], level, level >= 16 ? 97 : (level >= 8 ? 90 : 30));
+                                        #endif
+                                    }
+
+                                    break;
+                                }
+
+                                // 24 bit foreground
+                                case 2:
+                                {
+                                    u8 R = ESC_Param[base+2] > 127;
+                                    u8 G = ESC_Param[base+3] > 127;
+                                    u8 B = ESC_Param[base+4] > 127;
+
+                                    u8 bright = (ESC_Param[base+2] >= 192 ||
+                                                 ESC_Param[base+3] >= 192 ||
+                                                 ESC_Param[base+4] >= 192);
+
+                                    rgb = (bright ? 90 : 30) + (B << 2) + (G << 1) + R;
+
+                                    TTY_SetAttribute(rgb);
+
+                                    #ifdef ATT_LOGGING
+                                    kprintf("Setting truncated RGB24 colour %u (R: %u  -- G: %u -- B: %u) FG", rgb, ESC_Param[base+2], ESC_Param[base+3], ESC_Param[base+4]);
+                                    kprintf("ESC_ParamSeq: %u - base: %u", ESC_ParamSeq, base);
+                                    #endif
+                                    
+                                    break;
+                                }
+                            
+                                default:
+                                    #ifdef ATT_LOGGING                  
+                                    kprintf("Unknown param[1]: %d", ESC_Param[base+1]);
+                                    #endif
+                                    /*for (int i = 0; i < 4; i++)
+                                    {
+                                        kprintf("Setting default attributes: %d", ESC_Param[base+i]);
+                                        if (ESC_Param[base+i] != 255) TTY_SetAttribute(ESC_Param[base+i]);
+                                    }*/
+                                break;
+                            }   // Param[1] switch
+
+                            if ((ESC_ParamSeq == 10) && (base != 5))
                             {
-                                if (ESC_Param[base+2] <= 15) TTY_SetAttribute(ESC_Param[base+2] + (ESC_Param[base+2] <= 7 ? 40 : 100));
-                                #ifdef ESC_LOGGING
-                                else
-                                    kprintf("Attempted to set attribute colour > 15");
-                                #endif
+                                base = 5;
+                                goto DoSecondSet;
                             }
-                        break;
+                            else if ((ESC_ParamSeq == 6) && (base != 3))
+                            {
+                                base = 3;
+                                goto DoSecondSet;
+                            }
 
-                        case 2:     // RGB24 logic
-                            rgb = (((ESC_Param[base+4] + ESC_Param[base+3] + ESC_Param[base+2]) >= 256) ? (ESC_Param[base+0] == 38 ? 90 : 100) : (ESC_Param[base+0] == 38 ? 30 : 40)) +  // Attempt to find out if this colour is bright enough to warrant using the upper 8 colours
-                                 ((((ESC_Param[base+4] & 0xC0) != 0) << 2) | // B
-                                  (((ESC_Param[base+3] & 0xC0) != 0) << 1) | // G
-                                   ((ESC_Param[base+2] & 0xC0) != 0));       // R
+                            goto EndEscape;
+                        }   // Case 38
 
-                            TTY_SetAttribute(rgb);
+                        //Select background color
+                        case 48:
+                        {
+                            switch (ESC_Param[base+1])
+                            {
+                                // 8 bit background
+                                case 5:
+                                {
+                                    // 0-15: Standard 16 colours (Normal and high intensity)
+                                    if (ESC_Param[base+2] <= 15) 
+                                    {
+                                        u8 v = ESC_Param[base+2] + (ESC_Param[base+2] <= 7 ? 40 : 92);
+                                        TTY_SetAttribute(v);
+                                    }
+                                    // 16-231:  6 × 6 × 6 cube (216 colors)
+                                    else if (ESC_Param[base+2] <= 216) 
+                                    {
+                                        // ESC_Param[2] = 216-cube color index (16..231)
+                                        u8 t  = ESC_Param[base+2] - 16;
+                                        u8 r6 = t / 36;
+                                        u8 g6 = (t % 36) / 6;
+                                        u8 b6 = t % 6;
 
-                            #if ESC_LOGGING >= 4
-                            kprintf("Attempting to set truncated RGB colour %u (R: %u  -- G: %u -- B: %u)", rgb, ESC_Param[base+2], ESC_Param[base+3], ESC_Param[base+4]);
-                            #endif
-                        break;
-                    
+                                        // Convert to 1-bit RGB
+                                        u8 R = r6 >= 3;
+                                        u8 G = g6 >= 3;
+                                        u8 B = b6 >= 3;
+
+                                        // Use upper 8 colours (high intensity) ?
+                                        u8 bright = (r6 + g6 + b6) >= 8;
+
+                                        // Final 0–15 ANSI color
+                                        u8 result = (bright ? 100 : 40) + (B << 2) + (G << 1) + R;
+
+                                        TTY_SetAttribute(result);
+
+                                        #ifdef ATT_LOGGING
+                                            kprintf("Setting truncated 6x6x6 RGB cube colour - Idx: %u - R: %u - G: %u - B: %u - Result: %u", ESC_Param[base+2], R, G, B, result);
+                                        #endif
+                                    }
+                                    // 232-255:  grayscale from dark to light in 24 steps
+                                    else
+                                    {
+                                        u8 level = ESC_Param[base+2] - 232;   // 0..23
+                                        TTY_SetAttribute(level >= 16 ? 107 : (level >= 8 ? 100 : 40));
+
+                                        #ifdef ATT_LOGGING
+                                            kprintf("Setting truncated grayscale colour - Idx: %u - Level: %u - Result: %u", ESC_Param[base+2], level, level >= 16 ? 107 : (level >= 8 ? 100 : 40));
+                                        #endif
+                                    }
+
+                                    break;
+                                }
+
+                                // 24 bit background
+                                case 2:
+                                {
+                                    u8 R = ESC_Param[base+2] > 127;
+                                    u8 G = ESC_Param[base+3] > 127;
+                                    u8 B = ESC_Param[base+4] > 127;
+
+                                    u8 bright = (ESC_Param[base+2] >= 192 ||
+                                                 ESC_Param[base+3] >= 192 ||
+                                                 ESC_Param[base+4] >= 192);
+
+                                    rgb = (bright ? 100 : 40) + (B << 2) + (G << 1) + R;
+
+                                    TTY_SetAttribute(rgb);
+
+                                    #ifdef ATT_LOGGING
+                                    kprintf("Setting truncated RGB24 colour %u (R: %u  -- G: %u -- B: %u) BG", rgb, ESC_Param[base+2], ESC_Param[base+3], ESC_Param[base+4]);
+                                    kprintf("ESC_ParamSeq: %u - base: %u", ESC_ParamSeq, base);
+                                    #endif
+                                    
+                                    break;
+                                }
+                            
+                                default:
+                                    #ifdef ATT_LOGGING  
+                                    kprintf("Unknown param[1]: %d", ESC_Param[base+1]);
+                                    #endif
+                                    /*for (int i = 0; i < 4; i++)
+                                    {
+                                        kprintf("Setting default attributes: %d", ESC_Param[base+i]);
+                                        if (ESC_Param[base+i] != 255) TTY_SetAttribute(ESC_Param[base+i]);
+                                    }*/
+                                break;
+                            }   // Param[1] switch
+
+                            if ((ESC_ParamSeq == 10) && (base != 5))
+                            {
+                                base = 5;
+                                goto DoSecondSet;
+                            }
+                            else if ((ESC_ParamSeq == 6) && (base != 3))
+                            {
+                                base = 3;
+                                goto DoSecondSet;
+                            }
+
+                            goto EndEscape;
+                        }   // Case 48
+                        
                         default:
                             for (int i = 0; i < 4; i++)
                             {
-                                if (ESC_Param[base+i] != 255) TTY_SetAttribute(ESC_Param[base+i]);
+                                if (ESC_Param[base+i] != 255) 
+                                {
+                                    //kprintf("Setting default attributes: %d", ESC_Param[base+i]);
+                                    TTY_SetAttribute(ESC_Param[base+i]);
+                                }
                             }
                         break;
-                    }
-
-                    #ifdef ESC_LOGGING
-                    //kprintf("TTY_SetAttribute: 0:<%u> 1:<%u> 2:<%u> 3:<%u> 4:<%u>  at $%lX", ESC_Param[0], ESC_Param[1], ESC_Param[2], ESC_Param[3], ESC_Param[4], RXBytes);
-                    #endif
-                    
-                    if ((ESC_ParamSeq == 10) && (base != 5))
-                    {
-                        base = 5;
-                        goto DoSecondSet;
-                    }
+                    }   // Param[0] switch
 
                     goto EndEscape;
                 }
@@ -1241,16 +1916,28 @@ static void DoEscape(u8 byte)
                     switch (n)
                     {
                         case 5: // Report Operating Status
-                            NET_SendString("[0n");
+                            NET_SendString("\e[0n");
                         break;
 
                         case 6: // Cursor Position Report (CPR)
-                            len = sprintf(str, "[%d;%dR", TTY_GetSY_A() + 1, TTY_GetSX() + 1);
+                        {
+                            s16 cx = TTY_GetSX() + 1;
+                            s16 cy = TTY_GetSY_A() + 1;
+
+                            if (vDECOM)
+                            {
+                                cx -= DMarginLeft;
+                                cy -= DMarginTop;
+                            }
+
+                            len = sprintf(str, "\e[%d;%dR", cy, cx);
                             NET_SendStringLen(str, len);
+                            
                             #ifdef ESC_LOGGING
-                            kprintf("[93mReporting cursor position: \"ESC[%d;%dR\"[0m", TTY_GetSY_A() + 1, TTY_GetSX() + 1);
+                            kprintf("\e[92mReporting cursor position: \"ESC%s\" - (y;x)\e[0m", str+1);
                             #endif
                         break;
+                        }
 
                         case 8: // Set Title to Terminal Name and Version.
                             // This could easily be set here, however current versions of SMDT prefixes all titles with this information already
@@ -1258,7 +1945,7 @@ static void DoEscape(u8 byte)
 
                         default:
                             #ifdef ESC_LOGGING
-                            kprintf("[91mDevice Status Report [Dispatch] (DSR) - Unknown command $%X at $%lX[0m", n, RXBytes);
+                            kprintf("\e[91mDevice Status Report [Dispatch] (DSR) - Unknown command $%X at $%lX\e[0m", n, RXBytes-1);
                             #endif
                         break;
                     }
@@ -1269,10 +1956,12 @@ static void DoEscape(u8 byte)
                 case 0xD:   // ??? Unknown ESC[!0xD sequence
                 {
                     #ifdef ESC_LOGGING
-                    kprintf("[91mRan into unknown ESC[! sequence at $%lX[0m", RXBytes);
+                    kprintf("\e[91mRan into unknown ESC[<$%X> sequence at $%lX -- Reinserting byte <$%X> into stream\e[0m", byte, RXBytes-1, byte);
                     #endif
 
-                    goto EndEscape;
+                    // Reinsert byte into stream again, stop escape parser and rerun
+                    RestartByte = byte;
+                    goto Restart;
                 }
 
                 case 'p':   // Soft Reset (DECSTR) / Request Mode (RQM) / Alias: Save Rendition Attributes / ??? DECSR / Select VT-XXX Conformance Level (DECSCL)
@@ -1282,60 +1971,53 @@ static void DoEscape(u8 byte)
                     // Soft Reset (DECSTR)
                     if (ESC_Buffer[0] == '!')
                     {
-                        #ifdef ESC_LOGGING
+                        #if ESC_LOGGING >= 2
                         kprintf("Soft Reset (DECSTR)");
                         #endif
 
-                        TELNET_Init(TF_ClearScreen);
+                        TELNET_Init(TF_ClearScreen || TF_ResetVariables);
                     }
                     // Select VT-XXX Conformance Level (DECSCL)
                     else if (ESC_Buffer[1] == '"')
                     {
                         u8 level = ESC_Param[0];
-                        // Not used, remove ifdef when its needed:
-                        #ifdef ESC_LOGGING
-                        u8 bit7 = ESC_Buffer[0] - 48;
-                        #endif
+                        C1_7Bit = ESC_Buffer[0] - 48;
 
                         if (level < 61) 
                         {
-                            #ifdef ESC_LOGGING
-                            kprintf("[93mDECSCL Skipping because level < 61[0m");
+                            #if ESC_LOGGING >= 4
+                            kprintf("\e[93mDECSCL Skipping because level < 61\e[0m");
                             #endif
                         }
                         else
                         {
                             level -= 60;
                             
-                            #ifdef ESC_LOGGING
-                            kprintf("[93mDECSCL Level: %u - 7bit: %s[0m", level, bit7 ? "yes" : "no");
+                            #if ESC_LOGGING >= 4
+                            kprintf("\e[93mDECSCL Level: %u - 7bit: %s\e[0m", level, C1_7Bit ? "yes" : "no");
                             #endif
                         }
 
                     }
                     // Request Mode (RQM)
                     else if (ESC_Buffer[1] == '$')
-                    {
-                        // Not used, remove ifdef when its needed:
-                        #ifdef ESC_LOGGING
+                    {                        
+                        #if ESC_LOGGING >= 4
                         u8 data_end = ESC_Buffer[0] - 48;
-                        #endif
-                        
-                        #ifdef ESC_LOGGING
-                        kprintf("[93mRequest Mode (RQM): %u[0m", data_end);
+                        kprintf("\e[93mRequest Mode (RQM): %u\e[0m", data_end);
                         #endif
                     }
-                    #ifdef ESC_LOGGING
+                    #if ESC_LOGGING >= 4
                     else
                     {
-                        kprintf("[91mUnknown ESC[p - Data:[0m");
+                        kprintf("\e[91mUnknown ESC[p - Data:\e[0m");
 
                         for (u8 i = 0; i < ESC_ParamSeq; i++)
                         {
-                            kprintf("[93mESC[p - PARAM[%i]: %u -- $%X -- '%c'[0m", i, ESC_Param[i], ESC_Param[i], ESC_Param[i]);
+                            kprintf("\e[93mESC[p - PARAM[%i]: %u -- $%X -- '%c'\e[0m", i, ESC_Param[i], ESC_Param[i], ESC_Param[i]);
                         }
     
-                        kprintf("[93mESC[p - BUFFER: 0: %u, 1: %u, 2: %u, 3: %u -- 0: '%c', 1: '%c', 2: '%c', 3: '%c'[0m", ESC_Buffer[0], ESC_Buffer[1], ESC_Buffer[2], ESC_Buffer[3], ESC_Buffer[0], ESC_Buffer[1], ESC_Buffer[2], ESC_Buffer[3] == '\0' ? ' ' : ESC_Buffer[3]);
+                        kprintf("\e[93mESC[p - BUFFER: 0: %u, 1: %u, 2: %u, 3: %u -- 0: '%c', 1: '%c', 2: '%c', 3: '%c'\e[0m", ESC_Buffer[0], ESC_Buffer[1], ESC_Buffer[2], ESC_Buffer[3], ESC_Buffer[0], ESC_Buffer[1], ESC_Buffer[2], ESC_Buffer[3] == '\0' ? ' ' : ESC_Buffer[3]);
     
                     }
                     #endif
@@ -1352,13 +2034,13 @@ static void DoEscape(u8 byte)
                         if (n < 4)  // Load LEDs (DECLL) - "ESC[ Ⓝ q"
                         {                            
                             #if ESC_LOGGING >= 2
-                            kprintf("[91mNot implemented: Load LEDs (DECLL) at $%lX (CMD = %u)[0m", RXBytes, n);
+                            kprintf("\e[91mNot implemented: Load LEDs (DECLL) at $%lX (CMD = %u)\e[0m", RXBytes-1, n);
                             #endif
                         }
                         else if (n == '#')  // Alias: Restore Rendition Attributes - "ESC[ # q" - same as "ESC[ # }"
                         {
                             #if ESC_LOGGING >= 2
-                            kprintf("[91mNot implemented: (Alias) Restore Rendition Attributes at $%lX[0m", RXBytes);
+                            kprintf("\e[91mNot implemented: (Alias) Restore Rendition Attributes at $%lX\e[0m", RXBytes-1);
                             #endif
                         }
                         
@@ -1370,9 +2052,24 @@ static void DoEscape(u8 byte)
                     switch (type)
                     {
                         case '\"':    // Select Character Protection Attribute (DECSCA) - "ESC[ Ⓝ " q"
-                        {
-                            #if ESC_LOGGING >= 2
-                            kprintf("[91mNot implemented: Select Character Protection Attribute (DECSCA) at $%lX (CMD = %u)[0m", RXBytes, n);
+                        {                            
+                            switch (n)
+                            {
+                                case 0:
+                                case 2:
+                                    CharProtAttr = 0;
+                                break;
+
+                                case 1:
+                                    CharProtAttr = 1;
+                                break;
+
+                                default:
+                                break;
+                            }
+
+                            #if ESC_LOGGING >= 3
+                            kprintf("\e[93mSelect Character Protection Attribute (DECSCA) at $%lX (CMD = %u)\e[0m", RXBytes-1, n);
                             #endif
 
                             break;
@@ -1381,7 +2078,7 @@ static void DoEscape(u8 byte)
                         case '*':    // ??? DECSR - "ESC[ Ⓝ * q"
                         {
                             #if ESC_LOGGING >= 2
-                            kprintf("[91mNot implemented: ??? DECSR at $%lX (CMD = %u)[0m", RXBytes, n);
+                            kprintf("\e[91mNot implemented: ??? DECSR at $%lX (CMD = %u)\e[0m", RXBytes-1, n);
                             #endif
 
                             break;
@@ -1436,10 +2133,10 @@ static void DoEscape(u8 byte)
                                 break;
                             }
         
-                            SetSprite_TILE(SPRITE_ID_CURSOR, LastCursor);
+                            SetSprite_TILE(SPRITE_CURSOR, LastCursor);
         
-                            #if ESC_LOGGING >= 3
-                            kprintf("[91mSelect Cursor Style (DECSCUSR) at $%lX (CMD = %u)[0m", RXBytes, n);
+                            #if ESC_LOGGING >= 4
+                            kprintf("\e[91mSelect Cursor Style (DECSCUSR) at $%lX (CMD = %u)\e[0m", RXBytes-1, n);
                             #endif
 
                             break;
@@ -1447,7 +2144,7 @@ static void DoEscape(u8 byte)
                         
                         default:
                         #ifdef ESC_LOGGING
-                        kprintf("[91mESC[..q - Unknown type '%c' at $%lX[0m", type, RXBytes);
+                        kprintf("\e[91mESC[..q - Unknown type '%c' at $%lX\e[0m", type, RXBytes-1);
                         #endif
                         break;
                     }
@@ -1455,39 +2152,43 @@ static void DoEscape(u8 byte)
                     goto EndEscape;
                 }
 
-                case 'r':   // Set Top and Bottom Margins (DECSTBM) - "ESC[ Ⓝ ; Ⓝ r" --- Untested quickly hacked together, probably does not work
+                case 'r':   // Set Top and Bottom Margins (DECSTBM) - "ESC[ Ⓝ ; Ⓝ r"
                 {
                     ESC_Param[ESC_ParamSeq++] = atoi(ESC_Buffer);
 
-                    if ((ESC_Param[1] == 0) || (ESC_Param[1] == 255) || (ESC_Param[1] > C_YMAX)) ESC_Param[1] = C_YMAX;
+                    u8 top = ESC_Param[0];
+                    u8 bottom = ESC_Param[1];
 
-                    if (ESC_Param[0] < ESC_Param[1])
-                    {                        
-                        DMarginTop = ESC_Param[0] - 1;
-                        DMarginBottom = ESC_Param[1] - 1;
+                    top    = top    == 0   ? 1      : top;
+                    top    = top    == 255 ? 1      : top;
+                    bottom = bottom == 255 ? C_YMAX : bottom;
+                    bottom = bottom == 0   ? 1      : bottom;
+
+
+                    if (top < bottom)
+                    {
+                        DMarginTop    = top;
+                        DMarginBottom = bottom;
 
                         if (vDECOM)
                         {
-                            TTY_SetSX(DMarginLeft);     // DMarginLeft or 0 ?
+                            TTY_SetSX(DMarginLeft);
                             TTY_SetSY_A(DMarginTop);
                         }
                         else
-                        {                            
+                        {
                             TTY_SetSX(0);
                             TTY_SetSY_A(0);
                         }
                     }
                     else
                     {
-                        DMarginTop = 0;
+                        DMarginTop    = 0;
                         DMarginBottom = C_YMAX;
                     }
 
-                    //TTY_DrawScrollback();
-                    TTY_MoveCursor(TTY_CURSOR_DUMMY);
-
-                    #if ESC_LOGGING >= 2
-                    kprintf("ESC[%u;%ur -- p0<p1: %s -- vDECOM: %s -- C_YMAX: %u", ESC_Param[0], ESC_Param[1], (ESC_Param[0] < ESC_Param[1]) ? "TRUE" : "FALSE", vDECOM ? "TRUE" : "FALSE", C_YMAX);
+                    #if ESC_LOGGING >= 4
+                    kprintf("Top: %u - Bottom: %u - vDECOM: %s", DMarginTop, DMarginBottom, vDECOM?"True":"False");
                     #endif
 
                     goto EndEscape;
@@ -1498,31 +2199,69 @@ static void DoEscape(u8 byte)
                     if (vDECLRMM)
                     {
                         ESC_Param[ESC_ParamSeq++] = atoi(ESC_Buffer);
+                        u8 left  = ESC_Param[0];
+                        u8 right = ESC_Param[1];
+                        
+                        left  = left  == 255 ? 1      : left;
+                        right = right == 255 ? C_XMAX : right;
+                        left  = left  == 0   ? 1      : left;
+                        right = right == 0   ? C_XMAX : right;
 
-                        if ((ESC_Param[1] == 0xFF) || (ESC_Param[1] == 0) || (ESC_Param[1] >= C_XMAX))
-                        {
-                            DMarginRight = C_XMAX;
-                        }
-                        else DMarginRight = ESC_Param[1] - 1;
+                        s16 cx = 0;
+                        s16 cy = 0;
 
-                        if (ESC_Param[0] > ESC_Param[1])
+                        if (left < right)
                         {
-                            DMarginLeft = DMarginRight;
+                            DMarginLeft  = left;
+                            DMarginRight = right;
+                            
+                            #if ESC_LOGGING >= 3
+                            kprintf("Setting margin left  to %d", DMarginLeft);
+                            kprintf("Setting margin right to %d", DMarginRight);
+                            #endif
+
+                            if (vDECOM)
+                            {
+                                cx = DMarginLeft;
+                                cy = DMarginTop;
+                            }
+                            else
+                            {
+                                cx = 0;
+                                cy = 0;
+                            }
+
+                            #if ESC_LOGGING >= 3
+                            kprintf("Setting cx to %d (Current: %d)", cx, TTY_GetSX());
+                            kprintf("Setting cy to %d (Current: %d)", cy, TTY_GetSY_A());
+                            #endif
+
+                            TTY_SetSX(cx);
+                            TTY_SetSY_A(cy);
+
+                            bPendingWrap = FALSE;
                         }
-                        else DMarginLeft = ESC_Param[0] - 1;
                     }
-                    else
+                    else    // Invoke save cursor if DECLRMM is disabled
                     {
-                        u8 buffer = BufferSelect == 80 ? 1 : 0;
-                        Saved_sx[buffer] = TTY_GetSX();
-                        Saved_sy[buffer] = TTY_GetSY();
+                        TF_DECSC();
                     }
 
                     goto EndEscape;
                 }
 
                 case 't':   // Window operations [DISPATCH] - https://terminalguide.namepad.de/seq/csi_st/
-                {                    
+                {
+                    // TODO: Make sure this only filters out nonsense "delay" sequences and not proper window operations, which should only have less than 3 parameters
+                    if (ESC_ParamSeq >= 3) 
+                    {
+                        #if ESC_LOGGING >= 2
+                        kprintf("\e[91mSkipping window operation - too many parameters (delay sequence?)\e[0m");
+                        #endif
+
+                        goto EndEscape;
+                    }
+                    
                     ESC_Param[ESC_ParamSeq++] = atoi(ESC_Buffer);
                     u8 n = ESC_Param[0];
                     char str[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -1533,7 +2272,7 @@ static void DoEscape(u8 byte)
                     if (ESC_Buffer[0] == 51)   // >2
                     {
                         #if ESC_LOGGING >= 2
-                        kprintf("[91mNot implemented: Set Title Mode: 2 & %u[0m", ESC_Param[1]);
+                        kprintf("\e[91mNot implemented: Set Title Mode: 2 & %u\e[0m", ESC_Param[1]);
                         #endif
 
                         goto EndEscape;
@@ -1543,7 +2282,7 @@ static void DoEscape(u8 byte)
                     {
                         case 1:     // Restore Terminal Window - "ESC[ 1 t"
                         {                         
-                            #if ESC_LOGGING >= 3
+                            #if ESC_LOGGING >= 4
                             kprintf("Restore Terminal Window");
                             #endif
 
@@ -1553,7 +2292,7 @@ static void DoEscape(u8 byte)
 
                         case 2:     // Minimize Terminal Window - "ESC[ 2 t"
                         {
-                            #if ESC_LOGGING >= 3
+                            #if ESC_LOGGING >= 4
                             kprintf("Minimize Terminal Window");
                             #endif
 
@@ -1569,7 +2308,7 @@ static void DoEscape(u8 byte)
                             if (ESC_Param[2] == 255) TermPosY = 0;
                             else TermPosY = ESC_Param[2];
 
-                            #if ESC_LOGGING >= 2
+                            #if ESC_LOGGING >= 4
                             kprintf("Set Terminal Window Position - x: %u, y: %u", ESC_Param[1], ESC_Param[2]);
                             #endif
 
@@ -1579,7 +2318,7 @@ static void DoEscape(u8 byte)
                         case 7:     // Refresh/Redraw Terminal Window - "ESC[ 7 t"
                         {
                             #if ESC_LOGGING >= 2
-                            kprintf("[91mNot implemented: Refresh/Redraw Terminal Window. n = %u[0m", n);
+                            kprintf("\e[91mNot implemented: Refresh/Redraw Terminal Window. n = %u\e[0m", n);
                             #endif
 
                             break;
@@ -1594,7 +2333,7 @@ static void DoEscape(u8 byte)
                                 C_YMAX = (ESC_Param[1] > max_y ? max_y : ESC_Param[1]);
                             }
 
-                            #if ESC_LOGGING >= 3
+                            #if ESC_LOGGING >= 4
                             kprintf("Set terminal size: %u x %u", ESC_Param[2], ESC_Param[1]);
                             #endif
                         
@@ -1606,7 +2345,7 @@ static void DoEscape(u8 byte)
                         {
                             vMinimized = FALSE;
 
-                            #if ESC_LOGGING >= 3
+                            #if ESC_LOGGING >= 4
                             kprintf("Maximize Terminal Window - CMD = %u", ESC_Param[1]);
                             #endif
                             break;
@@ -1614,15 +2353,15 @@ static void DoEscape(u8 byte)
 
                         case 11:    // Report Terminal Window State (1 = non minimized - 2 = minimized)
                         {
-                            if (vMinimized) NET_SendString("[2t");
-                            else NET_SendString("[1t");
+                            if (vMinimized) NET_SendString("\e[2t");
+                            else NET_SendString("\e[1t");
                             
                             break;
                         }
 
                         case 13:    // Report Terminal Window Position - "ESC[ 13 ; Ⓝ t"  Ⓝ = 0/2
                         {
-                            len = sprintf(str, "[3;%u;%ut", (u16)TermPosX, (u16)TermPosY);
+                            len = sprintf(str, "\e[3;%u;%ut", (u16)TermPosX, (u16)TermPosY);
                             NET_SendStringLen(str, len);
                         
                             break;
@@ -1630,10 +2369,10 @@ static void DoEscape(u8 byte)
 
                         case 14:    // Report Terminal Window Size in Pixels - "ESC[ 14 ; Ⓝ t"  Ⓝ = 0/2
                         {
-                            len = sprintf(str, "[4;%u;%ut", C_YMAX * 8, C_XMAX * 8);
+                            len = sprintf(str, "\e[4;%u;%ut", C_YMAX * 8, C_XMAX * 8);
                             NET_SendStringLen(str, len);
 
-                            #if ESC_LOGGING >= 3
+                            #if ESC_LOGGING >= 4
                             kprintf("Reporting window size: %u x %u", C_XMAX * 8, C_YMAX * 8);
                             #endif
                             
@@ -1642,11 +2381,11 @@ static void DoEscape(u8 byte)
 
                         case 15:    // Report Screen Size in Pixels - "ESC[ 15 t"
                         {
-                            len = sprintf(str, "[5;%u;%ut", C_YMAX * 8, C_XMAX * 8);
+                            len = sprintf(str, "\e[5;%u;%ut", C_YMAX * 8, C_XMAX * 8);
                             NET_SendStringLen(str, len);
 
                             #if ESC_LOGGING >= 3
-                            kprintf("Reporting screen size: %u x %u - Position: $%lX", C_XMAX * 8, C_YMAX * 8, RXBytes);
+                            kprintf("Reporting screen size: %u x %u - Position: $%lX", C_XMAX * 8, C_YMAX * 8, RXBytes-1);
                             #endif
                         
                             break;
@@ -1654,19 +2393,17 @@ static void DoEscape(u8 byte)
 
                         case 16:    // Report Cell Size in Pixels - "ESC[ 16 t"
                         {
-                            NET_SendString("[6;8;8t");
+                            NET_SendString("\e[6;8;8t");
                             break;
                         }
 
                         case 18:    // Report Terminal Size - "ESC[ 18 t"
                         {
-                            len = sprintf(str, "[8;%u;%ut", C_YMAX, C_XMAX);
+                            len = sprintf(str, "\e[8;%u;%ut", C_YMAX, C_XMAX);
                             NET_SendStringLen(str, len);
-                            
-                            //NET_SendString("[8;25;80t");
 
-                            #if ESC_LOGGING >= 3
-                            kprintf("Reporting terminal size: %u x %u - Position: $%lX", C_XMAX, C_YMAX, RXBytes);
+                            #if ESC_LOGGING >= 4
+                            kprintf("Reporting terminal size: %u x %u - Position: $%lX", C_XMAX, C_YMAX, RXBytes-1);
                             #endif
                         
                             break;
@@ -1674,10 +2411,10 @@ static void DoEscape(u8 byte)
 
                         case 19:    // Report Screen Size - "ESC[ 19 t"
                         {
-                            len = sprintf(str, "[9;%u;%ut", C_YMAX, C_XMAX);
+                            len = sprintf(str, "\e[9;%u;%ut", C_YMAX, C_XMAX);
                             NET_SendStringLen(str, len);
 
-                            #if ESC_LOGGING >= 3
+                            #if ESC_LOGGING >= 4
                             kprintf("Reporting screen size: %u x %u", C_XMAX, C_YMAX);
                             #endif
 
@@ -1689,7 +2426,7 @@ static void DoEscape(u8 byte)
                             char lstr[64];
                             u16 llen = 0;
 
-                            llen = sprintf(lstr, "]L%s\\", FakeIconLabel);
+                            llen = sprintf(lstr, "\e]L%s\e\\", FakeIconLabel);
                             NET_SendStringLen(lstr, llen); // Reply with a fake icon string; this control sequence turned out to be a security hazard
                             break;
                         }
@@ -1699,7 +2436,7 @@ static void DoEscape(u8 byte)
                             char lstr[64];
                             u16 llen = 0;
 
-                            llen = sprintf(lstr, "]l%s\\", FakeWindowLabel);
+                            llen = sprintf(lstr, "\e]l%s\e\\", FakeWindowLabel);
                             NET_SendStringLen(lstr, llen); // Reply with a fake title string; this control sequence turned out to be a security hazard
                             break;
                         }
@@ -1718,7 +2455,7 @@ static void DoEscape(u8 byte)
                                         WindowNum++;
                                     }
 
-                                    #if ESC_LOGGING >= 2
+                                    #if ESC_LOGGING >= 4
                                     kprintf("Push Terminal Title \"%s\" to stack position %u", FakeWindowLabel, WindowNum-1);
                                     #endif
                                 break;
@@ -1730,7 +2467,7 @@ static void DoEscape(u8 byte)
                                         IconNum++;
                                     }
 
-                                    #if ESC_LOGGING >= 2
+                                    #if ESC_LOGGING >= 4
                                     kprintf("Push Terminal Icon \"%s\" to stack position %u", FakeIconLabel, IconNum-1);
                                     #endif
                                 break;
@@ -1749,8 +2486,8 @@ static void DoEscape(u8 byte)
                                         IconNum++;
                                     }
 
-                                    #if ESC_LOGGING >= 2
-                                    kprintf("[93mPush Terminal Title/Icon; Duplicate topmost item? n = %u[0m", ESC_Param[1]);
+                                    #if ESC_LOGGING >= 4
+                                    kprintf("\e[93mPush Terminal Title/Icon; Duplicate topmost item? n = %u\e[0m", ESC_Param[1]);
                                     #endif
                                 break;
                             }
@@ -1773,7 +2510,7 @@ static void DoEscape(u8 byte)
                                         ChangeTitle(LabelStack[WindowNum]);
                                     }
 
-                                    #if ESC_LOGGING >= 2
+                                    #if ESC_LOGGING >= 4
                                     kprintf("Pop Terminal Title, new title: \"%s\"", LabelStack[WindowNum]);
                                     #endif
                                 break;
@@ -1785,7 +2522,7 @@ static void DoEscape(u8 byte)
                                         IconNum--;
                                     }
 
-                                    #if ESC_LOGGING >= 2
+                                    #if ESC_LOGGING >= 4
                                     kprintf("Pop Terminal Icon, new icon: \"%s\"", LabelStack[IconNum]);
                                     #endif
                                 break;
@@ -1797,8 +2534,8 @@ static void DoEscape(u8 byte)
                                     memset(LabelStack[ICON_LABEL_OFFSET + IconNum], 0, 40);
                                     IconNum--;
 
-                                    #if ESC_LOGGING >= 2
-                                    kprintf("[93mPop Terminal Title/Icon; Remove topmost item from stack? n = %u[0m", ESC_Param[1]);
+                                    #if ESC_LOGGING >= 4
+                                    kprintf("\e[93mPop Terminal Title/Icon; Remove topmost item from stack? n = %u\e[0m", ESC_Param[1]);
                                     #endif
                                 break;
                             }
@@ -1816,7 +2553,7 @@ static void DoEscape(u8 byte)
                             else
                             {
                                 #ifdef ESC_LOGGING
-                                kprintf("[91mUnknown Window operation [DISPATCH]; n = %u (%u %u %u %u) at $%lX[0m", n, ESC_Buffer[0], ESC_Buffer[1], ESC_Buffer[2], ESC_Buffer[3], RXBytes);
+                                kprintf("\e[91mUnknown Window operation [DISPATCH]; n = %u (%u %u %u %u) at $%lX\e[0m", n, ESC_Buffer[0], ESC_Buffer[1], ESC_Buffer[2], ESC_Buffer[3], RXBytes-1);
                                 #endif
                             }
 
@@ -1832,15 +2569,66 @@ static void DoEscape(u8 byte)
                     goto EndEscape;
                 }
 
+                DECRC:
                 case 'u':   // Restore Cursor [variant] (ansi.sys) - Same as Restore Cursor (DECRC) (ESC 8)
                 {
                     u8 buffer = BufferSelect == 80 ? 1 : 0;
 
-                    TTY_SetSX(Saved_sx[buffer]);
-                    TTY_SetSY(Saved_sy[buffer]);
+                    #if ESC_LOGGING >= 4
+                    kprintf("Cursor restored (was saved? %s)", bCursorSaved[buffer] ? "yes" : "no");
+                    #endif
 
-                    DMarginTop = Saved_OrgTop[buffer];
-                    DMarginBottom = Saved_OrgBottom[buffer];
+                    if (bCursorSaved[buffer])
+                    {
+
+                        TTY_SetSX(Saved_sx[buffer]);
+                        TTY_SetSY_A(Saved_sy[buffer]);
+
+                        #if ESC_LOGGING >= 4
+                        kprintf("Restored cursor: s_sx: %d - s_sy: %d", Saved_sx[buffer], Saved_sy[buffer]);
+                        #endif
+
+                        vDECOM = Saved_DECOM;//FALSE;//   // xterm does not save DECOM ?
+                        //DMarginTop = 0;
+                        //DMarginBottom = C_YMAX;
+
+                        vDECLRMM = FALSE;   // Test - Don't think I should touch this?
+
+                        CharProtAttr = Saved_Prot[buffer];
+
+                        ///bPendingWrap = FALSE;
+
+                        TTY_MoveCursor(TTY_CURSOR_DUMMY);   // Dummy
+
+                        DMarginTop = Saved_OrgTop[buffer];
+                        DMarginBottom = Saved_OrgBottom[buffer];
+
+                        bCursorSaved[buffer] = FALSE;
+                    }
+                    else
+                    {
+                        TTY_SetSX(0);
+                        TTY_SetSY_A(0);//C_YSTART);
+
+                        vDECOM = FALSE;
+                        CharProtAttr = 0;
+
+                        vDECLRMM = FALSE;   // Test - Don't think I should touch this?
+
+                        TTY_MoveCursor(TTY_CURSOR_DUMMY);   // Dummy
+
+                        DMarginTop = 0;
+                        DMarginBottom = C_YMAX;
+                    }
+
+                    goto EndEscape;
+                }
+                
+                case 'v':   // TODO: look this one up, just dummy'ing it out for now to stop it from gobbling up data...
+                {    
+                    #ifdef ESC_LOGGING
+                    kprintf("\e[91mNot implemented:ESC[...v\e[0m");
+                    #endif
 
                     goto EndEscape;
                 }
@@ -1884,7 +2672,7 @@ static void DoEscape(u8 byte)
                     }
 
                     #ifdef ESC_LOGGING
-                    kprintf("[93mx control: %u - %u %u %u %u %u %u %u - p4: %u - Type: '%c' - Position: $%lX[0m", ESC_Param16, ESC_Param[1], ESC_Param[2], ESC_Param[3], ESC_Param[4], ESC_Param[5], ESC_Param[6], ESC_Param[7], param4, type, RXBytes);
+                    kprintf("\e[93mx control: %u - %u %u %u %u %u %u %u - p4: %u - Type: '%c' - Position: $%lX\e[0m", ESC_Param16, ESC_Param[1], ESC_Param[2], ESC_Param[3], ESC_Param[4], ESC_Param[5], ESC_Param[6], ESC_Param[7], param4, type, RXBytes-1);
                     #endif
 
                     switch (type)
@@ -1892,7 +2680,7 @@ static void DoEscape(u8 byte)
                         case '*':   // Select Attribute Change Extent (DECSACE)
                         {
                             #ifdef ESC_LOGGING
-                            kprintf("[91mNot implemented: Select Attribute Change Extent (DECSACE)[0m");
+                            kprintf("\e[91mNot implemented: Select Attribute Change Extent (DECSACE)\e[0m");
                             #endif
 
                             break;
@@ -1954,7 +2742,7 @@ static void DoEscape(u8 byte)
                             TTY_SetSY_A(tmp_sy);
 
                             #ifdef ESC_LOGGING
-                            kprintf("[93mDECFRA: Top: %u, Bottom: %u, Left: %u, Right: %u - Char: '%c' - Should skip: %s[0m", top, bottom, left, right, c, ((top > bottom) || (left > right) || (c <= 32 || (c > 127 && c <= 160) || c >= 255)) ? "True" : "False");
+                            kprintf("\e[93mDECFRA: Top: %u, Bottom: %u, Left: %u, Right: %u - Char: '%c' - Should skip: %s\e[0m", top, bottom, left, right, c, ((top > bottom) || (left > right) || (c <= 32 || (c > 127 && c <= 160) || c >= 255)) ? "True" : "False");
                             #endif
 
                             break;
@@ -1962,7 +2750,7 @@ static void DoEscape(u8 byte)
                         
                         default:
                         #ifdef ESC_LOGGING
-                        kprintf("[91mUnknown x control character: %c[0m", type);
+                        kprintf("\e[91mUnknown x control character: %c\e[0m", type);
                         #endif
 
                         break;
@@ -2006,7 +2794,7 @@ static void DoEscape(u8 byte)
                     }
 
                     #ifdef ESC_LOGGING
-                    kprintf("[93my control: %u %u %u %u %u %u %u %u - p4: %u - Type: '%c' - Position: $%lX[0m", ESC_Param16, ESC_Param[1], ESC_Param[2], ESC_Param[3], ESC_Param[4], ESC_Param[5], ESC_Param[6], ESC_Param[7], param4, type, RXBytes);
+                    kprintf("\e[93my control: %u %u %u %u %u %u %u %u - p4: %u - Type: '%c' - Position: $%lX\e[0m", ESC_Param16, ESC_Param[1], ESC_Param[2], ESC_Param[3], ESC_Param[4], ESC_Param[5], ESC_Param[6], ESC_Param[7], param4, type, RXBytes-1);
                     #endif
 
                     u16 pid = ESC_Param16;
@@ -2031,8 +2819,8 @@ static void DoEscape(u8 byte)
 
                             if (vDECOM)
                             {                                
-                                top    = (top    < DMarginTop    ? DMarginTop    : top);
-                                left   = (left   < DMarginLeft   ? DMarginLeft   : left);
+                                top    = (top    < DMarginTop  ? DMarginTop  : top);
+                                left   = (left   < DMarginLeft ? DMarginLeft : left);
                                 bottom = (bottom > C_YMAX      ? C_YMAX      : bottom);
                                 right  = (right  > C_XMAX      ? C_XMAX      : right);
                             }
@@ -2050,22 +2838,22 @@ static void DoEscape(u8 byte)
                             {
                                 //rb = 0x10000;
 
-                                if (XTCHECKSUM == 0) len = sprintf(str, "P%u!~0000\\", pid);    // Do not negate result
-                                else len = sprintf(str, "P%u!~10000\\", pid);
+                                if (XTCHECKSUM == 0) len = sprintf(str, "\eP%u!~0000\e\\", pid);    // Do not negate result
+                                else len = sprintf(str, "\eP%u!~10000\e\\", pid);
                             }
                             else
                             {
                                 rb -= 1;
 
-                                if (XTCHECKSUM == 0) len = sprintf(str, "P%u!~%04lX\\", pid, rb & 0xFFFF);    // Do not negate result
-                                else len = sprintf(str, "P%u!~%04lX\\", pid, (~rb & 0xFFFF));
+                                if (XTCHECKSUM == 0) len = sprintf(str, "\eP%u!~%04lX\e\\", pid, rb & 0xFFFF);    // Do not negate result
+                                else len = sprintf(str, "\eP%u!~%04lX\e\\", pid, (~rb & 0xFFFF));
                             }
 
                             //NET_SendString(str);
                             NET_SendStringLen(str, len);
 
                             #ifdef ESC_LOGGING
-                            kprintf("[93mDECRQCRA: page: %u -- T:%u, L:%u, B:%u, R:%u -- sum: %lu (negated: $%04lX)[0m", ESC_Param[1], top, left, bottom, right, rb, (~rb & 0x1FFFF));
+                            kprintf("\e[93mDECRQCRA: page: %u -- T:%u, L:%u, B:%u, R:%u -- sum: %lu (negated: $%04lX)\e[0m", ESC_Param[1], top, left, bottom, right, rb, (~rb & 0x1FFFF));
                             #endif
 
                             break;
@@ -2074,7 +2862,7 @@ static void DoEscape(u8 byte)
                         case '#':   // Select checksum extension (XTCHECKSUM)
                         {
                             #ifdef ESC_LOGGING
-                            kprintf("[91mNot implemented: Select checksum extension (XTCHECKSUM) - Extension: %u[0m", ESC_Param[1]);
+                            kprintf("\e[91mNot implemented: Select checksum extension (XTCHECKSUM) - Extension: %u\e[0m", ESC_Param[1]);
                             #endif
 
                             /*
@@ -2092,7 +2880,7 @@ static void DoEscape(u8 byte)
                         
                         default:
                         #ifdef ESC_LOGGING
-                        kprintf("[91mUnknown y control character: %c[0m", type);
+                        kprintf("\e[91mUnknown y control character: %c\e[0m", type);
                         #endif
                         break;
                     }
@@ -2139,7 +2927,7 @@ static void DoEscape(u8 byte)
                     }
 
                     #ifdef ESC_LOGGING
-                    kprintf("[93mz control: %u %u %u %u %u %u %u %u - p4: %u - Type: '%c' - Position: $%lX[0m", ESC_Param16, ESC_Param[1], ESC_Param[2], ESC_Param[3], ESC_Param[4], ESC_Param[5], ESC_Param[6], ESC_Param[7], param4, type, RXBytes);
+                    kprintf("\e[93mz control: %u %u %u %u %u %u %u %u - p4: %u - Type: '%c' - Position: $%lX\e[0m", ESC_Param16, ESC_Param[1], ESC_Param[2], ESC_Param[3], ESC_Param[4], ESC_Param[5], ESC_Param[6], ESC_Param[7], param4, type, RXBytes-1);
                     #endif
 
                     switch (type)
@@ -2147,7 +2935,7 @@ static void DoEscape(u8 byte)
                         case '\'':   // Enable Locator Reporting (DECELR)
                         {
                             #ifdef ESC_LOGGING
-                            kprintf("[91mNot implemented: Enable Locator Reporting (DECELR)[0m");
+                            kprintf("\e[91mNot implemented: Enable Locator Reporting (DECELR)\e[0m");
                             #endif
 
                             break;
@@ -2201,7 +2989,7 @@ static void DoEscape(u8 byte)
                             TTY_SetSY_A(tmp_sy);
 
                             #ifdef ESC_LOGGING
-                            kprintf("[93mDECERA: Top: %u, Bottom: %u, Left: %u, Right: %u[0m", top, bottom, left, right);
+                            kprintf("\e[93mDECERA: Top: %u, Bottom: %u, Left: %u, Right: %u\e[0m", top, bottom, left, right);
                             #endif
 
                             break;
@@ -2209,7 +2997,7 @@ static void DoEscape(u8 byte)
                         
                         default:
                         #ifdef ESC_LOGGING
-                        kprintf("[91mUnknown z control character: %c[0m", type);
+                        kprintf("\e[91mUnknown z control character: %c\e[0m", type);
                         #endif
 
                         break;
@@ -2257,7 +3045,7 @@ static void DoEscape(u8 byte)
                     }
 
                     #ifdef ESC_LOGGING
-                    kprintf("[93m{ control: %u %u %u %u %u %u %u %u - p4: %u - Type: '%c' - Position: $%lX[0m", ESC_Param16, ESC_Param[1], ESC_Param[2], ESC_Param[3], ESC_Param[4], ESC_Param[5], ESC_Param[6], ESC_Param[7], param4, type, RXBytes);
+                    kprintf("\e[93m{ control: %u %u %u %u %u %u %u %u - p4: %u - Type: '%c' - Position: $%lX\e[0m", ESC_Param16, ESC_Param[1], ESC_Param[2], ESC_Param[3], ESC_Param[4], ESC_Param[5], ESC_Param[6], ESC_Param[7], param4, type, RXBytes-1);
                     #endif
 
                     switch (type)
@@ -2265,7 +3053,7 @@ static void DoEscape(u8 byte)
                         case '#':   // Save Rendition Attributes - "ESC[ [ Ⓝ ] # {"
                         {
                             #ifdef ESC_LOGGING
-                            kprintf("[91mNot implemented: Save Rendition Attributes[0m");
+                            kprintf("\e[91mNot implemented: Save Rendition Attributes\e[0m");
                             #endif
 
                             break;
@@ -2274,7 +3062,7 @@ static void DoEscape(u8 byte)
                         case '\'':   // DEC Locator Select Events - "ESC[ [ Ⓝ ] ' {"
                         {
                             #ifdef ESC_LOGGING
-                            kprintf("[91mNot implemented: DEC Locator Select Events[0m");
+                            kprintf("\e[91mNot implemented: DEC Locator Select Events\e[0m");
                             #endif
 
                             break;
@@ -2328,7 +3116,7 @@ static void DoEscape(u8 byte)
                             TTY_SetSY_A(tmp_sy);
 
                             #ifdef ESC_LOGGING
-                            kprintf("[93mDECSERA: Top: %u, Bottom: %u, Left: %u, Right: %u[0m", top, bottom, left, right);
+                            kprintf("\e[93mDECSERA: Top: %u, Bottom: %u, Left: %u, Right: %u\e[0m", top, bottom, left, right);
                             #endif
 
                             break;
@@ -2336,7 +3124,7 @@ static void DoEscape(u8 byte)
                         
                         default:
                         #ifdef ESC_LOGGING
-                        kprintf("[91mUnknown { control character: %c[0m", type);
+                        kprintf("\e[91mUnknown { control character: %c\e[0m", type);
                         #endif
 
                         break;
@@ -2347,8 +3135,12 @@ static void DoEscape(u8 byte)
 
                 case '_':
                 {
+                    /*
+                    Hmm ?
+                    _: Represents the APC, which allows a string to be passed to the terminal emulator without being interpreted directly, frequently used for setting terminal titles or status bars. 
+                    */
                     #ifdef ESC_LOGGING
-                    kprintf("[91mUnknown character in escape stream: \"%c\" at $%lX[0m", byte, RXBytes);
+                    kprintf("\e[91mUnknown character in escape stream: \"%c\" (APC byte?) at $%lX\e[0m", byte, RXBytes-1);
                     #endif
                     
                     goto EndEscape; // In case of weird ESC[!_ sequence just end it now...
@@ -2357,7 +3149,7 @@ static void DoEscape(u8 byte)
                 case ' ':
                 {
                     #ifdef ESC_LOGGING
-                    kprintf("[91mUnknown character in escape stream: \"%c\" at $%lX[0m", byte, RXBytes);
+                    kprintf("\e[91mUnknown character in escape stream: \"%c\" at $%lX\e[0m", byte, RXBytes-1);
                     #endif
                     
                     return;
@@ -2369,26 +3161,49 @@ static void DoEscape(u8 byte)
                     return;
                 }
 
+                case 0x1B:
+                {
+                    #ifdef ESC_LOGGING
+                    kprintf("\e[91mRan into a rouge escape byte! Restarting escape sequence (EscSeq: %u  -  Position: $%lX)\e[0m", ESC_BufferSeq, RXBytes-1);
+                    #endif
+
+                    // Reinsert byte into stream again, stop escape parser and rerun
+                    RestartByte = byte;
+                    goto Restart;
+                    return;
+                }
+
                 default:
                     if ((byte >= 65) && (byte <= 122)) 
                     {
                         #ifdef ESC_LOGGING
-                        kprintf("[91mUnhandled $%X  -  u8: %u  -  char: '%c'  -  EscType: '%c' (EscSeq: %u  -  Position: $%lX)[0m", byte, byte, (char)byte, (char)ESC_Type, ESC_BufferSeq, RXBytes);
+                        kprintf("\e[91mUnhandled $%X  -  u8: %u  -  char: '%c'  -  EscType: '%c' (EscSeq: %u  -  Position: $%lX)\e[0m", byte, byte, (char)byte, (char)ESC_Type, ESC_BufferSeq, RXBytes-1);
                         #endif
                         goto EndEscape;
                     }
                 break;
             }
 
+            // leading zeroes
+            if ((ESC_BufferSeq == 1) && (ESC_Buffer[0] == '0') && (byte == '0')) 
+            {
+                ESC_BufferSeq = 0;
+            }
+            
+            #if ESC_LOGGING >= 5
+            kprintf("\e[92mAdding byte <$%X> (%c) to ESC_Buffer @ pos %u - Position: $%lX\e[0m", (char)byte, (char)byte, ESC_BufferSeq, RXBytes-1);
+            #endif
+
             ESC_Buffer[ESC_BufferSeq++] = (char)byte;
+            
             return;
         }
     
         case ']':   // Operating System Command (OSC)
         {
-            //kprintf("Byte at $%lX: %u (%c)", RXBytes, byte, byte);
+            //kprintf("Byte at $%lX: %u (%c)", RXBytes-1, byte, byte);
 
-            // Todo: Fix this; "]11;#ffffff\\_xyz\\A"
+            // Todo: Fix this; "\e]11;#ffffff\e\\\e_xyz\e\\A"
             if (bOSC_GetType)// || byte == 0x1B)
             {
                 if (byte == ' ' || byte == ';')
@@ -2402,7 +3217,7 @@ static void DoEscape(u8 byte)
                     ESC_BufferSeq = 0;
                     
                     #ifdef OSC_LOGGING
-                    kprintf("OSC: Got OSC %u at $%lX (OSC type = $%X)", OSC_Type, RXBytes, OSC_Type);
+                    kprintf("OSC: Got OSC %u at $%lX (OSC type = $%X)", OSC_Type, RXBytes-1, OSC_Type);
                     #endif
 
                     bOSC_GetType = FALSE;
@@ -2419,7 +3234,7 @@ static void DoEscape(u8 byte)
                 if (byte == 0x1B)
                 {                   
                     #ifdef OSC_LOGGING
-                    kprintf("OSC: Skipping <ESC> at $%lX - STRINGPARSE", RXBytes);
+                    kprintf("OSC: Skipping <ESC> at $%lX - STRINGPARSE", RXBytes-1);
                     #endif
 
                     return;
@@ -2429,7 +3244,7 @@ static void DoEscape(u8 byte)
                     OSC_String[ESC_OSCSeq] = '\0';   // -1 will be $1B Escape character, remove it
 
                     #ifdef OSC_LOGGING
-                    kprintf("OSC: Got string end $%X at $%lX (OSC_String = \"%s\") - STRINGPARSE", byte, RXBytes, OSC_String);
+                    kprintf("OSC: Got string end $%X at $%lX (OSC_String = \"%s\") - STRINGPARSE", byte, RXBytes-1, OSC_String);
                     #endif
 
                     ESC_OSCSeq = 0;
@@ -2449,7 +3264,7 @@ static void DoEscape(u8 byte)
             if (bOSC_Parse)
             {
                 #ifdef OSC_LOGGING
-                kprintf("OSC PARSE at $%lX", RXBytes);
+                kprintf("OSC PARSE at $%lX", RXBytes-1);
                 #endif
 
                 switch (OSC_Type)
@@ -2490,31 +3305,31 @@ static void DoEscape(u8 byte)
                             u16 len = 0;
                             memset(str, 0, 16);
                             
-                            len = sprintf(str, "]4;1;rgb:%04X/%04X/%04X\\", 0, 0, 0);   // rgb:%04x/%04x/%04x
+                            len = sprintf(str, "\e]4;1;rgb:%04X/%04X/%04X\e\\", 0, 0, 0);   // rgb:%04x/%04x/%04x
                             NET_SendStringLen(str, len);
 
                             #ifdef OSC_LOGGING
-                            kprintf("[91mUnimplemented OSC: Read palette color \"%s\" - PARSE[0m", OSC_String);
+                            kprintf("\e[91mUnimplemented OSC: Read palette color \"%s\" - PARSE\e[0m", OSC_String);
                             #endif
                         }
                         else
                         {
 
                             #ifdef OSC_LOGGING
-                            kprintf("[91mUnimplemented OSC: Change palette color \"%s\" - PARSE[0m", OSC_String);
+                            kprintf("\e[91mUnimplemented OSC: Change palette color \"%s\" - PARSE\e[0m", OSC_String);
                             #endif
                         }
                     break;
 
                     case 7:
                     #ifdef OSC_LOGGING
-                        kprintf("[91mUnimplemented OSC: $%X at $%lX (Report Current Working Directory) - PARSE[0m", OSC_Type, RXBytes);
+                        kprintf("\e[91mUnimplemented OSC: $%X at $%lX (Report Current Working Directory) - PARSE\e[0m", OSC_Type, RXBytes-1);
                         #endif
                     break;
 
                     case 10: // Change/Read Special Text Default Foreground Color
                         #ifdef OSC_LOGGING
-                        kprintf("[91mUnimplemented OSC: Change/Read Special Text Default Foreground Color: \"%s\" - PARSE[0m", OSC_String);
+                        kprintf("\e[91mUnimplemented OSC: Change/Read Special Text Default Foreground Color: \"%s\" - PARSE\e[0m", OSC_String);
                         #endif
 
                         // Parse colour from string here
@@ -2523,7 +3338,7 @@ static void DoEscape(u8 byte)
 
                     case 11: // Change/Read Special Text Default Background Color
                         #ifdef OSC_LOGGING
-                        kprintf("[91mUnimplemented OSC: Change/Read Special Text Default Background Color: \"%s\" - PARSE[0m", OSC_String);
+                        kprintf("\e[91mUnimplemented OSC: Change/Read Special Text Default Background Color: \"%s\" - PARSE\e[0m", OSC_String);
                         #endif
 
                         // Parse colour from string here
@@ -2534,7 +3349,7 @@ static void DoEscape(u8 byte)
 
                     case 14: // Change/Read Pointer Mask Color
                         #ifdef OSC_LOGGING
-                        kprintf("[91mUnimplemented OSC: Change/Read Pointer Mask Color: \"%s\" - PARSE[0m", OSC_String);
+                        kprintf("\e[91mUnimplemented OSC: Change/Read Pointer Mask Color: \"%s\" - PARSE\e[0m", OSC_String);
                         #endif
                     break;
 
@@ -2546,19 +3361,19 @@ static void DoEscape(u8 byte)
 
                     case 104: // Reset Palette Colors
                         #ifdef OSC_LOGGING
-                        kprintf("[91mUnimplemented OSC: Reset Palette Colors - String: \"%s\" - PARSE[0m", OSC_String);
+                        kprintf("\e[91mUnimplemented OSC: Reset Palette Colors - String: \"%s\" - PARSE\e[0m", OSC_String);
                         #endif
                     break;
 
                     default:
                         #ifdef OSC_LOGGING
-                        kprintf("[91mUnknown OSC: $%X at $%lX - PARSE[0m", OSC_Type, RXBytes);
+                        kprintf("\e[91mUnknown OSC: $%X at $%lX - PARSE\e[0m", OSC_Type, RXBytes-1);
                         #endif
                     break;
                 }
 
                 #ifdef OSC_LOGGING
-                kprintf("Ending OSC at $%lX", RXBytes);
+                kprintf("Ending OSC at $%lX", RXBytes-1);
                 #endif
 
                 ESC_OSCBuffer[0] = '\0';
@@ -2576,7 +3391,7 @@ static void DoEscape(u8 byte)
                 case 0:   // Change Window title and Icon
                 case 2:   // Change Window title
                     #ifdef OSC_LOGGING
-                    kprintf("OSC: Change Window title at $%lX (OSC type = $%X) - TYPE", RXBytes, OSC_Type);
+                    kprintf("OSC: Change Window title at $%lX (OSC type = $%X) - TYPE", RXBytes-1, OSC_Type);
                     #endif
 
                     ESC_OSCSeq = 0;
@@ -2585,7 +3400,7 @@ static void DoEscape(u8 byte)
 
                 case 4:   // Change/Read palette color
                     #ifdef OSC_LOGGING
-                    kprintf("OSC: Change/Read palette color at $%lX (OSC type = $%X) - TYPE", RXBytes, OSC_Type);
+                    kprintf("OSC: Change/Read palette color at $%lX (OSC type = $%X) - TYPE", RXBytes-1, OSC_Type);
                     #endif
 
                     ESC_OSCSeq = 0;
@@ -2594,7 +3409,7 @@ static void DoEscape(u8 byte)
 
                 case 7:
                     #ifdef OSC_LOGGING
-                    kprintf("OSC: Got end marker $7 at $%lX (OSC_String = \"%s\") - TYPE", RXBytes, OSC_String);
+                    kprintf("OSC: Got end marker $7 at $%lX (OSC_String = \"%s\") - TYPE", RXBytes-1, OSC_String);
                     #endif
 
                     ESC_OSCSeq = 0;
@@ -2604,7 +3419,7 @@ static void DoEscape(u8 byte)
 
                 case 10:  // Change/Read Special Text Default Background Color
                     #ifdef OSC_LOGGING
-                    kprintf("OSC: Change/Read Special Text Default Foreground Color at $%lX (OSC type = $%X) - TYPE", RXBytes, OSC_Type);
+                    kprintf("OSC: Change/Read Special Text Default Foreground Color at $%lX (OSC type = $%X) - TYPE", RXBytes-1, OSC_Type);
                     #endif
 
                     ESC_OSCSeq = 0;
@@ -2613,7 +3428,7 @@ static void DoEscape(u8 byte)
                 
                 case 11:  // Change/Read Special Text Default Background Color
                     #ifdef OSC_LOGGING
-                    kprintf("OSC: Change/Read Special Text Default Background Color at $%lX (OSC type = $%X) - TYPE", RXBytes, OSC_Type);
+                    kprintf("OSC: Change/Read Special Text Default Background Color at $%lX (OSC type = $%X) - TYPE", RXBytes-1, OSC_Type);
                     #endif
 
                     ESC_OSCSeq = 0;
@@ -2624,7 +3439,7 @@ static void DoEscape(u8 byte)
                     OSC_String[ESC_OSCSeq-1] = '\0';   // -1 will be $1B Escape character, remove it
 
                     #ifdef OSC_LOGGING
-                    kprintf("OSC: Got end marker $1B $5C at $%lX (OSC_String = \"%s\") - TYPE", RXBytes, OSC_String);
+                    kprintf("OSC: Got end marker $1B $5C at $%lX (OSC_String = \"%s\") - TYPE", RXBytes-1, OSC_String);
                     #endif
 
                     ESC_OSCSeq = 0;
@@ -2634,7 +3449,7 @@ static void DoEscape(u8 byte)
                 
                 case 104:  // Reset Palette Colors
                     #ifdef OSC_LOGGING
-                    kprintf("OSC: Reset Palette Colors at $%lX (OSC type = $%X) - TYPE", RXBytes, OSC_Type);
+                    kprintf("OSC: Reset Palette Colors at $%lX (OSC type = $%X) - TYPE", RXBytes-1, OSC_Type);
                     #endif
 
                     ESC_OSCSeq = 0;
@@ -2644,7 +3459,7 @@ static void DoEscape(u8 byte)
                 default:
                 {
                     #ifdef OSC_LOGGING
-                    kprintf("[91mUnknown OSC: $%X at $%lX - TYPE[0m", OSC_Type, RXBytes);
+                    kprintf("\e[91mUnknown OSC: $%X at $%lX - TYPE\e[0m", OSC_Type, RXBytes-1);
                     #endif                
                     
                     ESC_OSCBuffer[0] = '\0';
@@ -2663,7 +3478,7 @@ static void DoEscape(u8 byte)
         case '_':   // TEMP
         {
             #ifdef ESC_LOGGING
-            kprintf("[91mGot a stray \"ESC _\" ... Which is probably apart of a previous OSC. At $%lX[0m", RXBytes);
+            kprintf("\e[91mGot a stray \"ESC _\" ... Which is probably apart of a previous OSC. At $%lX\e[0m", RXBytes-1);
             #endif
 
             goto EndEscape;
@@ -2676,7 +3491,7 @@ static void DoEscape(u8 byte)
                 case '0':   // DEC Special Character and Line Drawing Set
                 {
                     CharMapSelection = 1;
-                    #if ESC_LOGGING >= 3
+                    #if ESC_LOGGING >= 4
                     kprintf("ESC%c0: DEC Special Character and Line Drawing Set", ESC_Type);
                     #endif
                     break;
@@ -2694,7 +3509,7 @@ static void DoEscape(u8 byte)
                 default:
                 {
                     #ifdef ESC_LOGGING
-                    kprintf("[91mUnimplemented G0 charset $%X ESC ( %c at $%lX[0m", byte, (char)byte, RXBytes);
+                    kprintf("\e[91mUnimplemented G0 charset $%X ESC ( %c at $%lX\e[0m", byte, (char)byte, RXBytes-1);
                     #endif
                 }
             }
@@ -2718,7 +3533,7 @@ static void DoEscape(u8 byte)
                 default:
                 {
                     #ifdef ESC_LOGGING
-                    kprintf("[91mUnimplemented G1 charset $%X ESC ) %c at $%lX[0m", byte, (char)byte, RXBytes);
+                    kprintf("\e[91mUnimplemented G1 charset $%X ESC ) %c at $%lX\e[0m", byte, (char)byte, RXBytes-1);
                     #endif
                 }
             }
@@ -2733,7 +3548,7 @@ static void DoEscape(u8 byte)
                 if (ESC_QSeqMulti)
                 {
                     #ifdef ESC_LOGGING
-                    kprintf("[91mUnimplemented multi mode \"%s\" at $%lX[0m", (char*)ESC_QBuffer, RXBytes);
+                    kprintf("\e[91mUnimplemented multi mode \"%s\" at $%lX\e[0m", (char*)ESC_QBuffer, RXBytes-1);
                     #endif
                     goto EndEscape;
                 }
@@ -2746,15 +3561,58 @@ static void DoEscape(u8 byte)
                         vDECCKM = TRUE;
                     break;
 
+                    case 40:    // Enable Support for Mode ?3 (132COLS)
+                    case 3:     // 132 Column Mode (DECCOLM)
+                        #if ESC_LOGGING >= 3
+                        kprintf("\e[91mDisabling 132 column mode (NOT IMPLEMENTED!) at $%lX\e[0m", RXBytes-1);
+                        #endif
+                    break;
+                
+                    case 4:    // Insert Mode (IRM)
+                        bInsertMode = TRUE;
+
+                        #if ESC_LOGGING >= 3
+                        kprintf("\e[92mEnabling insert mode at $%lX\e[0m", RXBytes-1);
+                        #endif
+                    break;
+                
+                    case 5:    // Reverse Display Colors (DECSCNM)
+                        bReverseColour = TRUE;
+
+                        #if ESC_LOGGING >= 3
+                        kprintf("\e[92mEnabling reverse colour at $%lX\e[0m", RXBytes-1);
+                        #endif
+                    break;
+
                     case 6:     // Origin Mode (DECOM), VT100.
                         vDECOM = TRUE;
+
+                        TTY_SetSX(DMarginLeft);
+                        TTY_SetSY_A(DMarginTop);
+
+                        #if ESC_LOGGING >= 3
+                        kprintf("\e[92mEnabling DECOM (Left: %d - Top: %d) at $%lX\e[0m", DMarginLeft, DMarginTop, RXBytes-1);
+                        #endif
                     break;
                 
                     case 7:     // Auto-Wrap Mode (DECAWM), VT100.
-                        sv_bWrapAround = TRUE;
+                        bWrapMode = TRUE;
+                        
+                        #if ESC_LOGGING >= 3
+                        kprintf("\e[92mEnabling Auto-Wrap mode (%s) at $%lX\e[0m", bWrapMode?"TRUE":"FALSE", RXBytes-1);
+                        #endif
+                    break;
+                
+                    case 8:    // Repeat Held Keys
+                        #if ESC_LOGGING >= 3
+                        kprintf("\e[91mRepeat Held Keys enable NOT IMPLEMENTED - at $%lX\e[0m", RXBytes-1);
+                        #endif
                     break;
                 
                     case 9:     // Mouse Click-Only Tracking (X10_MOUSE)
+                        #if ESC_LOGGING >= 3
+                        kprintf("\e[91mMouse Click-Only Tracking (X10_MOUSE) enable NOT IMPLEMENTED - at $%lX\e[0m", RXBytes-1);
+                        #endif
                     break;
 
                     case 12:    // Cursor Blinking ON (ATT610_BLINK)
@@ -2762,7 +3620,22 @@ static void DoEscape(u8 byte)
                     break;
                 
                     case 25:    // Shows the cursor, from the VT220. (DECTCEM)
-                        SetSprite_TILE(SPRITE_ID_CURSOR, LastCursor);
+                        if (sv_Font) LastCursor = 0x13;
+                        else         LastCursor = 0x10;
+
+                        SetSprite_TILE(SPRITE_CURSOR, LastCursor);
+
+                        #if ESC_LOGGING >= 3
+                        kprintf("\e[92mShowing cursor (DECTCEM) at $%lX\e[0m", RXBytes-1);
+                        #endif
+                    break;
+                
+                    case 45:    // Reverse Wrap Mode (REVERSEWRAP)
+                        bReverseWrap = TRUE;
+
+                        #if ESC_LOGGING >= 3
+                        kprintf("\e[92mEnabling Reverse Wrap Mode (%s) at $%lX\e[0m", bReverseWrap?"TRUE":"FALSE", RXBytes-1);
+                        #endif
                     break;
 
                     case 69:    // DECSLRM can set margins.
@@ -2774,8 +3647,8 @@ static void DoEscape(u8 byte)
                         // When the terminal looses focus emit: ESC [ O
                         // vte: Sends current focus state on mode activation.
 
-                        if (!WinMgr_isWindowOpen() && !vMinimized) NET_SendString("[I");
-                        else NET_SendString("[O");
+                        if (!WinMgr_isWindowOpen() && !vMinimized) NET_SendString("\e[I");
+                        else NET_SendString("\e[O");
                     break;
 
                     case 1000:  // Mouse Down+Up Tracking
@@ -2805,7 +3678,15 @@ static void DoEscape(u8 byte)
                     case 1015:  // Mouse Reporting Format URXVT
                         MReportFormat = MR_URXVT;
                         #ifdef ESC_LOGGING
-                        kprintf("[93mAttempt at activating mouse related mode: %uh (Not implemented)[0m", QSeqNumber);
+                        kprintf("\e[93mAttempt at activating mouse related mode: %uh (Not implemented)\e[0m", QSeqNumber);
+                        #endif
+                    break;
+                
+                    case 1045:    // Extended Reverse Wrap Mode
+                        bExtReverseWrap = TRUE;
+
+                        #if ESC_LOGGING >= 3
+                        kprintf("\e[92mEnabling Extended Reverse Wrap Mode (%s) at $%lX\e[0m", bExtReverseWrap?"TRUE":"FALSE", RXBytes-1);
                         #endif
                     break;
 
@@ -2822,6 +3703,13 @@ static void DoEscape(u8 byte)
 
                                 BufferSelect = 40;
                             }
+                            else if (sv_Font == FONT_SOFTWARE)
+                            {
+                                VDP_setHorizontalScroll(BG_A, HScroll);
+                                VDP_setHorizontalScroll(BG_B, HScroll);
+
+                                BufferSelect = 80;
+                            }
                             else
                             {
                                 VDP_setHorizontalScroll(BG_A, (HScroll+4-320));
@@ -2830,8 +3718,10 @@ static void DoEscape(u8 byte)
                                 BufferSelect = 80;
                             }
 
+                            SW_SetBuffer();
+
                             // Set VScroll to 0
-                            Saved_VScroll = VScroll;
+                            Saved_VScroll = TTY_GetVScroll();
                             TTY_ResetVScroll();
 
                             switch (QSeqNumber)
@@ -2839,15 +3729,22 @@ static void DoEscape(u8 byte)
                                 case 1049:                                
                                     // Save cursor position from main buffer
                                     Saved_sx[0] = TTY_GetSX();
-                                    Saved_sy[0] = TTY_GetSY();
+                                    Saved_sy[0] = TTY_GetSY_A();
 
                                     // Restore cursor position to alternate buffer
                                     TTY_SetSX(Saved_sx[1]);
-                                    TTY_SetSY(Saved_sy[1]);
+                                    TTY_SetSY_A(Saved_sy[1]);
 
                                     // Clear alternate buffer
-                                    VDP_clearTileMapRect(BG_A, 40, 0, 40, 30);
-                                    VDP_clearTileMapRect(BG_B, 40, 0, 40, 30);
+                                    if (sv_Font == FONT_SOFTWARE)
+                                    {
+                                        SW_ClearScreen();
+                                    }
+                                    else
+                                    {
+                                        VDP_clearTileMapRect(BG_A, 40, 0, 40, 30);
+                                        VDP_clearTileMapRect(BG_B, 40, 0, 40, 30);
+                                    }
                                 break;
                             
                                 default:
@@ -2870,10 +3767,10 @@ static void DoEscape(u8 byte)
 
                     default:
                     #ifdef ESC_LOGGING
-                    kprintf("[91mUnimplemented mode ?%uh at $%lX", QSeqNumber, RXBytes);
+                    kprintf("\e[91mUnimplemented mode ?%uh at $%lX", QSeqNumber, RXBytes-1);
                     kprintf("0=%c 1= %c - 2= %c - 3= %c", ESC_QBuffer[0], ESC_QBuffer[1], ESC_QBuffer[2], ESC_QBuffer[3]);
                     kprintf("0=%c%c - 2= %c%c", ESC_QBuffer[0], ESC_QBuffer[1], ESC_QBuffer[3], ESC_QBuffer[4]);
-                    kprintf("[0m");
+                    kprintf("\e[0m");
                     #endif
                     break;
                 }
@@ -2886,7 +3783,7 @@ static void DoEscape(u8 byte)
                 if (ESC_QSeqMulti)
                 {
                     #ifdef ESC_LOGGING
-                    kprintf("[91mUnimplemented multi mode \"%s\" at $%lX[0m", (char*)ESC_QBuffer, RXBytes);
+                    kprintf("\e[91mUnimplemented multi mode \"%s\" at $%lX\e[0m", (char*)ESC_QBuffer, RXBytes-1);
                     #endif
                     goto EndEscape;
                 }
@@ -2899,12 +3796,49 @@ static void DoEscape(u8 byte)
                         vDECCKM = FALSE;
                     break;
 
+                    case 40:    // Enable Support for Mode ?3 (132COLS)
+                    case 3:     // 132 Column Mode (DECCOLM)
+                        #if ESC_LOGGING >= 3
+                        kprintf("\e[91mDisabling 132 column mode (NOT IMPLEMENTED!) at $%lX\e[0m", RXBytes-1);
+                        #endif
+                    break;
+                
+                    case 4:    // Insert Mode (IRM)
+                        bInsertMode = FALSE;
+                        
+                        #if ESC_LOGGING >= 3
+                        kprintf("\e[92mDisabling insert mode at $%lX\e[0m", RXBytes-1);
+                        #endif
+                    break;
+                
+                    case 5:    // Reverse Display Colors (DECSCNM)
+                        bReverseColour = FALSE;
+
+                        #if ESC_LOGGING >= 3
+                        kprintf("\e[92mDisabling reverse colour at $%lX\e[0m", RXBytes-1);
+                        #endif
+                    break;
+
                     case 6:     // Normal Cursor Mode (DECOM), VT100.
                         vDECOM = FALSE;
+                        
+                        #if ESC_LOGGING >= 3
+                        kprintf("\e[92mDisabling DECOM at $%lX\e[0m", RXBytes-1);
+                        #endif
                     break;
                 
                     case 7:     // No Auto-Wrap Mode (DECAWM), VT100.
-                        sv_bWrapAround = FALSE;
+                        bWrapMode = FALSE;
+                        
+                        #if ESC_LOGGING >= 3
+                        kprintf("\e[92mDisabling Auto-Wrap mode at $%lX\e[0m", RXBytes-1);
+                        #endif
+                    break;
+                
+                    case 8:    // Repeat Held Keys
+                        #if ESC_LOGGING >= 3
+                        kprintf("\e[91mRepeat Held Keys disable NOT IMPLEMENTED - at $%lX\e[0m", RXBytes-1);
+                        #endif
                     break;
 
                     case 12:    // Cursor Blinking OFF (ATT610_BLINK)
@@ -2913,11 +3847,25 @@ static void DoEscape(u8 byte)
                         if (sv_Font) LastCursor = 0x13;
                         else         LastCursor = 0x10;
 
-                        SetSprite_TILE(SPRITE_ID_CURSOR, LastCursor);
+                        SetSprite_TILE(SPRITE_CURSOR, LastCursor);
                     break;
                 
                     case 25:    // Hides the cursor. (DECTCEM)
-                        SetSprite_TILE(SPRITE_ID_CURSOR, 0x16);
+                        SetSprite_TILE(SPRITE_CURSOR, 0x16);
+
+                        LastCursor = 0x16;
+
+                        #if ESC_LOGGING >= 3
+                        kprintf("\e[92mHiding cursor (DECTCEM) at $%lX\e[0m", RXBytes-1);
+                        #endif
+                    break;
+                
+                    case 45:    // Reverse Wrap Mode (REVERSEWRAP)
+                        bReverseWrap = FALSE;
+
+                        #if ESC_LOGGING >= 3
+                        kprintf("\e[92mDisabling Reverse Wrap Mode (%s) at $%lX\e[0m", bReverseWrap?"TRUE":"FALSE", RXBytes-1);
+                        #endif
                     break;
 
                     case 69:    // DECSLRM cannot set margins.
@@ -2938,7 +3886,15 @@ static void DoEscape(u8 byte)
                     case 1006:  // Mouse Reporting Format Digits
                     case 1015:  // Mouse Reporting Format URXVT
                         #ifdef ESC_LOGGING
-                        kprintf("[93mAttempt at deactivating mouse related mode: %ul (Not implemented)[0m", QSeqNumber);
+                        kprintf("\e[93mAttempt at deactivating mouse related mode: %ul (Not implemented)\e[0m", QSeqNumber);
+                        #endif
+                    break;
+
+                    case 1045:   // Extended Reverse Wrap Mode
+                        bExtReverseWrap = FALSE;
+
+                        #if ESC_LOGGING >= 3
+                        kprintf("\e[92mDisabling Extended Reverse Wrap Mode (%s) at $%lX\e[0m", bExtReverseWrap?"TRUE":"FALSE", RXBytes-1);
                         #endif
                     break;
 
@@ -2955,11 +3911,18 @@ static void DoEscape(u8 byte)
                                 VDP_setHorizontalScroll(BG_A, HScroll);
                                 VDP_setHorizontalScroll(BG_B, HScroll);
                             }
+                            else if (sv_Font == FONT_SOFTWARE)
+                            {
+                                VDP_setHorizontalScroll(BG_A, HScroll);
+                                VDP_setHorizontalScroll(BG_B, HScroll);
+                            }
                             else
                             {
                                 VDP_setHorizontalScroll(BG_A, (HScroll+4));
                                 VDP_setHorizontalScroll(BG_B, (HScroll  ));
                             }
+                            
+                            SW_SetBuffer();
 
                             // Set VScroll to main buffer vscroll
                             TTY_SetVScrollAbs(Saved_VScroll);
@@ -2968,18 +3931,25 @@ static void DoEscape(u8 byte)
                             {
                                 case 1047:
                                     // Clear alternate buffer
-                                    VDP_clearTileMapRect(BG_A, 40, 0, 40, 30);
-                                    VDP_clearTileMapRect(BG_B, 40, 0, 40, 30);
+                                    if (sv_Font == FONT_SOFTWARE)
+                                    {
+                                        SW_ClearScreen();
+                                    }
+                                    else
+                                    {
+                                        VDP_clearTileMapRect(BG_A, 40, 0, 40, 30);
+                                        VDP_clearTileMapRect(BG_B, 40, 0, 40, 30);
+                                    }
                                 break;
 
                                 case 1049:
                                     // Save cursor position from alternate buffer
                                     Saved_sx[1] = TTY_GetSX();
-                                    Saved_sy[1] = TTY_GetSY();
+                                    Saved_sy[1] = TTY_GetSY_A();
 
                                     // Restore cursor position to main buffer
                                     TTY_SetSX(Saved_sx[0]);
-                                    TTY_SetSY(Saved_sy[0]);
+                                    TTY_SetSY_A(Saved_sy[0]);
                                 break;
                             
                                 default:
@@ -2998,7 +3968,7 @@ static void DoEscape(u8 byte)
 
                     default:
                     #ifdef ESC_LOGGING
-                    kprintf("[91mUnimplemented mode ?%ul at $%lX[0m", QSeqNumber, RXBytes);
+                    kprintf("\e[91mUnimplemented mode ?%ul at $%lX\e[0m", QSeqNumber, RXBytes-1);
                     #endif
                     break;
                 }
@@ -3011,7 +3981,7 @@ static void DoEscape(u8 byte)
                 QSeqNumber = atoi16((char*)ESC_QBuffer);
 
                 #ifdef ESC_LOGGING
-                kprintf("[91mUnknown mode set and end character ?%u%c at $%lX[0m", QSeqNumber, byte, RXBytes);
+                kprintf("\e[91mUnknown mode set and end character ?%u%c at $%lX\e[0m", QSeqNumber, byte, RXBytes-1);
                 #endif
 
                 goto EndEscape;
@@ -3022,7 +3992,7 @@ static void DoEscape(u8 byte)
                 QSeqNumber = atoi16((char*)ESC_QBuffer);
 
                 #ifdef ESC_LOGGING
-                kprintf("[91mUnknown mode set and end character ?%u%c at $%lX[0m", QSeqNumber, byte, RXBytes);
+                kprintf("\e[91mUnknown mode set and end character ?%u%c at $%lX\e[0m", QSeqNumber, byte, RXBytes-1);
                 #endif
 
                 goto EndEscape;
@@ -3045,37 +4015,6 @@ static void DoEscape(u8 byte)
 
             return;
         }
-
-        case ' ':   // ??? Escape
-        {           
-             switch (byte)
-            {
-                case 'G':   // Use 8-bit controls (S8C1T) - "ESC ␣ G"
-                {
-                    #if ESC_LOGGING >= 2
-                    kprintf("[91mNot implemented: S8C1T -  Position: $%lX[0m", RXBytes);
-                    #endif
-                    goto EndEscape;
-                }
-
-                case 'F':   // Use 7-bit controls (S7C1T) - "ESC ␣ F"
-                {
-                    #if ESC_LOGGING >= 2
-                    kprintf("[91mNot implemented: S8C1T -  Position: $%lX[0m", RXBytes);
-                    #endif
-                    goto EndEscape;
-                }
-                   
-                default:
-                {
-                    #ifdef ESC_LOGGING
-                    kprintf("[91mUnhandled $%X  -  u8: %u  -  char: '%c'  -  EscType: ␣ (EscSeq: %u  -  Position: $%lX)[0m", byte, byte, (char)byte, ESC_BufferSeq, RXBytes);
-                    #endif
-                    goto EndEscape;
-                }
-            }
-            return;
-        }
         
         default:
             if (ESC_Seq == 1)
@@ -3087,15 +4026,42 @@ static void DoEscape(u8 byte)
                     case 0x0D:   // ??? Unknown ESC sequence
                     case 0x1B:   // ??? Unknown ESC ESC sequence
                         #ifdef ESC_LOGGING
-                        kprintf("[91mRan into unknown ESC <$%X> sequence at $%lX[0m", ESC_Type, RXBytes);
+                        kprintf("\e[91mRan into unknown ESC<$%X> sequence at $%lX -- Reinserting byte <$%X> into stream\e[0m", ESC_Type, RXBytes-1, byte);
                         #endif
 
-                        goto EndEscape;
+                        // Reinsert byte into stream again, stop escape parser and rerun
+                        RestartByte = byte;
+                        goto Restart;
+                        return;
                     break;
+
+                    case '#':   // ESC # <num>
+                    {
+                        SpecialCharacter = '#';
+                        NextByte = NC_SpecialByte;
+
+                        #ifdef ESC_LOGGING
+                        kprintf("\e[94mGot \"ESC # <num>\" Awaiting next byte... At $%lX\e[0m", RXBytes-1);
+                        #endif
+
+                        return;
+                    }
+
+                    case '%':   // ESC % <8/G/@>
+                    {
+                        SpecialCharacter = '%';
+                        NextByte = NC_SpecialByte;
+
+                        #ifdef ESC_LOGGING
+                        kprintf("\e[94mGot \"ESC %% <8/G/@>\" Awaiting next byte... At $%lX\e[0m", RXBytes-1);
+                        #endif
+
+                        return;
+                    }
 
                     case '=':   // ESC =    Application Keypad (DECKPAM).
                         #ifdef ESC_LOGGING
-                        kprintf("[91m\"ESC =\" NOT IMPLEMENTED! At $%lX[0m", RXBytes);
+                        kprintf("\e[91m\"ESC =\" NOT IMPLEMENTED! At $%lX\e[0m", RXBytes-1);
                         #endif
 
                         goto EndEscape;
@@ -3103,11 +4069,45 @@ static void DoEscape(u8 byte)
 
                     case '>':   // ESC >    Normal Keypad (DECKPNM), VT100.
                         #ifdef ESC_LOGGING
-                        kprintf("[91m\"ESC >\" NOT IMPLEMENTED! At $%lX[0m", RXBytes);
+                        kprintf("\e[91m\"ESC >\" NOT IMPLEMENTED! At $%lX\e[0m", RXBytes-1);
                         #endif
 
                         goto EndEscape;
                     break;
+
+                    case ' ':   // ESC ␣ <char/num>
+                    {
+                        SpecialCharacter = ' ';
+                        NextByte = NC_SpecialByte;
+
+                        #ifdef ESC_LOGGING
+                        kprintf("\e[94mGot \"ESC ␣ <char/num>\" Awaiting next byte... At $%lX\e[0m", RXBytes-1);
+                        #endif
+
+                        return;
+                    }
+
+                    case '6':   // ESC 6    Back Index (DECBI)
+                        #ifdef ESC_LOGGING
+                        kprintf("\e[93m\"ESC 6\" not fully implemented! (hack) At $%lX\e[0m", RXBytes-1);
+                        #endif
+
+                        // This isn't correct but w/e
+                        TTY_MoveCursor(TTY_CURSOR_LEFT, 1);
+
+                        goto EndEscape;
+                    break;
+
+                    case '7':   // Save Cursor (DECSC) (ESC 7)
+                    {
+                        TF_DECSC();
+                        goto EndEscape;
+                    }
+
+                    case '8':   // Restore Cursor (DECRC) (ESC 8)
+                    {
+                        goto DECRC; // Ends escape after jump
+                    }
 
                     case 'D':   // ESC D    Index (IND) - Cursor down - at bottom of region, scroll up
                     {
@@ -3119,7 +4119,7 @@ static void DoEscape(u8 byte)
                         if (TTY_GetSY_A() >= DMarginBottom) TTY_DrawScrollback(1);
                         else
                         {
-                            if (vNewlineConv == 1) TTY_SetSX(0);  // Convert \n to \n\r
+                            if (bLinefeedMode) TTY_SetSX(0);  // Convert \n to \n\r
 
                             TTY_MoveCursor(TTY_CURSOR_DOWN, 1);
                         }
@@ -3129,7 +4129,7 @@ static void DoEscape(u8 byte)
 
                     case 'M':   // ESC M    Reverse Index (RI) https://terminalguide.namepad.de/seq/a_esc_cm/  (Old note: Moves cursor one line up, scrolling if needed)
                         #ifdef ESC_LOGGING
-                        kprintf("[93m\"ESC M\" Reverse Index NOT IMPLEMENTED! At $%lX[0m", RXBytes);
+                        kprintf("\e[93m\"ESC M\" Reverse Index NOT IMPLEMENTED! At $%lX\e[0m", RXBytes-1);
                         #endif
 
                         if (TTY_GetSY_A() > DMarginTop) TTY_MoveCursor(TTY_CURSOR_UP, 1);
@@ -3158,7 +4158,7 @@ static void DoEscape(u8 byte)
                         HTS_Column[c] = 1;
 
                         #if ESC_LOGGING >= 4
-                        kprintf("[93mSetting column %u as tabstop[0m", c);
+                        kprintf("\e[93mSetting column %u as tabstop\e[0m", c);
                         #endif
 
                         goto EndEscape;
@@ -3167,7 +4167,7 @@ static void DoEscape(u8 byte)
                     case 'N':   // ESC N    Select G2 set for next character only
                     {
                         #ifdef ESC_LOGGING
-                        kprintf("[91m\"ESC N\" Select G2 set for next character only NOT IMPLEMENTED! At $%lX[0m", RXBytes);
+                        kprintf("\e[91m\"ESC N\" Select G2 set for next character only NOT IMPLEMENTED! At $%lX\e[0m", RXBytes-1);
                         #endif
 
                         goto EndEscape;
@@ -3176,7 +4176,7 @@ static void DoEscape(u8 byte)
                     case 'O':   // ESC O    Select G2 set for next character only
                     {
                         #ifdef ESC_LOGGING
-                        kprintf("[91m\"ESC O\" Select G3 set for next character only NOT IMPLEMENTED! At $%lX[0m", RXBytes);
+                        kprintf("\e[91m\"ESC O\" Select G3 set for next character only NOT IMPLEMENTED! At $%lX\e[0m", RXBytes-1);
                         #endif
 
                         goto EndEscape;
@@ -3185,22 +4185,43 @@ static void DoEscape(u8 byte)
                     case 'P':   // ESC P    Device Control String
                     {
                         #ifdef ESC_LOGGING
-                        kprintf("[91m\"ESC P\" Device Control String NOT IMPLEMENTED! At $%lX[0m", RXBytes);
+                        kprintf("\e[91m\"ESC P\" Device Control String NOT IMPLEMENTED! At $%lX\e[0m", RXBytes-1);
                         #endif
 
                         goto EndEscape;
                     }
 
+                    case 'V':   // ESC V    Start Protected Area (SPA)
+                        #ifdef ESC_LOGGING
+                        kprintf("\e[91m\"ESC V\" NOT IMPLEMENTED! At $%lX\e[0m", RXBytes-1);
+                        #endif
+
+                        goto EndEscape;
+                    break;
+
+                    case 'W':   // ESC W    End Protected Area (EPA)
+                        #ifdef ESC_LOGGING
+                        kprintf("\e[91m\"ESC W\" NOT IMPLEMENTED! At $%lX\e[0m", RXBytes-1);
+                        #endif
+
+                        goto EndEscape;
+                    break;
+
+                    case 'Z':   // ESC Z    Return Terminal ID (DECID)  -- Same as primary device attributes without parameters (DA1)
+                        NET_SendString("\e[?1;2c");
+                        goto EndEscape;
+                    break;
+
                     case 'c':   // RIS: Reset to initial state - Resets the device to its state after being powered on. 
                     {
-                        TTY_Init(TF_ClearScreen);
+                        TTY_Init(TF_ClearScreen | TF_ResetVariables);
                         goto EndEscape;
                     }
                     
                     case '\\':  // ESC \    String Terminator
                     {
                         #ifdef ESC_LOGGING
-                        kprintf("[93m\"ESC \\\" String Terminator At $%lX[0m", RXBytes);
+                        kprintf("\e[93m\"ESC \\\" String Terminator at $%lX\e[0m", RXBytes-1);
                         #endif
 
                         ESC_OSCBuffer[0] = '\0';
@@ -3213,43 +4234,40 @@ static void DoEscape(u8 byte)
                         goto EndEscape;
                     }
 
-                    case '7':   // Save Cursor (DECSC) (ESC 7)
+                    case '_':   // ... Should probably check for C1_7Bit == 0 here
                     {
-                        #if ESC_LOGGING >= 2
-                        kprintf("ESC 7");
+                        NextByte = NC_APC;
+
+                        #if ESC_LOGGING >= 3
+                        kprintf("\e[92mSkipping: ESC_ (interpreting as APC sequence) at $%lX\e[0m", RXBytes-1);
                         #endif
 
-                        u8 buffer = BufferSelect == 80 ? 1 : 0;
-
-                        Saved_sx[buffer] = TTY_GetSX();
-                        Saved_sy[buffer] = TTY_GetSY();
-
-                        Saved_OrgTop[buffer] = DMarginTop;
-                        Saved_OrgBottom[buffer] = DMarginBottom;
-
-                        goto EndEscape;
+                        return;
                     }
-
-                    case '8':   // Restore Cursor (DECRC) (ESC 8)
+                    
+                    case 'k':  // ESC k - tmux-specific escape sequence to set terminal title
                     {
-                        #if ESC_LOGGING >= 2
-                        kprintf("ESC 8");
+                        #ifdef ESC_LOGGING
+                        kprintf("\e[93m\"ESC k\" set title (tmux) at $%lX\e[0m", RXBytes-1);
                         #endif
 
-                        u8 buffer = BufferSelect == 80 ? 1 : 0;
+                        //goto EndEscape;
 
-                        TTY_SetSX(Saved_sx[buffer]);
-                        TTY_SetSY(Saved_sy[buffer]);
-    
-                        DMarginTop = Saved_OrgTop[buffer];
-                        DMarginBottom = Saved_OrgBottom[buffer];
+                        bOSC_GetType = FALSE;
+                        bOSC_GetString = TRUE;
+                        OSC_Type = 2;
+                        ESC_Type = ']';
 
-                        goto EndEscape;
+                        return;
                     }
                 
                     default:    // By default skip this round and parse it later
                         #if ESC_LOGGING >= 2
-                        if ((ESC_Type != '[') && (ESC_Type != ']') && (ESC_Type != '(') && (ESC_Type != ')')) kprintf("[91;5mSkipping: ESC %c ($%X) at $%lX[0m", ESC_Type, ESC_Type, RXBytes);
+                        if ((ESC_Type != '[') && (ESC_Type != ']') && (ESC_Type != '(') && (ESC_Type != ')')) kprintf("\e[91;5mSkipping: ESC %c ($%X) at $%lX\e[0m", ESC_Type, ESC_Type, RXBytes-1);
+                        #endif
+
+                        #if ESC_LOGGING >= 5
+                        kprintf("\e[92mSkipping: ESC<$%X> (%c) at $%lX\e[0m", ESC_Type, ESC_Type, RXBytes-1);
                         #endif
                     break;
                 }
@@ -3263,6 +4281,22 @@ static void DoEscape(u8 byte)
 
     EndEscape:
     {
+        ResetSequence();
+        return;
+    }
+
+    Restart:
+    {
+        ResetSequence();
+        RXBytes--;
+        TELNET_ParseRX(RestartByte);
+
+        return;
+    }
+}
+
+static void ResetSequence()
+{
         NextByte = NC_Data;
         ESC_Seq = 0;
         ESC_Type = 0;
@@ -3295,8 +4329,39 @@ static void DoEscape(u8 byte)
         ESC_QBuffer[4] = '\0';
         ESC_QBuffer[5] = '\0';
 
-        return;
-    }
+        SpecialCharacter = 0;
+}
+
+void TF_DECSC()
+{
+        u8 buffer = BufferSelect == 80 ? 1 : 0;
+
+        if (vDECOM)
+        {
+            // Checkme: what if margin left/top is greater than sx/sy ?
+            Saved_sx[buffer] = TTY_GetSX() - DMarginLeft;
+            Saved_sy[buffer] = TTY_GetSY_A() - DMarginTop;
+        }
+        else
+        {
+            Saved_sx[buffer] = TTY_GetSX();
+            Saved_sy[buffer] = TTY_GetSY_A();
+        }
+
+        Saved_DECOM = vDECOM;
+        Saved_Prot[buffer] = CharProtAttr;
+
+        bCursorSaved[buffer] = TRUE;
+
+        #if ESC_LOGGING >= 4
+        kprintf("Saving cursor: s_sx: %d - s_sy: %d", Saved_sx[buffer], Saved_sy[buffer]);
+        #endif
+}
+
+void TF_CUB(u8 num)
+{
+    TTY_MoveCursor(TTY_CURSOR_LEFT, num);
+    return;
 }
 
 static inline void IAC_SuggestNAWS()
@@ -3480,7 +4545,7 @@ static void DoIAC(u8 byte)
 
                             u8 NewLM = (IAC_SubNegotiationBytes[1] & (LMSM_EDIT | LMSM_TRAPSIG));
 
-                            if (NewLM == vLineMode)
+                            if (NewLM == v_LineMode)
                             {
                                 #ifdef IAC_LOGGING
                                 kprintf("New linemode == current linemode; ignoring...");
@@ -3488,18 +4553,18 @@ static void DoIAC(u8 byte)
                             }
                             else
                             {
-                                vLineMode = NewLM;
+                                v_LineMode = NewLM;
 
                                 NET_SendChar(TC_IAC);
                                 NET_SendChar(TC_SB);
                                 NET_SendChar(TO_LINEMODE);
                                 NET_SendChar(LM_MODE);
-                                NET_SendChar((vLineMode | LMSM_MODEACK));
+                                NET_SendChar((v_LineMode | LMSM_MODEACK));
                                 NET_SendChar(TC_IAC);
                                 NET_SendChar(TC_SE);
 
                                 #ifdef IAC_LOGGING
-                                kprintf("Response: IAC SB LINEMODE MODE %u IAC SE", (vLineMode | LMSM_MODEACK));
+                                kprintf("Response: IAC SB LINEMODE MODE %u IAC SE", (v_LineMode | LMSM_MODEACK));
                                 #endif
                             }
                             break;
@@ -3519,7 +4584,7 @@ static void DoIAC(u8 byte)
                         
                         default:
                         #ifdef IAC_LOGGING
-                        kprintf("[91mError: Unhandled Linemode. case (IAC_SubNegotiationBytes[0] = $%X)[0m", IAC_SubNegotiationBytes[0]);
+                        kprintf("\e[91mError: Unhandled Linemode. case (IAC_SubNegotiationBytes[0] = $%X)\e[0m", IAC_SubNegotiationBytes[0]);
                         #endif
                         break;
                     }
@@ -3565,7 +4630,7 @@ static void DoIAC(u8 byte)
                 {
                     #ifdef IAC_LOGGING
                     kprintf("Server: IAC SB LOGOUT xyz IAC SE");
-                    kprintf("[91mResponse: NONE - NOT IMPLEMENTED![0m");
+                    kprintf("\e[91mResponse: NONE - NOT IMPLEMENTED!\e[0m");
                     #endif
 
                     break;
@@ -3630,7 +4695,7 @@ static void DoIAC(u8 byte)
                 }
 
                 case TO_ECHO:
-                    vDoEcho = 1;
+                    bNoEcho = TRUE;
                     #ifdef IAC_LOGGING
                     kprintf("Server: IAC WILL ECHO");
                     #endif
@@ -3671,7 +4736,7 @@ static void DoIAC(u8 byte)
                 
                 default:
                     #ifdef IAC_LOGGING
-                    kprintf("[91mError: Unhandled TC_WILL option case (IAC_Option = $%X)[0m", IAC_Option);
+                    kprintf("\e[91mError: Unhandled TC_WILL option case (IAC_Option = $%X)\e[0m", IAC_Option);
                     #endif
                 break;
             }
@@ -3684,7 +4749,7 @@ static void DoIAC(u8 byte)
             switch (IAC_Option)
             {
                 case TO_ECHO:
-                    vDoEcho = 0;
+                    bNoEcho = FALSE;
                     #ifdef IAC_LOGGING
                     kprintf("Server: IAC WONT ECHO");
                     #endif
@@ -3692,7 +4757,7 @@ static void DoIAC(u8 byte)
                 
                 default:
                     #ifdef IAC_LOGGING
-                    kprintf("[91mError: Unhandled TC_WONT option case (IAC_Option = $%X)[0m", IAC_Option);
+                    kprintf("\e[91mError: Unhandled TC_WONT option case (IAC_Option = $%X)\e[0m", IAC_Option);
                     #endif
                 break;
             }
@@ -3721,7 +4786,7 @@ static void DoIAC(u8 byte)
                     NET_SendChar(TC_IAC);
                     NET_SendChar(TC_WILL);
                     NET_SendChar(TO_ECHO);
-                    vDoEcho = 1;
+                    bNoEcho = TRUE;
                     #ifdef IAC_LOGGING
                     kprintf("Response: IAC WILL ECHO");
                     #endif
@@ -3907,7 +4972,7 @@ static void DoIAC(u8 byte)
                 
                 default:
                     #ifdef IAC_LOGGING
-                    kprintf("[91mError: Unhandled TC_DO option case (IAC_Option = $%X)[0m", IAC_Option);
+                    kprintf("\e[91mError: Unhandled TC_DO option case (IAC_Option = $%X)\e[0m", IAC_Option);
                     #endif
                 break;
             }
@@ -3923,7 +4988,7 @@ static void DoIAC(u8 byte)
                     NET_SendChar(TC_IAC);
                     NET_SendChar(TC_WONT);
                     NET_SendChar(TO_ECHO);
-                    vDoEcho = 0;
+                    bNoEcho = FALSE;
 
                     #ifdef IAC_LOGGING
                     kprintf("Response: IAC WONT ECHO");
@@ -3942,7 +5007,7 @@ static void DoIAC(u8 byte)
                 
                 default:
                     #ifdef IAC_LOGGING
-                    kprintf("[91mError: Unhandled TC_DONT option case (IAC_Option = $%X)[0m", IAC_Option);
+                    kprintf("\e[91mError: Unhandled TC_DONT option case (IAC_Option = $%X)\e[0m", IAC_Option);
                     #endif
                 break;
             }
@@ -3953,14 +5018,14 @@ static void DoIAC(u8 byte)
         case TC_DM:
         {
             #ifdef IAC_LOGGING
-            kprintf("[93mGot IAC TC_DM[0m");
+            kprintf("\e[93mGot IAC TC_DM\e[0m");
             #endif
             break;
         }
     
         default:
             #ifdef IAC_LOGGING
-            kprintf("[91mError: Unhandled command case (IAC_Command = $%X -- IAC_Option = $%X)[0m", IAC_Command, IAC_Option);
+            kprintf("\e[91mError: Unhandled command case (IAC_Command = $%X -- IAC_Option = $%X)\e[0m", IAC_Command, IAC_Option);
             #endif
         break;
     }

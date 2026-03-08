@@ -8,6 +8,8 @@
 #include "Mouse.h"          // MHitRect
 #include "system/Time.h"
 
+#include "Terminal.h"   // TEMP for cursor debug
+
 static SM_Window *InfoWindow = NULL;
 static s16 ScrollY = 0;
 static s8 sIdx = 0;     // Selector idx between tab + buttons
@@ -143,8 +145,8 @@ static void DrawSysMonTab()
 
     
     // - Network speed -
-    u32 downspeed = (RXBytes - Lastdown) * 8;
-    u32 upspeed = (TXBytes - Lastup) * 8;
+    u32 downspeed = (RXBytes - Lastdown) * 8;//10;  // 10 = 8 data + start + stop bit
+    u32 upspeed = (TXBytes - Lastup) * 8;//10;  // 10 = 8 data + start + stop bit
 
     if (downspeed >= 1000)
     {
@@ -263,6 +265,17 @@ static void DrawInfoTab()
 
     snprintf(buf, 40, "VRAM size: %u KiB", bVRAM_128KB ? 128 : 64);
     UI_DrawText(0, i++, PAL1, buf);
+
+    // TEMP
+    i++;    
+    i++;
+    UI_DrawText(0, i++, PAL1, "Terminal cursor debug");
+
+    snprintf(buf, 40, "sx: %d - sy_a: %d", TTY_GetSX(), TTY_GetSY_A());
+    UI_DrawText(0, i++, PAL1, buf);
+
+    snprintf(buf, 40, "sy: %d - vscroll: %d", TTY_GetSY(), TTY_GetVScroll());
+    UI_DrawText(0, i++, PAL1, buf);
 }
 
 static void UpdateView()
@@ -371,7 +384,7 @@ u16 InfoView_Open()
 
     if (InfoWindow == NULL)
     {
-        printf("[91mFailed to allocate memory;\nCan't create InfoWindow[0m\n");
+        printf("\e[91mFailed to allocate memory;\nCan't create InfoWindow\e[0m\n");
         return 1;
     }
 

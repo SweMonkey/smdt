@@ -7,6 +7,7 @@ extern bool sv_bScreensaver;
 extern s16 InactiveCounter;
 
 void ScreensaverInit();
+void ScrSetupSprite();
 void ScreensaverTick();
 
 #endif // SCREENSAVER_H_INCLUDED

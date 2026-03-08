@@ -143,7 +143,8 @@ void FS_ListDir(char *dir)
         {
             case LFS_TYPE_DIR:
             {
-                printf("[94m%-30s[0m\n", info.name);
+                printf("\e[94m%-30s\e[0m\n", info.name);
+                Stdout_Flush();
                 break;
             }
 
@@ -168,7 +169,8 @@ void FS_ListDir(char *dir)
             case LFS_TYPE_REG:
             {
                 u8 nlen = strlen(info.name);
-                printf("%s%-30s[0m %4lu %s\n", ((info.name[nlen-2] == 'i') && (info.name[nlen-1] == 'o') ? "[95m" : ""), info.name, info.size >= 1024 ? info.size/1024 : info.size, info.size >= 1024 ? "KB" : "B");
+                printf("%s%-30s\e[0m %4lu %s\n", ((info.name[nlen-2] == 'i') && (info.name[nlen-1] == 'o') ? "\e[95m" : ""), info.name, info.size >= 1024 ? info.size/1024 : info.size, info.size >= 1024 ? "KB" : "B");
+                Stdout_Flush();
                 break;
             }
 
@@ -177,7 +179,7 @@ void FS_ListDir(char *dir)
     }
 
     OnExit:
-        printf("[0m");
+        printf("\e[0m\n");
         lfs_dir_close(PList[ps].lfs_type, &d);
     OnError:
         FS_SetActivePartition(old_part);

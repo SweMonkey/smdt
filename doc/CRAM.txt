@@ -40,6 +40,6 @@ Row     Column      Usage                                               Index
 2       12-15       2+2 colours for 8 colour 4x8 fonts (Text+AA)        44 ... 47
 3       12-15       2+2 colours for 8 colour 4x8 fonts (Text+AA)        60 ... 63
 
-2       0-15        16 colours for 8x8 fonts                            32 ... 47
+2       0-15        16 colours for 8x8 & software rendered fonts        32 ... 47
 Row     Column      Usage                                               Index
 

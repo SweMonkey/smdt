@@ -4,10 +4,10 @@ __attribute__((externally_visible))
 const ROMHeader rom_header = 
 {
     "SEGA MEGA DRIVE ",                                 // System type
-    "(C)DECEPTSOFT'25",                                 // Copyright/Release date
+    "(C)DECEPTSOFT'26",                                 // Copyright/Release date
     "SMDT                                            ", // Domestic title
     "SMDT                                            ", // Overseas title
-    "GM DSTC2017-33",                                   // Serial number
+    "GM DSTC2017-34",                                   // Serial number
     0x000,                                              // Checksum
     "JKRDM           ",                                 // Device support
     0x00000000,                                         // ROM start address

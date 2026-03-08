@@ -3,6 +3,7 @@
 #include "Utils.h"
 #include "Screensaver.h"
 #include "devices/MegaMouse.h"
+#include "system/Sprite.h"
 
 #define MOUSE_SPEED 1
 
@@ -29,12 +30,17 @@ void Mouse_Init()
     MouseX = 156;
     MouseY = 108;
 
+    Mouse_SetupSprite();
+}
+
+void Mouse_SetupSprite()
+{
     u16 ps = (sv_PointerStyle ? 0x6000 : 0x2000) | 0x8017;  // 0x6000 = PAL3, 0x2000 = PAL1, 0x8000 = High prio, 0x17 = pointer tile
 
-    SetSprite_Y(SPRITE_ID_POINTER, 0);
-    SetSprite_SIZELINK(SPRITE_ID_POINTER, SPR_SIZE_1x1, 0); // Redundant; This is also setup during startup in main.c
-    SetSprite_TILE(SPRITE_ID_POINTER, ps);
-    SetSprite_X(SPRITE_ID_POINTER, 0);
+    SetSprite_Y(SPRITE_POINTER, 0);
+    SetSprite_SIZELINK(SPRITE_POINTER, SPR_SIZE_1x1, 0); // Redundant; This is also setup during startup in Init.c
+    SetSprite_TILE(SPRITE_POINTER, ps);
+    SetSprite_X(SPRITE_POINTER, 0);
 }
 
 void Mouse_Poll()
@@ -61,8 +67,8 @@ void Mouse_Poll()
 
         if (MouseX || MouseY)
         {
-            SetSprite_X(SPRITE_ID_POINTER, MouseX+128);
-            SetSprite_Y(SPRITE_ID_POINTER, MouseY+128);
+            SetSprite_X(SPRITE_POINTER, MouseX+128);
+            SetSprite_Y(SPRITE_POINTER, MouseY+128);
             InactiveCounter = -1;   // Reset screensaver counter
         }
 

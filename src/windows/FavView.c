@@ -951,7 +951,7 @@ u16 FavView_Open()
 
     if (FavWindow == NULL)
     {
-        printf("[91mFailed to allocate memory;\nCan't create FavWindow[0m\n");
+        printf("\e[91mFailed to allocate memory;\nCan't create FavWindow\e[0m\n");
         return 1;
     }
 

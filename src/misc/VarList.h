@@ -20,4 +20,12 @@ extern SM_VarList VarList[];
 
 void getenv(const char *name, char *ret);
 
+
+extern bool sv_bLinefeedMode;
+extern bool sv_bNoEcho;
+extern u8 sv_LineMode;
+extern u8 sv_Backspace;
+extern bool sv_bWrapMode;
+extern bool sv_bEnableUTF8;
+
 #endif // VARLIST_H_INCLUDED

@@ -1,18 +1,35 @@
 Reserved and free VRAM blocks
 Note: Addresses are in tile units (/32)
 
-$0   - $F       Background colour blocks
+VRAM setup when using any font but the software rendered font:
+$0   - $F       Background colour blocks used for 8x8 fonts
 $10  - $15      Cursor tiles (Block/Line/Bar 8x8/4x8)
 $16             Blank/invisible cursor tile
 $17             Mouse pointer cursor
-$18  - $1F      Icons
-$20  - $2F      Screensaver sprite tiles (16 tiles)
-$30  - $3F      Free (16 tiles)
-$40  - $23F     Terminal ASCII font
-$240 - $43F     Terminal ASCII font duplicate used for 80 column colour support otherwise free (480 tiles)
-$440 - $4FF     UI font and window tiles
+$18  - $20      Icons
+$21  - $2F      Free (16 tiles)
+$30  - $3F      Screensaver sprite tiles (16 tiles)
+$40 -  $FF      UI font and window tiles
+$100 - $2FF     Terminal ASCII font
+$300 - $4FF     Terminal ASCII font duplicate used for 80 column colour support otherwise free (480 tiles)
 $500 - $55F     HScroll table
 $560 - $57F     SAT
 $580 - $5FF     Window table
 $600 - $6FF     BG A table
 $700 - $7FF     BG B table
+
+
+VRAM setup when using the software renderer:
+$0   - $F       Background colour blocks used for 8x8 fonts
+$10  - $15      Cursor tiles (Block/Line/Bar 8x8/4x8)
+$16             Blank/invisible cursor tile
+$17             Mouse pointer cursor
+$18  - $20      Icons
+$21  - $2F      Free (16 tiles)
+$30  - $3F      Screensaver sprite tiles (16 tiles)
+$40 -  $FF      UI font and window tiles
+$100 - $5FF     Framebuffer for screen (40x32 tiles) $2000-$BFFF=$9FFF
+$600 - $65F     HScroll table
+$660 - $67F     SAT
+$680 - $6FF     Window table
+$700 - $7FF     BG A + B table (Shared)

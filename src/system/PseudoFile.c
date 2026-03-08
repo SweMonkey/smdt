@@ -70,8 +70,8 @@ static void MoreFunc()
 {
     u8 kbdata = 0;
 
-    TELNET_ParseRX('\n');
-    TELNET_ParseRX('');
+    //TELNET_ParseRX('\n');
+    TELNET_ParseRX('\e');
     TELNET_ParseRX('[');
     TELNET_ParseRX('7');
     TELNET_ParseRX('m');
@@ -81,11 +81,11 @@ static void MoreFunc()
     TELNET_ParseRX('r');
     TELNET_ParseRX('e');
     TELNET_ParseRX('>');
-    TELNET_ParseRX(' ');
-    TELNET_ParseRX('');
+    TELNET_ParseRX('\e');
     TELNET_ParseRX('[');
     TELNET_ParseRX('0');
     TELNET_ParseRX('m');
+    TELNET_ParseRX(' ');
 
     while (1)
     {
@@ -97,7 +97,7 @@ static void MoreFunc()
         if (is_AnyKey())
         {
             TTY_SetSX(0);
-            TTY_MoveCursor(TTY_CURSOR_UP, 1); // Only move up in case the initial \n is printed above
+            //TTY_MoveCursor(TTY_CURSOR_UP, 1); // Only move up in case the initial \n is printed above
             Buffer_Flush(&TxBuffer);
             break;
         }
@@ -144,7 +144,7 @@ void Stdout_Flush()
     {
         TELNET_ParseRX(data);
 
-        if ((TTY_GetSY() - start) >= (bPALSystem?27:25))
+        if ((TTY_GetSY() - start) > (bPALSystem?27:25))
         {
             start = TTY_GetSY();
             MoreFunc();

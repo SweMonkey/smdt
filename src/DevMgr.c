@@ -12,6 +12,7 @@
 #include "Utils.h"                  // Definitions
 #include "Input.h"                  // Input_JP
 #include "system/PseudoFile.h"
+#include "system/StatusBar.h"
 
 /*
 ID	        Peripheral
@@ -145,7 +146,7 @@ void DetectDevices()
     if (ps2_r)
     {
         DevList[DevSeq++] = &DRV_KBPS2;
-        TRM_SetStatusIcon(ICO_KB_OK, ICO_POS_0);
+        SB_SetStatusIcon(ICO_KB_OK, ICO_POS_0);
         bKeyboard = TRUE;
     }
 
@@ -159,7 +160,7 @@ void DetectDevices()
         if (KB_Saturn_Init())
         {
             DevList[DevSeq++] = &DRV_KBSATURN;
-            TRM_SetStatusIcon(ICO_KB_OK, ICO_POS_0);
+            SB_SetStatusIcon(ICO_KB_OK, ICO_POS_0);
             bKeyboard = TRUE;
         }
     }
@@ -177,14 +178,14 @@ void DetectDevices()
 
             if (!bKeyboard)
             {
-                TRM_SetStatusIcon(ICO_MOUSE_OK, ICO_POS_0);
+                SB_SetStatusIcon(ICO_MOUSE_OK, ICO_POS_0);
             }
         }
     }
 
     if (!bKeyboard)
     {
-        Stdout_Push(" [93mNo keyboard found.[0m\n");
+        Stdout_Push(" \e[93mNo keyboard found.\e[0m\n");
         kprintf("No keyboard found - Press F1 to continue");
     }
 
@@ -208,7 +209,7 @@ void DetectDevices()
 
         if (!bKeyboard && (vKB_BATStatus == 0))
         {
-            TRM_SetStatusIcon(ICO_JP_OK, ICO_POS_0);
+            SB_SetStatusIcon(ICO_JP_OK, ICO_POS_0);
         }
     }
 
@@ -234,13 +235,13 @@ void DetectDevices()
 
     if (rb == 0xDEADBEEF)
     {
-        Stdout_Push(" [97m128 KB VRAM system[0m\n");
+        Stdout_Push(" \e[97m128 KB VRAM system\e[0m\n");
         bVRAM_128KB = TRUE;
     }
     else
     {
         //VDP_setReg(1, old_reg);   // Reset 128 KB VRAM bit
-        Stdout_Push(" [97m64 KB VRAM system[0m\n");
+        Stdout_Push(" \e[97m64 KB VRAM system\e[0m\n");
         bVRAM_128KB = FALSE;
     }
 
@@ -254,7 +255,7 @@ void DetectDevices()
     SetDevicePort(&DRV_UART, sv_ListenPort);
     *((vu8*) DRV_UART.SCtrl) = 0x38;
     
-    Stdout_Push(" [97mChecking for network adapters...[0m\n");
+    Stdout_Push(" \e[97mChecking for network adapters...\e[0m\n");
 
     #ifndef EMU_BUILD
     u8 xpn_r = 0;
@@ -270,7 +271,7 @@ void DetectDevices()
         NET_SetGetIPFunc(RLN_GetIP);
         NET_SetPingFunc(RLN_PingIP);
         
-        Stdout_Push(" [92mRLN: RetroLink found[0m\n");
+        Stdout_Push(" \e[92mRLN: RetroLink found\e[0m\n");
     }
     else if ((xpn_r = XPN_Initialize())) // Check if xPort device is present
     {
@@ -289,10 +290,10 @@ void DetectDevices()
         switch (xpn_r)
         {
             case 1:
-                Stdout_Push(" [92mXPN: xPort module OK[0m\n");
+                Stdout_Push(" \e[92mXPN: xPort module OK\e[0m\n");
             break;
             case 2:
-                Stdout_Push(" [91mXPN: Error[0m\n");
+                Stdout_Push(" \e[91mXPN: Error\e[0m\n");
             break;
         
             default:
@@ -305,11 +306,11 @@ void DetectDevices()
         bRLNetwork = FALSE;
         bXPNetwork = FALSE;
 
-        Stdout_Push(" [93mNo network adapters found[0m\n");
-        Stdout_Push(" [97mListening on built in UART[0m\n");
+        Stdout_Push(" \e[93mNo network adapters found\e[0m\n");
+        Stdout_Push(" \e[97mListening on built in UART\e[0m\n");
 
-        TRM_SetStatusIcon(ICO_NET_ERROR, ICO_POS_1);
-        TRM_SetStatusIcon(ICO_NET_ERROR, ICO_POS_2);
+        SB_SetStatusIcon(ICO_NET_ERROR, ICO_POS_1);
+        SB_SetStatusIcon(ICO_NET_ERROR, ICO_POS_2);
     }
 }
 

@@ -36,7 +36,7 @@ u16 Buffer_GetNum(Buffer *b)
 /// @param b Pointer to buffer
 /// @param data Byte data to push into buffer
 /// @return FALSE is returned if the buffer is full (data is dropped). TRUE on successful push
-bool Buffer_Push(Buffer *b, u8 data)
+inline __attribute__((always_inline)) bool Buffer_Push(Buffer *b, u8 data)
 {
     u16 next;
 
@@ -74,7 +74,7 @@ bool Buffer_PushString(Buffer *b, const char *str)
 /// @param b Pointer to buffer
 /// @param data Return byte to pop data into
 /// @return FALSE is returned if the buffer is empty. TRUE on successful pop.
-bool Buffer_Pop(Buffer *b, u8 *data)
+inline __attribute__((always_inline)) bool Buffer_Pop(Buffer *b, u8 *data)
 {
     u16 next;
 

@@ -6,16 +6,18 @@
 #include "Utils.h"
 #include "Network.h"
 #include "Keyboard.h"       // bKB_Ctrl
+#include "SwRenderer.h"
 #include "misc/CMDFunc.h"
 
 #include "system/PseudoFile.h"
 #include "system/Time.h"
 #include "system/Filesystem.h"
+#include "system/StatusBar.h"
 
 #define INPUT_SIZE 128
 #define INPUT_SIZE_ARGV 32
 
-u8 sv_TerminalFont = FONT_4x8_16;
+u8 sv_TerminalFont = FONT_SOFTWARE;
 u8 ClockLastTime = 60;
 static char TimeString[9];
 static bool bRunningCMD = FALSE;
@@ -34,7 +36,7 @@ int argc = 0;                // Argument count
 
 #ifdef EMU_BUILD
 static u32 cputime;
-static char title[18];
+static char title[40];
 #endif
 
 
@@ -125,7 +127,7 @@ static void RunCommand()
     // Or let the user know that the command was not found
     if (strlen(argv[0]) > 0)
     {
-        printf("Command \"[36m%s[0m\" not found...\n", argv[0]);
+        printf("Command \"\e[36m%s\e[0m\" not found...\n", argv[0]);
     }
 
     Exit:
@@ -148,7 +150,6 @@ static void RunCommand()
     // Print CWD
     if (isCurrentState(PS_Terminal) && StateHasChanged() == FALSE)
     {
-        Stdout_PushByte('\n');
         PrintCWD();
     }
 
@@ -248,6 +249,10 @@ static u8 DoBackspace()
     {
         VDP_setTileMapXY(BG_B, TILE_ATTR_FULL(2, 0, 0, 0, 0), TTY_GetSX()+BufferSelect, sy);
     }
+    else if (sv_Font == FONT_SOFTWARE)
+    {
+        SW_PrintChar(' ');
+    }
     else
     {
         VDP_setTileMapXY(!(TTY_GetSX() & 1), TILE_ATTR_FULL(2, 0, 0, 0, 0), (TTY_GetSX()+BufferSelect)>>1, sy);
@@ -267,14 +272,17 @@ void ShellDrawClockUpdate()
 
 static void SetupTerminal()
 {
-    TTY_SetFontSize(sv_TerminalFont);
+    sv_Font = sv_TerminalFont;
     TELNET_Init(TF_Everything);
 
     // Variable overrides (TTY/Telnet)
-    vDoEcho = 0;
-    vLineMode = LMSM_EDIT;
-    vNewlineConv = 1;
-    sv_bWrapAround = TRUE;
+    bNoEcho = FALSE;
+    v_LineMode = LMSM_EDIT;
+    bLinefeedMode = TRUE;
+    bWrapMode = TRUE;
+    bInsertMode = FALSE;
+    bReverseWrap = TRUE;
+    bEnableUTF8 = TRUE;
 
     // Shell
     bRunningCMD = FALSE;
@@ -290,20 +298,41 @@ static void SetupTerminal()
     //DoTimeSync(sv_TimeServer);
     ShellDrawClockUpdate();
 
-    Buffer_Flush(&TxBuffer);
-    Buffer_Flush(&RxBuffer);
     ClearArgv();
     MEM_pack();
+}
+
+static void ReadHistory()
+{
+    SM_File *f = F_Open("/sram/system/history.txt", FM_RDONLY);
+    if (f)
+    {
+        F_Read(LastCommand[0], INPUT_SIZE, 1, f);
+        F_Read(LastCommand[1], INPUT_SIZE, 1, f);
+        F_Close(f);
+    }
+}
+
+static void WriteHistory()
+{
+    SM_File *f = F_Open("/sram/system/history.txt", FM_WRONLY | FM_CREATE);
+    if (f)
+    {
+        F_Write(LastCommand[0], INPUT_SIZE, 1, f);
+        F_Write(LastCommand[1], INPUT_SIZE, 1, f);
+        F_Close(f);
+    }
 }
 
 u16 Enter_Terminal(u8 argc, char *argv[])
 {
     SetupTerminal();
     printf("SMDT Command Shell v0.3\n");
-    printf("Type [32mhelp[0m for available commands%s", sv_Font?" - ":"\n");
-    printf("Press [32mF8[0m for quick menu\n\n");
+    printf("Type \e[32mhelp\e[0m for available commands%s", sv_Font?" - ":"\n");
+    printf("Press \e[32mF8\e[0m for quick menu\n\n");
 
     PrintCWD();
+    ReadHistory();
 
     return EXIT_SUCCESS;
 }
@@ -317,17 +346,19 @@ void ReEnter_Terminal()
 void Exit_Terminal()
 {
     Telnet_Quit();
+    WriteHistory();
 }
 
 void Reset_Terminal()
 {
-    TTY_Init(TF_ClearScreen);
+    TTY_Init(TF_ClearScreen | TF_ResetVariables);
 }
 
 void Run_Terminal()
 {
     if ((argc > 0) && (bRunningCMD == FALSE))
     {
+        //WriteHistory();   // Disabled to avoid hiccup when running commands - History may not be saved unless the user exits the shell before shutdown (power off)
         RunCommand();
     }
 
@@ -341,7 +372,7 @@ void Run_Terminal()
     #ifdef EMU_BUILD
     if (SecondElapsed(&cputime, 1))
     {
-        snprintf(title, 17, "%s - CPU: %03u%c", STATUS_TEXT_SHORT, SYS_getCPULoad(), '%');
+        snprintf(title, 36, "%s Debug - CPU: %03u%c", STATUS_TEXT_SHORT, SYS_getCPULoad(), '%');
         TRM_DrawText(title, 1, 0, PAL1);
     }
     #endif

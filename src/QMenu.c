@@ -12,7 +12,11 @@
 #include "IRC.h"            // IRC_SetFontSize
 #include "WinMgr.h"
 #include "Palette.h"
+
 #include "misc/ConfigFile.h"
+#include "misc/VarList.h"
+#include "system/Sprite.h"
+#include "system/StatusBar.h"
 
 // Forward decl.
 void WINFN_Reset();
@@ -44,9 +48,13 @@ void WINFN_IrcMsgFilter();
 void WINFN_CharSet();
 void WINFN_Brightness();
 void WINFN_Pointer();
+void WINFN_ColourPalette();
+void WINFN_Wrapmode();
+void WINFN_ShowDateIRC();
 
 // Extern forward decl.
 void PrintCWD();
+void ShellDrawClockUpdate();
 
 // Local QMenu forward decl.
 static void DrawEntry(u8 idx);
@@ -73,7 +81,8 @@ u8 sv_QBGCL  = 0;    // Selected BG colour entry in quick menu
 u8 sv_QFGCL  = 2;    // Selected FG colour entry in quick menu
 u8 sv_QCURCL = 0;    // Selected cursor colour entry in quick menu
 
-extern u8 sv_EnableUTF8;
+extern bool bEnableUTF8;
+extern bool sv_bEnableUTF8;
 extern u8 sv_IRCFont;
 extern u8 sv_TelnetFont;
 extern u8 sv_TerminalFont;
@@ -161,15 +170,16 @@ static struct s_menu
      "CRLF"}
 },
 {//6
-    4,
+    5,
     0, 255, 0,
     NULL, NULL, NULL,
     "Variables",
-    {5, 21, 22, 29},
+    {5, 21, 22, 29, 39},
     {"Line ending",
      "Local echo",
      "Line mode",
-     "Backspace key"}
+     "Backspace key",
+     "Wrap mode",}
 },
 {//7
     6,
@@ -185,14 +195,15 @@ static struct s_menu
      "P3:1= <?>"}
 },
 {//8
-    5,
+    6,
     0, 255, 0,
     NULL, NULL, NULL,
     "Colours",
-    {17, 18, 24, 26, 35},
+    {17, 18, 24, 38, 26, 35},
     {"BG Colour",
      "4x8 Mono colour",
-     "4x8 8 colour set",
+     "4x8 8 Colour set",
+     "16 Colour palette",
      "Cursor & Pointer",
      "Brightness"}
 },
@@ -220,16 +231,17 @@ static struct s_menu
      "300 Baud"}
 },
 {//11
-    5,
+    6,
     0, 255, 0,
     NULL, WINFN_Font_Term, NULL,
     "Terminal font",
-    {254, 254, 254, 254, 254},
+    {254, 254, 254, 254, 254, 254},
     {"8x8 16 Colour",
      "8x8 16 Colour bold",
      "4x8 Mono",
      "4x8  8 Colour",
-     "4x8 16 Colour NoInv"}
+     "4x8 16 Colour NoInv",
+     "4x8 Software font"}
 },
 {//12
     2,
@@ -241,16 +253,17 @@ static struct s_menu
      "SV (Swedish)"}
 },
 {//13
-    6,
+    7,
     0, 255, 0,
     NULL, WINFN_DebugSel, NULL,
     "Debug",
-    {15, 23, 255, 255, 255, 255},
+    {15, 23, 255, 255, 255, 255, 255},
     {"TX/RX stats",
      "RX Buffer stats",
      "HexView - RX",
      "HexView - TX",
      "HexView - Stdout",
+     "HexView - Screen",
      "System Info"}
 },
 {//14
@@ -317,16 +330,17 @@ static struct s_menu
      "+16"}
 },
 {//20
-    5,
+    6,
     0, 255, 0,
     NULL, WINFN_Font_Telnet, NULL,
     "Telnet font",
-    {254, 254, 254, 254, 254},
+    {254, 254, 254, 254, 254, 254},
     {"8x8 16 Colour",
      "8x8 16 Colour bold",
      "4x8 Mono",
      "4x8  8 Colour",
-     "4x8 16 Colour NoInv"}
+     "4x8 16 Colour NoInv",
+     "4x8 Software Font"}
 },
 {//21
     2,
@@ -427,13 +441,14 @@ static struct s_menu
      "Character set"}
 },
 {//31
-    2,
+    3,
     0, 255, 0,
     NULL, NULL, NULL,
     "IRC",
-    {32, 33},
+    {32, 33, 40},
     {"Word wrap",
-     "Message filters"}
+     "Message filters",
+     "Time stamp"}
 },
 {//32
     2,
@@ -495,7 +510,36 @@ static struct s_menu
     {254, 254},
     {"Normal",
      "Inverted"}
-},};
+},
+{//38
+    3,
+    0, 255, 0,
+    NULL, WINFN_ColourPalette, NULL,
+    "16 Colour palette",
+    {254, 254, 254},
+    {"Xterm",
+     "CGA/EGA/VGA",
+     "Windows"}
+},
+{//39
+    2,
+    0, 255, 0,
+    NULL, WINFN_Wrapmode, NULL,
+    "Wrap mode",
+    {254, 254},
+    {"Off",
+     "On"}
+},
+{//40
+    2,
+    0, 255, 0,
+    NULL, WINFN_ShowDateIRC, NULL,
+    "Time stamp",
+    {254, 254},
+    {"Off",
+     "On"}
+},
+};
 
 static const MRect qrect_data[] =
 {
@@ -537,23 +581,26 @@ void QMenu_Input()
 
 void SetupQItemTags()
 {
-    MainMenu[ 5].tagged_entry = vNewlineConv;
+    MainMenu[ 5].tagged_entry = sv_bLinefeedMode;      // !!
     MainMenu[ 9].tagged_entry = sv_TermType;
     MainMenu[12].tagged_entry = sv_KeyLayout;
     MainMenu[16].tagged_entry = sv_ListenPort;
     MainMenu[17].tagged_entry = sv_QBGCL;
     MainMenu[18].tagged_entry = sv_QFGCL;
-    MainMenu[21].tagged_entry = vDoEcho;
-    MainMenu[22].tagged_entry = vLineMode>1?0:vLineMode;
+    MainMenu[21].tagged_entry = sv_bNoEcho;             // !!
+    MainMenu[22].tagged_entry = sv_LineMode > 1 ? 0 : sv_LineMode;  // !!
     MainMenu[24].tagged_entry = sv_bHighCL;
     MainMenu[25].tagged_entry = sv_bScreensaver;
     MainMenu[28].tagged_entry = sv_ThemeUI;
-    MainMenu[29].tagged_entry = vBackspace;
+    MainMenu[29].tagged_entry = sv_Backspace;           // !!
     MainMenu[32].tagged_entry = sv_WrapAtScreenEdge;
     MainMenu[33].tagged_entry = sv_MsgFilter << 3;
-    MainMenu[34].tagged_entry = sv_EnableUTF8;
+    MainMenu[34].tagged_entry = sv_bEnableUTF8;         // !!
     MainMenu[36].tagged_entry = sv_QCURCL;
     MainMenu[37].tagged_entry = sv_PointerStyle;
+    MainMenu[38].tagged_entry = sv_CLPalette;
+    MainMenu[39].tagged_entry = sv_bWrapMode;           // !!
+    MainMenu[40].tagged_entry = sv_bShowTime;
 
     // Special case for IRC message filters, 0 = no selection, so do not tag entry 0
     if (MainMenu[33].tagged_entry == 0) MainMenu[33].tagged_entry = 0xF9;
@@ -572,6 +619,9 @@ void SetupQItemTags()
         break;
         case 3:
         MainMenu[11].tagged_entry = 4;
+        break;
+        case 4:
+        MainMenu[11].tagged_entry = 5;
         break;
 
         default:
@@ -593,6 +643,9 @@ void SetupQItemTags()
         break;
         case 3:
         MainMenu[20].tagged_entry = 4;
+        break;
+        case 4:
+        MainMenu[20].tagged_entry = 5;
         break;
 
         default:
@@ -811,7 +864,7 @@ static void DownMenu()
 u16 QMenu_Open()
 {
     TRM_SetWinHeight(10);
-    TRM_ClearArea(0, 1, 24, 29, PAL1, TRM_CLEAR_BG);
+    TRM_ClearArea(0, 1, 40, 32, PAL1, TRM_CLEAR_BG);
             
     DrawMenu(0);
 
@@ -861,7 +914,7 @@ void WINFN_Reset()
 
 void WINFN_Newline()
 {    
-    vNewlineConv = SelectedIdx;
+    bLinefeedMode = sv_bLinefeedMode = SelectedIdx;
 }
 
 void WINFN_BGColor()
@@ -985,36 +1038,51 @@ void WINFN_Font_Term()
     switch (SelectedIdx)
     {
         case 0:
-            sv_TerminalFont = 0;
+            sv_TerminalFont = FONT_8x8_16;
             sv_BoldFont = FALSE;
         break;
         case 1:
-            sv_TerminalFont = 0;
+            sv_TerminalFont = FONT_8x8_16;
             sv_BoldFont = TRUE;
         break;
         case 2:
-            sv_TerminalFont = 2;
+            sv_TerminalFont = FONT_4x8_1;
             sv_BoldFont = FALSE;
         break;
         case 3:
-            sv_TerminalFont = 1;
+            sv_TerminalFont = FONT_4x8_8;
             sv_BoldFont = FALSE;
         break;
         case 4:
-            sv_TerminalFont = 3;
+            sv_TerminalFont = FONT_4x8_16;
             sv_BoldFont = FALSE;
+        break;
+        case 5:
+            sv_TerminalFont = FONT_SOFTWARE;
+            sv_BoldFont = FALSE;
+
+            TRM_ClearPlane(BG_A);
+            TRM_ClearPlane(BG_B);
         break;
     
         default:
         break;
     }
 
-    if (getState() == PS_Terminal) 
+    if (getState() == PS_Terminal)  // Are we currently in the terminal state?
     {
+        VDP_setEnable(FALSE);
         TTY_SetFontSize(sv_TerminalFont);
-        TTY_Init(TF_ClearScreen | TF_ResetPalette);
+        TTY_ReloadPalette();
+
+        TRM_ClearArea(0, 1, 40, 32, PAL1, TRM_CLEAR_BG);
+        DrawMenu(MenuIdx);    // Redraw menu because the window table may have moved location in VRAM
+
+        SB_ResetStatusBar();
+        ShellDrawClockUpdate();
         PrintCWD();
-    }
+        VDP_setEnable(TRUE);
+    }    
 }
 
 void WINFN_Font_Telnet()
@@ -1022,28 +1090,45 @@ void WINFN_Font_Telnet()
     switch (SelectedIdx)
     {
         case 0:
-            sv_TelnetFont = 0;
+            sv_TelnetFont = FONT_8x8_16;
             sv_BoldFont = FALSE;
         break;
         case 1:
-            sv_TelnetFont = 0;
+            sv_TelnetFont = FONT_8x8_16;
             sv_BoldFont = TRUE;
         break;
         case 2:
-            sv_TelnetFont = 2;
+            sv_TelnetFont = FONT_4x8_1;
+            sv_BoldFont = FALSE;
         break;
         case 3:
-            sv_TelnetFont = 1;
+            sv_TelnetFont = FONT_4x8_8;
+            sv_BoldFont = FALSE;
         break;
         case 4:
-            sv_TelnetFont = 3;
+            sv_TelnetFont = FONT_4x8_16;
+            sv_BoldFont = FALSE;
+        break;
+        case 5:
+            sv_TelnetFont = FONT_SOFTWARE;
+            sv_BoldFont = FALSE;
         break;
     
         default:
         break;
     }
     
-    if (getState() == PS_Telnet) TTY_SetFontSize(sv_TelnetFont);
+    if (getState() == PS_Telnet)    // Are we currently in the telnet state?
+    {
+        VDP_setEnable(FALSE);
+        TTY_SetFontSize(sv_TelnetFont);
+        TTY_ReloadPalette();
+        
+        TRM_ClearArea(0, 1, 40, 32, PAL1, TRM_CLEAR_BG);
+        SB_ResetStatusBar();
+        DrawMenu(MenuIdx);    // Redraw menu because the window table may have moved location in VRAM
+        VDP_setEnable(TRUE);
+    }
 }
 
 void WINFN_Font_IRC()
@@ -1051,15 +1136,16 @@ void WINFN_Font_IRC()
     switch (SelectedIdx)
     {
         case 0:
-            sv_IRCFont = 0;
+            sv_IRCFont = FONT_8x8_16;
             sv_BoldFont = FALSE;
         break;
         case 1:
-            sv_IRCFont = 0;
+            sv_IRCFont = FONT_8x8_16;
             sv_BoldFont = TRUE;
         break;
         case 2:
-            sv_IRCFont = 2;
+            sv_IRCFont = FONT_4x8_1;
+            sv_BoldFont = FALSE;
         break;
     
         default:
@@ -1145,6 +1231,15 @@ void WINFN_DebugSel()
         }
 
         case 5:
+        {
+            char *fn[] = {"/sram/system/screen.io"};
+
+            WinMgr_Close(W_QMenu);
+            WinMgr_Open(W_HexView, 1, fn);
+            break;
+        }
+
+        case 6:
         {
             WinMgr_Close(W_QMenu);
             WinMgr_Open(W_InfoView, 0, NULL);
@@ -1233,7 +1328,7 @@ void WINFN_HScOff()
     }
 
     HScroll = sv_HSOffset;
-    if (!sv_Font)
+    if (!sv_Font || (sv_Font == FONT_SOFTWARE))
     {
         VDP_setHorizontalScroll(BG_A, HScroll);
         VDP_setHorizontalScroll(BG_B, HScroll);
@@ -1249,12 +1344,12 @@ void WINFN_HScOff()
 
 void WINFN_Echo()
 {    
-    vDoEcho = SelectedIdx;
+    bNoEcho = sv_bNoEcho = SelectedIdx;
 }
 
 void WINFN_LineMode()
 {    
-    vLineMode = SelectedIdx;
+    v_LineMode = sv_LineMode = SelectedIdx;
 }
 
 void WINFN_Custom_FGCL()
@@ -1316,7 +1411,7 @@ void WINFN_UI_Theme()
 
 void WINFN_Backspace()
 {
-    vBackspace = SelectedIdx;
+    v_Backspace = sv_Backspace = SelectedIdx;
 }
 
 void WINFN_StartMenu()
@@ -1354,7 +1449,7 @@ void WINFN_IrcMsgFilter()
 
 void WINFN_CharSet()
 {
-    sv_EnableUTF8 = SelectedIdx;
+    bEnableUTF8 = sv_bEnableUTF8 = SelectedIdx;
 }
 
 void WINFN_Brightness()
@@ -1398,5 +1493,21 @@ void WINFN_Pointer()
 {
     sv_PointerStyle = SelectedIdx;
     u16 ps = (sv_PointerStyle ? 0x6000 : 0x2000) | 0x8017;
-    SetSprite_TILE(SPRITE_ID_POINTER, ps);
+    SetSprite_TILE(SPRITE_POINTER, ps);
+}
+
+void WINFN_ColourPalette()
+{
+    sv_CLPalette = SelectedIdx;
+    TTY_ReloadPalette();
+}
+
+void WINFN_Wrapmode()
+{    
+    bWrapMode = sv_bWrapMode = SelectedIdx;
+}
+
+void WINFN_ShowDateIRC()
+{
+    sv_bShowTime = SelectedIdx;
 }

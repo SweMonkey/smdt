@@ -1,12 +1,11 @@
 
 # SMD terminal emulator with builtin telnet and IRC client
 A terminal emulator with a unix like shell, telnet and IRC client for the Sega Mega Drive/Genesis with support for keyboards, mice and RS-232 communication.<br><br>
-## This README is outdated, while most of the information below remains accurate, it needs to be updated to include the many new additions not yet covered.<br><br>
-![Screenshot of the telnet client in 80 column + 16 colour mode](/doc/images/telnet.png?raw=true)
-![Screenshot of the IRC client](/doc/images/irc_02.png?raw=true)
+![Screenshot of the telnet client in 80 column mode](/doc/images/telnet1.png?raw=true)
+![Screenshot of the IRC client](/doc/images/irc_03.png?raw=true)
 ![Screenshot of the terminal emulator showing dwarf fortress](/doc/images/dwarf_fortress.png?raw=true)
 ![Screenshot of a debugging utility to inspect streams](/doc/images/hexview.png?raw=true)
-![Screenshot of the telnet client in 80 column + 8 colour mode](/doc/images/nethack.png?raw=true)
+![Screenshot of the Free Pascal IDE (remote linux pc)](/doc/images/freepascal.png?raw=true)
 ![Screenshot of the terminal emulator](/doc/images/terminal.png?raw=true)
 
 ##### Table of Contents
@@ -23,21 +22,25 @@ A terminal emulator with a unix like shell, telnet and IRC client for the Sega M
   * [PS/2 pin reference](#ps2-pin-reference)
   * [MD UART pin reference](#md-uart-pin-reference)
 * [Filesystem](#filesystem)
+* [Mouse support](#mouse-support)
 * [Shortcuts](#shortcuts)
-  * [Quick menu](#quick-menu)
+  * [Quickmenu](#quick-menu)
   * [IRC client](#irc-client)
   * [Telnet client](#telnet-client)
-  * [Gopher client](#gopher-client)
   * [Terminal emulator](#terminal-emulator)
 * [FAQ](#faq)
 
 ## Disclaimer
 > [!WARNING]
-> **Do note that the MD is a 5 volt system!** That means you should take care to not connect any random serial device directly to the MD (Such as a PC).<br>
+> **Please note that the MD is a 5 volt system!** That means you should take care to not connect any random serial device directly to the MD (Such as a PC).<br>
 > Use a "voltage translator" such as the max3232 between your MD and remote device to translate the voltage levels.<br>
 > Make sure you understand my ramble down under the "Device" section to hook up external devices correctly!<br>
 > I (smds) will not take any responsibilities for any failure to read and understand the above warning.<br>
 <br>
+
+This is my "kitchen sink" project where I do stupid or unusual stuff with the Mega Drive, expect bugs popping up every now and then!<br>
+I have worked on this project on and off since around 2016 and SMDT started off as a utility to transfer and view images from my PC to my Mega Drive using the parallel port (hence the name "SMD Transfer"):<br>
+<br>And for anyone wondering, No, this project is not "vibe coded".<br>
 
 ## Thanks to
 b1tsh1ft3r - Testing, improvement ideas and RetroLink/xPort support<br>
@@ -55,10 +58,10 @@ The SGDK library must be rebuilt with the flags `HALT_Z80_ON_IO` and `HALT_Z80_O
 
 ## Running SMDT
 SMDT is made to run on the original Mega Drive / Genesis hardware;<br>
-Easiest way to run SMDT on your system is by transferring the binary file `smdt_vX.YY.Z.bin` to a flashcart.<br>
+Easiest way to run SMDT on your system is by transferring the binary file `smdt.bin` to a flashcart.<br>
 <br>
 You can also run SMDT in a Mega Drive / Genesis emulator and easily check it out; Do mind that most emulators do not provide any way to actually connect any external serial devices or keyboards.<br><br>
-I highly recommend the emulator [BlastEm 0.6.3+](https://www.retrodev.com/blastem/nightlies/) since it supports the Sega Saturn keyboard as well as providing the functionality to connect the serial port to a UNIX socket, allowing SMDT to connect to remote servers.<br>
+I highly recommend the emulator [BlastEm 0.6.3+](https://www.retrodev.com/blastem/nightlies/) because it supports the Sega Saturn keyboard as well as providing the functionality to connect the serial port to a UNIX socket, allowing SMDT to connect to remote servers.<br>
 <br>
 
 ## Running SMDT in blastEm
@@ -95,7 +98,7 @@ io {
 <br>
 
 If the serial port is setup correctly in blastEm, then you can now connect to the above socket by using the tool [SMDT-PC](https://github.com/SweMonkey/smdt-pc) like this:<br>
-1. Open `smdt_vX.YY.Z.bin` in blastEm.<br>
+1. Open `smdt.bin` in blastEm.<br>
 2. Launch SMDT-PC with this command in a terminal: `./smdtpc -xportsock /path/to/blastEm/smdtsock.sock`.<br>
 
 <br>
@@ -134,16 +137,16 @@ Device detection is only done on bootup, no plug & play support (yet).<br>
 <br>
 A total of 2 PS/2 devices and 1 UART device can potentially be connected to a single MD controller port. However, beware the power draw may exceed what the MD can supply!<br>
 <br>
-When a keyboard is connected and detected a 'K' icon will be visible in the status bar.<br>
+When a keyboard is connected and detected a keycap 'A' icon will be visible in the status bar.<br>
 A fallback joypad device will be activated if SMDT fails to find a keyboard or when a keyboard is plugged into PORT 2, allowing the use of a regular joypad.<br>
 <br>
-All detected devices can be viewed in the "Connected devices" list (Quick menu -> Mega Drive settings -> Connected devices)<br>
+All detected devices can be viewed in the "Connected devices" list (Quickmenu -> Mega Drive settings -> Connected devices)<br>or in the System info panel (Quickmenu -> Debug -> System Info)<br>
 <br>
 > [!NOTE]
 > SMDT is limited when it comes to detecting the presence of a serial connection on the built in UART.<br>
 > By default SMDT will listen for incoming connections and attempt to find serial devices on PORT 2 UART.<br>
-> This setting can be changed in the "Select serial port" menu (Quick menu -> Mega Drive settings -> Select serial port)<br>
-> Do not forget to save your changes! (Quick menu -> System -> Save config)<br>
+> This setting can be changed in the "Select serial port" menu (Quickmenu -> Mega Drive settings -> Select serial port)<br>
+> Do not forget to save your changes! (Quickmenu -> System -> Save config)<br>
 <br>
 
 ### List of autodetected devices
@@ -223,10 +226,21 @@ Copyright (c) 2022, The littlefs authors.<br>
 Copyright (c) 2017, Arm Limited. All rights reserved.<br>
 [See littlefs on github](https://github.com/littlefs-project/littlefs)<br>
 
+## Mouse support
+SMDT supports the mega/sega mouse. If connected it should be autodetected at startup and you should see a mouse cursor when the system has booted.<br>
+Currently SMDT does not offer a way to rebind the buttons (planned for the future).<br>
+
+Left button   = Enter/Execute<br>
+Right button  = Close/Go back<br>
+Middle button = Open quick menu<br>
+C button      = Unused<br>
+
+SMDT GUI "fully" supports using the mouse, however terminal mouse tracking is currently WIP.
+
 ## Shortcuts
 
-### Quick menu
-Right windows key OR F8 = Open the Quick menu<br>
+### Quickmenu
+Right windows key OR F8 = Open the Quickmenu<br>
 Enter = Enter submenu and activate a choice<br>
 Escape = Back out of current menu<br>
 Up cursor = Move selector up<br>
@@ -243,14 +257,17 @@ Right arrow key = Switch to next channel<br>
 Tab = Toggle channel user list<br>
 Numpad 1 = Scroll left<br>
 Numpad 3 = Scroll right<br>
+<br>
+Supported IRC commands:<br>
+`/privmsg` and `/msg` - Followed by your message, explicit send message command.<br>
+`/raw` - Send a command to the IRC server. Use this to send commands that is not supported by SMDT, however take care to format the command exactly as IRC spec dictates.<br>
+`/quit` - Issues quit command to leave the server.<br>
+`/join` - Followed by #channelname, joins the channel #channelname.<br>
+`/part` - Followed by #channelname, leaves the channel #channelname. If no channel is provided then the currently open channel will be closed instead.<br>
+`/nick` - Followed by your nickname, changes and reregisters your new nickname with the IRC server.<br>
 
 ### Telnet client
 None<br>
-
-### Gopher client
-Very WIP gopher client, use at your own risk!<br>
-Cursor keys = Move the cursor on screen<br>
-Enter       = Go to link highlighted by the cursor<br>
 
 ### Terminal emulator
 Type `help` for a list of all available built in commands.<br>
@@ -266,7 +283,7 @@ Q: Changing IRC font does not change anything?<br>
 A: Due to current design limitations of the IRC client the changes made won't take effect until next time the IRC client is started.<br>
 <br>
 Q: My settings got reset after rebooting!<br>
-A: Make sure to save your settings by either using the Quick menu (System -> Save config) or by typing `savecfg` and pressing Enter in the terminal. If settings still fail to save it may be due to your system or emulator lacking SRAM, thus being unable to access the filesystem in SMDT.<br>
+A: Make sure to save your settings by either using the Quickmenu (System -> Save config) or by typing `savecfg` and pressing Enter in the terminal. If settings still fail to save it may be due to your system or emulator lacking SRAM, thus being unable to access the filesystem in SMDT.<br>
 <br>
 Q: How do I change my IRC nick?<br>
 A: In the terminal, run the command `setvar username yournick` OR in the IRC client, type `/nick yournick` and press Enter.<br>

@@ -13,20 +13,9 @@
 #include "devices/RL_Network.h"
 #include "misc/ConfigFile.h"
 #include "system/PseudoFile.h"
-
-/*
-    USERLIST WARNING:
-
-    DO NOT TRY TO DEBUG THE USER LIST WINDOW IN AN EMULATOR. IT WILL MISLEAD AND CAUSE YOU HARM.
-    IT WILL REPORT VERY WEIRD BEHAVIOURS WHEN ALLOCATING/FREEING MEMORY AND WHEN TRYING TO SHOW
-    THE USERLIST WINDOW.
-
-    IRC CMD 353 (START OF NAMES LIST FOLLOWED BY NICK LIST) AND IRC CMD 366 (END OF NAMES LIST)
-    REQUIRES SOME SPECIAL "ASYNCHRONUS" HANDLING, DUE TO BEING RECEIVED AT COMPLETELY DIFFERENT
-    TIMES SOME TIME AFTER A "NAMES" COMMAND HAS BEEN SENT TO THE REMOTE SERVER FROM SMDT.
-
-    THIS SEQUENCE OF EVENTS CANNOT BE EMULATED BY REPLAYING A LOGGED STREAM!
-*/
+#include "system/StatusBar.h"
+#include "system/Sprite.h"
+#include "system/Time.h"
 
 static u8 rxdata;
 static SM_Window *UserWin = NULL;
@@ -38,6 +27,8 @@ static u16 BufferLastNum = 65535;
 u8 sv_IRCFont = FONT_4x8_1;
 extern u16 sv_EpochStart;
 
+
+#if IRC_MAX_CHANNELS == 5
 static const MRect mrect_data[] =
 {
     {240, 0, 8, 8, 0},   // Channel 1
@@ -48,12 +39,28 @@ static const MRect mrect_data[] =
     {280, 0, 8, 8, 5},   // Channel 6
     {320, 0, 0, 0, 0},   // Terminator
 };
+#else
+static const MRect mrect_data[] =
+{
+    {248, 0, 8, 8, 0},   // Channel 1
+    {256, 0, 8, 8, 1},   // Channel 2
+    {264, 0, 8, 8, 2},   // Channel 3
+    {272, 0, 8, 8, 3},   // Channel 4
+    {280, 0, 8, 8, 4},   // Channel 5
+    {320, 0, 0, 0, 0},   // Terminator
+};
+#endif
 
 void IRC_PrintChar(u8 c);
 
 
 u16 Enter_IRC(u8 argc, char *argv[])
 {
+    if (sv_Font == FONT_SOFTWARE)
+    {
+        SP_Setup();
+    }
+
     sv_Font = sv_IRCFont;
     EpochSave = sv_EpochStart;
 
@@ -76,12 +83,12 @@ u16 Enter_IRC(u8 argc, char *argv[])
 
     // Setup window plane to accomodate user list window on the right side
     TRM_SetWinParam(FALSE, TRUE, 20, 1);
-    TRM_SetStatusText(STATUS_TEXT_SHORT);
+    SB_SetStatusText(STATUS_TEXT_SHORT);
 
     UserWin = malloc(sizeof(SM_Window));
     if (UserWin == NULL)
     {
-        printf("[91mIRC Client: Failed to allocate memory. Can't create UserWin\n[0m\n");
+        printf("\e[91mIRC Client: Failed to allocate memory. Can't create UserWin\n\e[0m\n");
         return EXIT_FAILURE;
     }
     UI_CreateWindow(UserWin, "", WF_NoBorder);
@@ -124,7 +131,7 @@ void Exit_IRC()
     Buffer_Flush(&RxBuffer);
     
     sprintf(TitleBuf, "%s - Disconnecting...     ", STATUS_TEXT_SHORT);
-    TRM_SetStatusText(TitleBuf);
+    SB_SetStatusText(TitleBuf);
 
     NET_Disconnect();
 
@@ -205,9 +212,12 @@ void Run_IRC()
         TRM_DrawChar('2', (35-IRC_MAX_CHANNELS)+1, 0, PG_CurrentIdx == 1 ? PAL0 : (bPG_HasNewMessages[1] ? PAL3 : PAL1) );  // 30
         TRM_DrawChar('3', (35-IRC_MAX_CHANNELS)+2, 0, PG_CurrentIdx == 2 ? PAL0 : (bPG_HasNewMessages[2] ? PAL3 : PAL1) );  // 31
         TRM_DrawChar('4', (35-IRC_MAX_CHANNELS)+3, 0, PG_CurrentIdx == 3 ? PAL0 : (bPG_HasNewMessages[3] ? PAL3 : PAL1) );  // 32
-        TRM_DrawChar('5', (35-IRC_MAX_CHANNELS)+4, 0, PG_CurrentIdx == 4 ? PAL0 : (bPG_HasNewMessages[4] ? PAL3 : PAL1) );  // 33
 
-        #if IRC_MAX_CHANNELS == 6
+        #if IRC_MAX_CHANNELS >= 5
+        TRM_DrawChar('5', (35-IRC_MAX_CHANNELS)+4, 0, PG_CurrentIdx == 4 ? PAL0 : (bPG_HasNewMessages[4] ? PAL3 : PAL1) );  // 33
+        #endif
+
+        #if IRC_MAX_CHANNELS >= 6
         TRM_DrawChar('6', (35-IRC_MAX_CHANNELS)+5, 0, PG_CurrentIdx == 5 ? PAL0 : (bPG_HasNewMessages[5] ? PAL3 : PAL1) );  // 34
         #endif
 
@@ -234,7 +244,7 @@ void ChangePage(u8 num)
     bPG_HasNewMessages[num] = FALSE;
     bPG_UpdateMessage = TRUE;
 
-    TRM_SetStatusText(TitleBuf);
+    SB_SetStatusText(TitleBuf);
 
     TMB_UploadBufferFull(PG_Buffer[PG_CurrentIdx]);
 }
@@ -281,6 +291,7 @@ u8 ParseTx()
         // do tolower() on command string here
         tolower_string(command);
 
+        // This is only for sending messages by explicitly using the /privmsg or /msg command, for recieving messages, see IRC.c
         if ((strcmp(command, "privmsg") == 0) || (strcmp(command, "msg") == 0))
         {
             u8 tmbbuf[300] = {0};
@@ -302,8 +313,20 @@ u8 ParseTx()
             }
 
             sprintf((char*)outbuf, "PRIVMSG %s :%s\n", command, (char*)inbuf+end_c);
-            sprintf((char*)tmbbuf, "\5%s: \4%s\n", v_UsernameReset, (char*)inbuf+end_c);
-            NameOffset = strlen(v_UsernameReset) + 2;
+
+            if (sv_bShowTime)
+            {
+                char buf[40];
+                TimeToStr_TimeNoSec(&SystemTime, buf);
+
+                sprintf((char*)tmbbuf, "[%s] \5%s: \4%s\n", buf, v_UsernameReset, (char*)inbuf+end_c);
+                NameOffset = strlen(v_UsernameReset) + 10;
+            }
+            else
+            {
+                sprintf((char*)tmbbuf, "\5%s: \4%s\n", v_UsernameReset, (char*)inbuf+end_c);
+                NameOffset = strlen(v_UsernameReset) + 2;
+            }
 
             // Try to find an unused page or an existing one
             for (u8 ch = 0; ch < IRC_MAX_CHANNELS; ch++)
@@ -320,7 +343,7 @@ u8 ParseTx()
                     TMB_SetActiveBuffer(PG_Buffer[ch]);
 
                     snprintf(TitleBuf, 35-IRC_MAX_CHANNELS, "%s %-*s", STATUS_TEXT_SHORT, 35-IRC_MAX_CHANNELS, PG_Buffer[PG_CurrentIdx]->Title);
-                    TRM_SetStatusText(TitleBuf);
+                    SB_SetStatusText(TitleBuf);
                     bPG_UpdateMessage = TRUE;
                     break;
                 }
@@ -379,7 +402,7 @@ u8 ParseTx()
 
                         // Update status text
                         sprintf(TitleBuf, "%s %s (%u)", STATUS_TEXT_SHORT, PG_Buffer[ch]->Title, ch+1);
-                        TRM_SetStatusText(TitleBuf);
+                        SB_SetStatusText(TitleBuf);
                     }
 
                     break;
@@ -418,7 +441,7 @@ u8 ParseTx()
             else sprintf((char*)outbuf, "%s\n", command);
         }
     }
-    else // Else send as message
+    else // Else send as message -- This is only for sending messages, for recieving messages, see IRC.c - For sending messages using explicit /privmsg or /msg command see further up in this file.
     {
         u8 tmbbuf[300] = {0};
         
@@ -429,8 +452,21 @@ u8 ParseTx()
         TMB_SetActiveBuffer(PG_Buffer[PG_CurrentIdx]);
 
         sprintf((char*)outbuf, "PRIVMSG %s :%s\n", PG_Buffer[PG_CurrentIdx]->Title, (char*)inbuf);
-        sprintf((char*)tmbbuf, "\5%s: \4%s\n", v_UsernameReset, (char*)inbuf);
-        NameOffset = strlen(v_UsernameReset) + 2;
+
+
+        if (sv_bShowTime)
+        {
+            char buf[40];
+            TimeToStr_TimeNoSec(&SystemTime, buf);
+
+            sprintf((char*)tmbbuf, "[%s] \5%s: \4%s\n", buf, v_UsernameReset, (char*)inbuf);
+            NameOffset = strlen(v_UsernameReset) + 10;
+        }
+        else
+        {
+            sprintf((char*)tmbbuf, "\5%s: \4%s\n", v_UsernameReset, (char*)inbuf);
+            NameOffset = strlen(v_UsernameReset) + 2;
+        }
 
         IRC_PrintString((char*)tmbbuf);
     }

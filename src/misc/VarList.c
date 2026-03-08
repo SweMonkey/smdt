@@ -17,6 +17,13 @@ extern u8 sv_ThemeUI;
 extern s8 sv_CBrightness;
 extern u8 sv_PointerStyle;
 
+bool sv_bLinefeedMode = TRUE;   // Should default to FALSE
+bool sv_bNoEcho = FALSE;
+u8 sv_LineMode = 0;
+u8 sv_Backspace = 0;
+bool sv_bWrapMode = FALSE;
+bool sv_bEnableUTF8 = TRUE;
+
 SM_VarList VarList[] =
 {
     {ST_BYTE, &sv_HSOffset,         "hsoffset"},
@@ -52,9 +59,17 @@ SM_VarList VarList[] =
     {ST_WORD, &sv_EpochStart,       "epoch"},
     {ST_BYTE, &sv_MsgFilter,        "ircmsgfilter"},
     {ST_BYTE, &sv_WrapAtScreenEdge, "ircwrap"},
-    {ST_BYTE, &sv_EnableUTF8,       "enableutf8"},
+    {ST_BYTE, &sv_bEnableUTF8,      "enableutf8"},
     {ST_BYTE, &sv_CBrightness,      "brightness"},
     {ST_BYTE, &sv_PointerStyle,     "pointerstyle"},
+    {ST_BYTE, &sv_CLPalette,        "clpalette"},
+
+    {ST_BYTE, &sv_bLinefeedMode,    "blinefeed"},
+    {ST_BYTE, &sv_bNoEcho,          "bnoecho"},
+    {ST_BYTE, &sv_LineMode,         "linemode"},
+    {ST_BYTE, &sv_Backspace,        "backspace"},
+    {ST_BYTE, &sv_bWrapMode,        "wrapmode"},
+    {ST_BYTE, &sv_bShowTime,        "ircshowtime"},
     {0, 0, 0}  // List terminator
 };
 
@@ -71,23 +86,18 @@ void getenv(const char *name, char *ret)
             switch (VarList[i].size)
             {
                 case ST_BYTE:
-                    //ret = malloc(sizeof(u8)+1);
                     sprintf(ret, "%u", *((u8*)VarList[i].ptr));
                 break;
                 case ST_WORD:
-                    //ret = malloc(sizeof(u16)+1);
                     sprintf(ret, "%u", *((u16*)VarList[i].ptr));
                 break;
                 case ST_LONG:
-                    //ret = malloc(sizeof(u32)+1);
                     sprintf(ret, "%lu", *((u32*)VarList[i].ptr));
                 break;        
                 case ST_SPTR:
-                    //ret = malloc(strlen((char*)VarList[i].ptr)+1);
                     sprintf(ret, "%s", (char*)VarList[i].ptr);
                 break;
                 case ST_SARR:
-                    //ret = malloc(strlen((char*)VarList[i].ptr)+1);
                     sprintf(ret, "%s", (char*)VarList[i].ptr);
                 break;
                 default:

@@ -25,12 +25,6 @@
 #define DEVMODE_PARALLEL 1
 #define DEVMODE_SERIAL   2
 
-#define ICO_ID_UNKNOWN 0x1F // Unknown input device '?'
-#define ICO_KB_OK      0x1C // Keyboard input device 'K'
-#define ICO_JP_OK      0x1E // Joypad input device 'J'
-#define ICO_ID_ERROR   0x1D // Error with input device 'X'
-#define ICO_MOUSE_OK   0x20 // Mouse input device 'M'
-
 typedef enum 
 {
     DP_None  = 0, 

@@ -3,10 +3,12 @@
 #include "Terminal.h"
 #include "Telnet.h"
 #include "Cursor.h"
-#include "system/PseudoFile.h"
 #include "Utils.h"
 #include "Input.h"
 #include "Mouse.h"
+#include "system/PseudoFile.h"
+#include "system/Sprite.h"
+#include "system/StatusBar.h"
 
 #ifdef EMU_BUILD
 #include "kdebug.h"
@@ -69,7 +71,7 @@ u16 Enter_Gopher(u8 argc, char *argv[])
         kprintf("Failed to allocate memory for LineBuf");
         #endif
 
-        printf("[91mGopher Client: Failed to allocate memory\n for LineBuf![0m\n");
+        printf("\e[91mGopher Client: Failed to allocate memory\n for LineBuf!\e[0m\n");
         return EXIT_FAILURE;
     }
     //memset(LineBuf, 0, B_LINEBUF_LEN);
@@ -82,8 +84,8 @@ u16 Enter_Gopher(u8 argc, char *argv[])
         kprintf("Failed to allocate memory for PageBuffer");
         #endif
 
-        printf("[91mGopher Client: Failed to allocate memory for PageBuffer![0m\n");
-        printf("[91mFree: %u - LFree: %u - Needed: %u[0m\n", MEM_getFree(), MEM_getLargestFreeBlock(), B_PAGEBUF_LEN);
+        printf("\e[91mGopher Client: Failed to allocate memory for PageBuffer!\e[0m\n");
+        printf("\e[91mFree: %u - LFree: %u - Needed: %u\e[0m\n", MEM_getFree(), MEM_getLargestFreeBlock(), B_PAGEBUF_LEN);
         return EXIT_FAILURE;
     }
     //memset(PageBuffer, 0, B_PAGEBUF_LEN);
@@ -96,7 +98,7 @@ u16 Enter_Gopher(u8 argc, char *argv[])
         kprintf("Failed to allocate memory for LFPos");
         #endif
 
-        printf("[91mGopher Client: Failed to allocate memory\n for LFPos![0m\n");
+        printf("\e[91mGopher Client: Failed to allocate memory\n for LFPos!\e[0m\n");
         return EXIT_FAILURE;
     }
     //memset(LFPos, 0, B_PAGEROWS*2);
@@ -110,20 +112,20 @@ u16 Enter_Gopher(u8 argc, char *argv[])
     {
         u16 ps = (sv_PointerStyle ? 0x6000 : 0x2000) | 0x8017;  // 0x6000 = PAL3, 0x2000 = PAL1, 0x8000 = High prio, 0x17 = pointer tile
 
-        SetSprite_Y(SPRITE_ID_POINTER, (PointerY_A*8)+142);
-        SetSprite_SIZELINK(SPRITE_ID_POINTER, SPR_SIZE_1x1, 0);
-        SetSprite_TILE(SPRITE_ID_POINTER, ps);
-        SetSprite_X(SPRITE_ID_POINTER, PointerX+128);
+        SetSprite_Y(SPRITE_POINTER, (PointerY_A*8)+142);
+        SetSprite_SIZELINK(SPRITE_POINTER, SPR_SIZE_1x1, 0);
+        SetSprite_TILE(SPRITE_POINTER, ps);
+        SetSprite_X(SPRITE_POINTER, PointerX+128);
     }
 
     // Hide terminal cursor
-    SetSprite_TILE(SPRITE_ID_CURSOR, 0x16);
+    SetSprite_TILE(SPRITE_CURSOR, 0x16);
 
     // Variable overrides
-    vDoEcho = 0;
-    vLineMode = LMSM_EDIT;
+    bNoEcho = FALSE;
+    v_LineMode = LMSM_EDIT;
     bDoCursorBlink = FALSE;
-    sv_bWrapAround = FALSE;
+    bWrapMode = FALSE;
     C_XMAX = 127;
     ScrHeight = C_SYSTEM_YMAX;
 
@@ -162,12 +164,12 @@ void Exit_Gopher()
     
     if (!bMouse)
     {
-        SetSprite_Y(SPRITE_ID_POINTER, 0);
-        SetSprite_X(SPRITE_ID_POINTER, 128);
+        SetSprite_Y(SPRITE_POINTER, 0);
+        SetSprite_X(SPRITE_POINTER, 128);
     }
 
     // Show terminal cursor
-    SetSprite_TILE(SPRITE_ID_CURSOR, LastCursor);
+    SetSprite_TILE(SPRITE_CURSOR, LastCursor);
 
     //Stdout_Flush();
     NET_Disconnect();
@@ -236,7 +238,7 @@ void Input_Gopher()
         if (PointerY_A > 0)
         {
             PointerY_A--;
-            SetSprite_Y(SPRITE_ID_POINTER, (PointerY_A*8)+142);
+            SetSprite_Y(SPRITE_POINTER, (PointerY_A*8)+142);
         }
         else 
         {
@@ -253,7 +255,7 @@ void Input_Gopher()
         if (PointerY_A < (C_SYSTEM_YMAX - 1)) // < 26
         {
             PointerY_A++;
-            SetSprite_Y(SPRITE_ID_POINTER, (PointerY_A*8)+142);
+            SetSprite_Y(SPRITE_POINTER, (PointerY_A*8)+142);
         }
         else 
         {
@@ -265,7 +267,7 @@ void Input_Gopher()
         if (PointerX >= 8)
         {
             PointerX -= 8;
-            SetSprite_X(SPRITE_ID_POINTER, PointerX+128);
+            SetSprite_X(SPRITE_POINTER, PointerX+128);
         }
     }
     if (is_KeyDown(KEY_RIGHT))
@@ -273,7 +275,7 @@ void Input_Gopher()
         if (PointerX <= 304)
         {
             PointerX += 8;
-            SetSprite_X(SPRITE_ID_POINTER, PointerX+128);
+            SetSprite_X(SPRITE_POINTER, PointerX+128);
         }
     }
 
@@ -309,20 +311,14 @@ void Gopher_Init()
     memset(PageBuffer, 0, B_PAGEBUF_LEN);
     memset(LFPos, 0, B_PAGEROWS*2);
     LFPos[LFCount++] = 0;   // First entry should point to the start of the PageBuffer
-    SetSprite_Y(SPRITE_ID_POINTER, (PointerY_A*8)+142);
-    SetSprite_X(SPRITE_ID_POINTER, PointerX+128);
+    SetSprite_Y(SPRITE_POINTER, (PointerY_A*8)+142);
+    SetSprite_X(SPRITE_POINTER, PointerX+128);
     ScrollPos = ScrHeight;
 
     VDP_clearPlane(BG_A, TRUE);
     VDP_clearPlane(BG_B, TRUE);
 
-    VScroll = 0;
-
-    // Update vertical scroll
-    *((vu32*) VDP_CTRL_PORT) = 0x40000010;
-    *((vu16*) VDP_DATA_PORT) = VScroll;
-    *((vu32*) VDP_CTRL_PORT) = 0x40020010;
-    *((vu16*) VDP_DATA_PORT) = VScroll;
+    TTY_ResetVScroll();
 
     bPageDone = FALSE;
 }
@@ -338,7 +334,7 @@ void Gopher_Scroll(u8 dir)
         ScrollPos--;
         TTY_SetSY(old_sy + ScrollPos-(bPALSystem?26:22));   // -22
         TTY_ClearLineSingle(sy);
-        VScroll -= 8;
+        TTY_SetVScroll(-8);
 
         Gopher_PrintLine(ScrollPos-ScrHeight, 1);
     }
@@ -352,18 +348,12 @@ void Gopher_Scroll(u8 dir)
         if (ScrollPos > ScrHeight)
         {
             TTY_ClearLineSingle(sy);
-            VScroll += 8;
+            TTY_SetVScroll(8);
         }
 
         Gopher_PrintLine(ScrollPos-1, 1);
     }
     else return;
-
-    // Update vertical scroll
-    *((vu32*) VDP_CTRL_PORT) = 0x40000010;
-    *((vu16*) VDP_DATA_PORT) = VScroll;
-    *((vu32*) VDP_CTRL_PORT) = 0x40020010;
-    *((vu16*) VDP_DATA_PORT) = VScroll;
 
     TTY_SetSY(old_sy);
     TTY_MoveCursor(TTY_CURSOR_DUMMY);
@@ -382,7 +372,7 @@ void Gopher_GetPage()
     if (NET_Connect(addr))
     {
         snprintf(TitleBuf, 29, "%s %-21s", STATUS_TEXT_SHORT, gserv);   // %-27s ?
-        TRM_SetStatusText(TitleBuf);
+        SB_SetStatusText(TitleBuf);
         NET_SendString(link);
     }    
 }

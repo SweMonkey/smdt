@@ -1,24 +1,16 @@
 #include "Utils.h"
+#include "Network.h"    // Network icon definitions
 #include "system/PseudoFile.h"
 
 bool bPALSystem;
 bool bHardReset;
 static u8 WinBottom = 0, WinRight = 1;
 static u8 WinWidth = 0, WinHeight = 1;
-static char StatusText[36];
 
+u16 AVR_HSCROLL = AVR_HSCROLL_START;
+u16 AVR_SAT     = AVR_SAT_START;
+u16 AVR_WINDOW  = AVR_WINDOW_START;
 
-void TRM_SetStatusText(const char *t)
-{
-    strncpy(StatusText, t, 36);
-    TRM_DrawText(StatusText, 1, 0, PAL1);
-}
-
-void TRM_ResetStatusText()
-{
-    TRM_ClearArea(0, 0, 36, 1, PAL1, TRM_CLEAR_WINDOW);
-    TRM_DrawText(StatusText, 1, 0, PAL1);
-}
 
 void TRM_SetWinHeight(u8 h)
 {
@@ -45,12 +37,6 @@ void TRM_ResetWinParam()
 {
     *((vu16*) VDP_CTRL_PORT) = 0x9100 | ((WinWidth  & 0x7F) | (WinRight ?0x80:0));  // Set window width and left/right
     *((vu16*) VDP_CTRL_PORT) = 0x9200 | ((WinHeight & 0x7F) | (WinBottom?0x80:0));  // Set window height and top/bottom
-}
-
-inline void TRM_SetStatusIcon(const char icon, u16 pos)
-{
-    *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(VDP_WINDOW + ((pos & 63) * 2));
-    *((vu16*) VDP_DATA_PORT) = icon;
 }
 
 void TRM_DrawChar(const u8 c, u8 x, u8 y, u8 palette)
@@ -107,7 +93,7 @@ void TRM_ClearArea(u16 x, u16 y, u16 w, u16 h, u8 palette, u16 tile)
     while (i--) VDP_setTileMapDataRowEx(WINDOW, data, TILE_ATTR(palette, 1, 0, 0), ya++, x, wa, DMA);
 }
 
-void TRM_FillPlane(VDPPlane plane, u16 tile)
+void TRM_ClearPlane(VDPPlane plane)
 {
     switch(plane)
     {
@@ -121,6 +107,33 @@ void TRM_FillPlane(VDPPlane plane, u16 tile)
 
         case WINDOW:
             DMA_doVRamFill(AVR_WINDOW, 0x2000, 0, 1);
+        break;
+
+        default:
+        return;
+    }
+
+    VDP_waitDMACompletion();
+}
+
+void TRM_FillPlane(VDPPlane plane, u16 value)
+{
+    switch(plane)
+    {
+        case BG_A:
+            DMA_doVRamFill(AVR_PLANE_A, 0x1000, value & 0xFF, 2);
+            VDP_waitDMACompletion();
+            DMA_doVRamFill(AVR_PLANE_A+1, 0x1000, value >> 8, 2);
+        break;
+
+        case BG_B:
+            DMA_doVRamFill(AVR_PLANE_B, 0x1000, value & 0xFF, 2);
+            VDP_waitDMACompletion();
+            DMA_doVRamFill(AVR_PLANE_B+1, 0x1000, value >> 8, 2);
+        break;
+
+        case WINDOW:
+            DMA_doVRamFill(AVR_WINDOW, 0x2000, value, 1);
         break;
 
         default:

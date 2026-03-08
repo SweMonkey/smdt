@@ -3,11 +3,12 @@
 #include "Utils.h"
 #include "Terminal.h"
 #include "Telnet.h"
-#include "system/PseudoFile.h"
 #include "Input.h"
 #include "Keyboard.h"
 #include "StateCtrl.h"
 #include "Palette.h"
+#include "system/PseudoFile.h"
+#include "system/StatusBar.h"
 
 extern u32 registerState[];
 extern u32 pcState;
@@ -26,23 +27,25 @@ static inline void InitException()
 
     Buffer_Flush(&StdoutBuffer);
 
+    SB_ResetStatusBar();
+
     TELNET_Init(TF_Everything);
-    vDoEcho = 0;
-    vLineMode = LMSM_EDIT;
-    vNewlineConv = 1;
+    bNoEcho = FALSE;
+    v_LineMode = LMSM_EDIT;
+    bLinefeedMode = TRUE;
     TTY_SetFontSize(FONT_8x8_16);
     TTY_ReloadPalette();
     TRM_SetWinParam(FALSE, FALSE, 0, 1);
     SetColor(18, 0xEEE);    // Window text FG Normal
     SetColor(19, 0x222);    // Window inner BG
-    Stdout_Push("?25l\n");     // Hide cursor and print newline
+    Stdout_Push("\e?25l\n"); // Hide cursor and print newline
 }
 
 static inline void WaitForInput()
 {
     u8 kbdata = 0;
 
-    Stdout_Push("\n[97m  Press any key to reboot  [30;40m");
+    Stdout_Push("\n\e[97m  Press any key to reboot  \e[30;40m");
     Stdout_Flush();
     
     while(1)
@@ -63,21 +66,21 @@ static inline void WaitForInput()
 
 static inline void PrintPCSR()
 {
-    printf("  PC: [96m%08lX[0m    SR: [96m%04X[0m\n", pcState, srState);
-    printf("  Func: [95m%s[0m\n", "<not available>");   // Test: __FUNCTION__
-    printf("  File: [95m%s[0m\n\n", "<not available>"); // Test: __FILE__
+    printf("  PC: \e[96m%08lX\e[0m    SR: \e[96m%04X\e[0m\n", pcState, srState);
+    printf("  Func: \e[95m%s\e[0m\n", "<not available>");   // Test: __FUNCTION__
+    printf("  File: \e[95m%s\e[0m\n\n", "<not available>"); // Test: __FILE__
 }
 
 static inline void PrintRegisters()
 {
-    printf("  D0: [96m%08lX[0m    A0: [96m%08lX[0m\n", registerState[0], registerState[8]);
-    printf("  D1: [96m%08lX[0m    A1: [96m%08lX[0m\n", registerState[1], registerState[9]);
-    printf("  D2: [96m%08lX[0m    A2: [96m%08lX[0m\n", registerState[2], registerState[10]);
-    printf("  D3: [96m%08lX[0m    A3: [96m%08lX[0m\n", registerState[3], registerState[11]);
-    printf("  D4: [96m%08lX[0m    A4: [96m%08lX[0m\n", registerState[4], registerState[12]);
-    printf("  D5: [96m%08lX[0m    A5: [96m%08lX[0m\n", registerState[5], registerState[13]);
-    printf("  D6: [96m%08lX[0m    A6: [96m%08lX[0m\n", registerState[6], registerState[14]);
-    printf("  D7: [96m%08lX[0m    A7: [96m%08lX[0m\n\n", registerState[7], registerState[15]);
+    printf("  D0: \e[96m%08lX\e[0m    A0: \e[96m%08lX\e[0m\n", registerState[0], registerState[8]);
+    printf("  D1: \e[96m%08lX\e[0m    A1: \e[96m%08lX\e[0m\n", registerState[1], registerState[9]);
+    printf("  D2: \e[96m%08lX\e[0m    A2: \e[96m%08lX\e[0m\n", registerState[2], registerState[10]);
+    printf("  D3: \e[96m%08lX\e[0m    A3: \e[96m%08lX\e[0m\n", registerState[3], registerState[11]);
+    printf("  D4: \e[96m%08lX\e[0m    A4: \e[96m%08lX\e[0m\n", registerState[4], registerState[12]);
+    printf("  D5: \e[96m%08lX\e[0m    A5: \e[96m%08lX\e[0m\n", registerState[5], registerState[13]);
+    printf("  D6: \e[96m%08lX\e[0m    A6: \e[96m%08lX\e[0m\n", registerState[6], registerState[14]);
+    printf("  D7: \e[96m%08lX\e[0m    A7: \e[96m%08lX\e[0m\n\n", registerState[7], registerState[15]);
 }
 
 static inline void PrintStack()
@@ -86,7 +89,7 @@ static inline void PrintStack()
 
     for (u8 i = 0; i < 20; i+=2)
     {
-        printf("  SP+%02X: [96m%08lX[0m    SP+%02X: [96m%08lX[0m\n", i*4, *(sp + (i + 0)), (i+1)*4, *(sp + (i + 1)));
+        printf("  SP+%02X: \e[96m%08lX\e[0m    SP+%02X: \e[96m%08lX\e[0m\n", i*4, *(sp + (i + 0)), (i+1)*4, *(sp + (i + 1)));
     }
 }
 
@@ -95,7 +98,7 @@ void __attribute__ ((noinline)) int_addresserror()
 {
     InitException();
 
-    TRM_SetStatusText("Address error exception            ");
+    SB_SetStatusText("Address error exception            ");
 
     PrintPCSR();
     PrintRegisters();
@@ -108,7 +111,7 @@ void __attribute__ ((noinline)) int_illegal()
 {
     InitException();
 
-    TRM_SetStatusText("Illegal instruction exception      ");
+    SB_SetStatusText("Illegal instruction exception      ");
 
     PrintPCSR();
     PrintRegisters();
@@ -121,7 +124,7 @@ void __attribute__ ((noinline)) int_zerodivide()
 {
     InitException();
 
-    TRM_SetStatusText("Divide by zero exception           ");
+    SB_SetStatusText("Divide by zero exception           ");
 
     PrintPCSR();
     PrintRegisters();
@@ -134,7 +137,7 @@ void __attribute__ ((noinline)) int_error()
 {
     InitException();
 
-    TRM_SetStatusText("Error exception                    ");
+    SB_SetStatusText("Error exception                    ");
 
     PrintPCSR();
     PrintRegisters();
@@ -147,7 +150,7 @@ void __attribute__ ((noinline)) int_trapv()
 {
     InitException();
 
-    TRM_SetStatusText("TRAPV exception                    ");
+    SB_SetStatusText("TRAPV exception                    ");
 
     PrintPCSR();
     PrintRegisters();
@@ -160,7 +163,7 @@ void __attribute__ ((noinline)) int_privviolation()
 {
     InitException();
 
-    TRM_SetStatusText("Privilege violation exception      ");
+    SB_SetStatusText("Privilege violation exception      ");
 
     PrintPCSR();
     PrintRegisters();
@@ -173,7 +176,7 @@ void __attribute__ ((noinline)) int_trace()
 {
     InitException();
 
-    TRM_SetStatusText("Trace exception                    ");
+    SB_SetStatusText("Trace exception                    ");
 
     PrintPCSR();
     PrintRegisters();
@@ -186,7 +189,7 @@ void __attribute__ ((noinline)) int_line1x1x()
 {
     InitException();
 
-    TRM_SetStatusText("Line 1x1x emulator exception       ");
+    SB_SetStatusText("Line 1x1x emulator exception       ");
 
     PrintPCSR();
     PrintRegisters();
@@ -199,7 +202,7 @@ void __attribute__ ((noinline)) int_buserror()
 {
     InitException();
 
-    TRM_SetStatusText("Bus error exception                ");
+    SB_SetStatusText("Bus error exception                ");
 
     PrintPCSR();
     PrintRegisters();
@@ -212,7 +215,7 @@ void __attribute__ ((noinline)) int_chkinst()
 {
     InitException();
 
-    TRM_SetStatusText("ChkInst exception                  ");
+    SB_SetStatusText("ChkInst exception                  ");
 
     PrintPCSR();
     PrintRegisters();

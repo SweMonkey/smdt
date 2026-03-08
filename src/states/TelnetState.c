@@ -9,13 +9,14 @@
 #include "Keyboard.h"           // bKB_ScrLock
 #include "devices/RL_Network.h"
 #include "system/PseudoFile.h"
+#include "system/StatusBar.h"
 
 #ifdef DEBUG_STREAM
 #include "misc/DebugStream.h"
 #endif
 
 static u8 rxdata;
-u8 sv_TelnetFont = FONT_4x8_8;
+u8 sv_TelnetFont = FONT_SOFTWARE;
 
 
 u16 Enter_Telnet(u8 argc, char *argv[])
@@ -24,15 +25,20 @@ u16 Enter_Telnet(u8 argc, char *argv[])
     TELNET_Init(TF_Everything);
 
     // Set up initial title
-    u8 it = 0;
     char title[38];
-    u8 len = strlen(argv[1]);
-    len = len >= 37 ? 37 : len;
+    u8 it = 0;
+    u8 len = 0;
+    
+    if (argc > 1)
+    {
+        len = strlen(argv[1]);
+        len = len >= 37 ? 37 : len;
 
-    while (it++ < len) if (argv[1][it] == ':') break;
+        while (it++ < len) if (argv[1][it] == ':') break;
+    }
 
-    snprintf(title, 37, "%s - %.*s", STATUS_TEXT_SHORT, it, argv[1]);
-    TRM_SetStatusText(title);
+    snprintf(title, 37, "%s %c %.*s", STATUS_TEXT_SHORT, (len > 0 ? '-' : ' '), it, (len > 0 ? argv[1] : " "));
+    SB_SetStatusText(title);
 
     Buffer_Flush(&TxBuffer);
     Buffer_Flush(&RxBuffer);
@@ -49,7 +55,7 @@ u16 Enter_Telnet(u8 argc, char *argv[])
         if (NET_Connect(argv[1]) == FALSE) 
         {
             // Connection failed; Inform the user here
-            printf("Connection to %s failed", argv[1]);
+            printf("Connection to %s failed\n\r", argv[1]);
         }
     }
 
@@ -74,13 +80,13 @@ void Exit_Telnet()
 
 void Reset_Telnet()
 {
-    TRM_SetStatusText(STATUS_TEXT_SHORT);
-    TTY_Init(TF_ClearScreen);
+    SB_SetStatusText(STATUS_TEXT_SHORT);
+    TTY_Init(TF_ClearScreen | TF_ResetVariables);
 }
 
 void Run_Telnet()
 {
-    u16 it = 0;
+    //u16 it = 0;
     
     if (bKB_ScrLock) return;
 
@@ -88,7 +94,7 @@ void Run_Telnet()
     {
         TELNET_ParseRX(rxdata);
 
-        if (it++ > 16) break;   // May need tweaking, 8 is too little (buffer will overflow)
+        //if (it++ > 32) break;   // May need tweaking, 8 is too little (buffer will overflow)
     }
 
     //Telnet_MouseTrack();
@@ -100,25 +106,48 @@ void Input_Telnet()
 
     if (is_KeyDown(KEY_RETURN) || is_KeyDown(KEY_KP_RETURN))
     {
-        /*When LINEMODE is turned on, and when in EDIT mode, when any normal
-        line terminator on the client side operating system is typed, the
-        line should be transmitted with "CR LF" as the line terminator.  When
-        EDIT mode is turned off, a carriage return should be sent as "CR
-        NUL", a line feed should be sent as LF, and any other key that cannot
-        be mapped into an ASCII character, but means the line is complete
-        (like a DOIT or ENTER key), should be sent as "CR LF".*/
-        if (vLineMode & LMSM_EDIT)
+        if (bLinefeedMode)
         {
+            NET_SendChar(0xD); // Send \r - carridge return
+            NET_SendChar(0xA); // Send \n - line feed
+
+            #if ESC_LOGGING >= 3
+            kprintf("\e[92mSending <13><10> return\e[0m");
+            #endif
+        }
+        else if (v_LineMode & LMSM_EDIT)
+        {
+            /*When LINEMODE is turned on, and when in EDIT mode, when any normal
+            line terminator on the client side operating system is typed, the
+            line should be transmitted with "CR LF" as the line terminator.  When
+            EDIT mode is turned off, a carriage return should be sent as "CR
+            NUL", a line feed should be sent as LF, and any other key that cannot
+            be mapped into an ASCII character, but means the line is complete
+            (like a DOIT or ENTER key), should be sent as "CR LF".*/
+
             NET_BufferChar(0xD); // Send \r - carridge return
             NET_BufferChar(0xA); // Send \n - line feed
             NET_TransmitBuffer();
+
+            #if ESC_LOGGING >= 3
+            kprintf("\e[92mBuffering <13><10> return\e[0m");
+            #endif
         }
         else
         {
+            #if ESC_LOGGING >= 3
+            kprintf("\e[92mSending <13> return\e[0m");
+            #endif
+
             NET_SendChar(0xD); // Send \r - carridge return
             //NET_SendChar(0xA); // Send \n - line feed
         }
     }
+
+    /*if (is_KeyDown(KEY_F1))
+    {
+        bLinefeedMode = TRUE;
+    }*/
 
     if (is_KeyDown(KEY_ESCAPE))
     {
@@ -129,11 +158,11 @@ void Input_Telnet()
     {
         // 0x8  = backspace
         // 0x7F = DEL
-        if (vLineMode & LMSM_EDIT)
+        if (v_LineMode & LMSM_EDIT)
         {
             Buffer_ReversePop(&TxBuffer);
         }
-        else if (vBackspace == 1)
+        else if (v_Backspace == 1)
         {
             NET_SendChar(0x8);    // ^H
         }
