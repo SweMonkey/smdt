@@ -293,3 +293,6 @@ A: Type `/join #channel` in the text input box at the bottom and press Enter.<br
 <br>
 Q: I get double characters typed when I type on certain telnet servers?<br>
 A: Either the server or SMDT failed to setup local echo. You can change this manually in the Quick meu (Settings -> Client settings -> Terminal -> Variables -> Local echo -> On).<br>
+<br>
+Q: Any way I can boot straight into a telnet session and bypass the command shell?<br>
+A: Yes, hold either the backspace key on a keyboard OR the C button on a controller during the bootscreen. This will boot straight into a telnet session where it will listen to anything on the serial port.<br>

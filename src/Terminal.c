@@ -552,17 +552,29 @@ void TTY_PrintChar(u8 c)
     // If a deferred wrap is pending, apply it BEFORE drawing the next printable
     if (bPendingWrap)
     {
-        //kprintf("sx: %d -> 0    --  sy: %d + 1  -- bWrapMode: %s  --  Wrap pending", sx, sy, bWrapMode?"True":"False");
-        sx = 0;
-        /*if (bWrapMode)*/ TTY_MoveCursor(TTY_CURSOR_DOWN, 1);
+        if (bWrapMode)  // Required for "ANSIRCTests.test_SaveRestoreCursor_Wrap"
+        {
+            sx = 0;
+            TTY_MoveCursor(TTY_CURSOR_DOWN, 1);
+        }
 
         bPendingWrap = FALSE;
+    }
+
+    if (bInsertMode)
+    {
+        // ... not available for anything other than the software renderer ...
     }
 
     switch (sv_Font)
     {
         case FONT_SOFTWARE:
         {
+            if (bInsertMode)
+            {
+                SW_ShiftRow_Right(TTY_GetSY_A(), TTY_GetSX(), 1);
+            }
+
             SW_PrintChar(c);
             EvenOdd = sx & 1;
             break;
@@ -623,7 +635,7 @@ void TTY_PrintChar(u8 c)
         default: break;
     }
 
-    if (bInsertMode == FALSE) TTY_MoveCursor(TTY_CURSOR_RIGHT, 1);
+    TTY_MoveCursor(TTY_CURSOR_RIGHT, 1);
 }
 
 inline void TTY_PrintString(const char *str)
@@ -789,14 +801,16 @@ void TTY_ClearPartialLine(u16 y, u16 from_x, u16 to_x)
             u16 to_x_ = to_x >> 1;
             u16 num = (to_x_ - from_x_);   // >>3
 
+            /*
+            CHECKME: Is this offset by 1 character?
+            vttest_cursor_movement_1: Characters are cleared from column 1 instead of column 0.
+            */
+
             *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR((u32) AVR_PLANE_A + ((( (from_x_) & 127) + ((y & 31) << 7)) << 1) + (BufferSelect));        
             j = num;    // NumChar / 8 --> Below sends 2 bytes * 4 (8 bytes every loop)
             while (j--)
             {
                 *((vu16*) VDP_DATA_PORT) = 0;
-                //*((vu16*) VDP_DATA_PORT) = 0;
-                //*((vu16*) VDP_DATA_PORT) = 0;
-                //*((vu16*) VDP_DATA_PORT) = 0;
             }
             
             *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR((u32) AVR_PLANE_B + ((( (from_x_ + !EvenOdd ) & 127) + ((y & 31) << 7)) << 1) + (BufferSelect));
@@ -804,9 +818,6 @@ void TTY_ClearPartialLine(u16 y, u16 from_x, u16 to_x)
             while (j--)
             {
                 *((vu16*) VDP_DATA_PORT) = 0;
-                //*((vu16*) VDP_DATA_PORT) = 0;
-                //*((vu16*) VDP_DATA_PORT) = 0;
-                //*((vu16*) VDP_DATA_PORT) = 0;
             }
             break;
         }
@@ -1159,8 +1170,8 @@ void TTY_DrawScrollback(u8 num)
 {
     if (sv_Font == FONT_SOFTWARE)
     {
-        kprintf("Software scrollback - num: %u - top: %u - bottom: %u", num, DMarginTop, DMarginBottom);
-        SW_ShiftLineUp(num);
+        //kprintf("Software scrollback - num: %u - top: %u - bottom: %u", num, DMarginTop, DMarginBottom);
+        SW_ShiftLinesUp(num);
         return;
     }
 

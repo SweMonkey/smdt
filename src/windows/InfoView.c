@@ -242,7 +242,7 @@ static void DrawInfoTab()
 
     i++;
 
-    snprintf(buf, 40, "SMDT Version: %s", STATUS_VER_STR);
+    snprintf(buf, 40, "%s Version: %s", STATUS_TEXT_SHORT, STATUS_VER_STR);
     UI_DrawText(0,  i++, PAL1, buf);
 
     snprintf(buf, 40, "  Build date: %s %s", __DATE__, __TIME__);

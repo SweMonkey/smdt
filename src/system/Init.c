@@ -11,6 +11,7 @@
 #include "Telnet.h"
 #include "WinMgr.h"
 #include "Palette.h"
+#include "Keyboard.h"
 
 #include "misc/ConfigFile.h"
 #include "misc/Exception.h"
@@ -189,5 +190,18 @@ void SystemInit(bool hardReset)
     //ChangeState(PS_Telnet, 0, NULL);
     //ChangeState(PS_IRC, 0, NULL);
     //ChangeState(PS_Gopher, 0, NULL);
-    ChangeState(PS_Terminal, 0, NULL);
+
+    u8 kbdata;
+    if (KB_Poll(&kbdata)) KB_Interpret_Scancode(kbdata);
+
+    VDP_setEnable(FALSE);
+    if (is_KeyDown(KEY_BACKSPACE))
+    {
+        ChangeState(PS_Telnet, 0, NULL);
+    }
+    else
+    {
+        ChangeState(PS_Terminal, 0, NULL);
+    }
+    VDP_setEnable(TRUE);
 }

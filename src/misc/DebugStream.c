@@ -12,9 +12,9 @@
 
 #ifdef DEBUG_STREAM
 #include "kdebug.h"
-asm(".global streamdump\nstreamdump:\n.incbin \"tmp/streams/error/PCJR.ANS\"");
+asm(".global streamdump\nstreamdump:\n.incbin \"tmp/streams/test_vt102_features.log\"");
 extern const unsigned char streamdump[];
-static const u32 dumpsize = 2155;
+static const u32 dumpsize = 18989;
 static const u32 dumpstart = 0;
 #endif
 
@@ -40,7 +40,7 @@ void Run_DebugStream(u32 len)
             KB_Interpret_Scancode(kbdata);
         }
 
-        if (is_KeyDown(KEY_F1))// || (p == 0x91D))
+        if (is_KeyDown(KEY_F1))// || (p == 0xB6B))
         {
             bStepping = TRUE;
             InputTick();    // Flush input queue

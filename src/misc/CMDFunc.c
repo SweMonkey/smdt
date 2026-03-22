@@ -279,8 +279,8 @@ xport disconnect  - Close connection\n\n");
 
 void CMD_UName(u8 argc, char *argv[])
 {
-    const char *Krnl_Str = "SMDT";
-    const char *OS_Str = "SMDT";
+    const char *Krnl_Str = STATUS_TEXT_SHORT;
+    const char *OS_Str = STATUS_TEXT_SHORT;
     const char *Mach_Str = "m68k";
     //const char *Node_Str = "Local";
     const char *Mach_Name = "None";
@@ -629,7 +629,6 @@ void CMD_Test(u8 argc, char *argv[])
         u16 fc = bPALSystem ? 250 : 300;    // How many frames we should run the test for
         u16 nf = bPALSystem ? 50 : 60;      // How many frames there are in a second
 
-        bInsertMode = TRUE;
         SYS_disableInts();
         
         while (frame < fc)
@@ -647,11 +646,11 @@ void CMD_Test(u8 argc, char *argv[])
             {
                 hv = 0;
                 frame++;
+                TTY_SetSX(0);
             }
         }
 
         SYS_enableInts();
-        bInsertMode = FALSE;
         printf("\nManaged to print %u characters in %lu seconds (Insert mode ON)\n = %lu characters/s\n = %lu characters/frame\n\n", num, frame/nf, num/(frame/nf), num/frame);
         kprintf("\nManaged to print %u characters in %lu seconds (Insert mode ON)\n = %lu characters/s\n = %lu characters/frame\n\n", num, frame/nf, num/(frame/nf), num/frame);
         return;
@@ -996,6 +995,13 @@ void CMD_Test(u8 argc, char *argv[])
         return;
     }
 
+    if ((argc > 2) && (strcmp("-ftitle", argv[1]) == 0))
+    {
+        SB_SetStatusText(argv[2]);
+        SB_ResetStatusText();
+        return;
+    }
+
     if ((argc > 1) && (strcmp("-dmouse", argv[1]) == 0))
     {
         bMouse = FALSE;
@@ -1069,13 +1075,39 @@ void CMD_Test(u8 argc, char *argv[])
 
     if ((argc > 2) && (strcmp("-clearv", argv[1]) == 0))
     {
-        printf("\e[1;1H1   \n2   \n3   \n4   \n5   \n6   \n7   \n8   \n9   \n10  \n11  \n12  \n13  \n14  \n15  \n16  \n17  \n18  \n19  \n20  \n21  \n22  \n");
+        printf("\e[2J\e[1;1H1   \n2   \n3   \n4   \n5   \n6   \n7   \n8   \n9   \n10  \n11  \n12  \n13  \n14  \n15  \n16  \n17  \n18  \n19  \n20  \n21  \n22  \n");
         Stdout_Flush();
         u8 n = atoi(argv[2]);
         n = n ? n : 1;
         SW_ClearLine(14, n);
 
         kprintf("Clearing lines 14 -> %u", 14 + n);
+    }
+
+    if ((argc > 1) && (strcmp("-clearp", argv[1]) == 0))
+    {
+        printf("\e[2J\e[1;1H0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF\n");
+        printf(              "1111111111111111111111111111111111111111|111111111111111111111111111111111111111\n");
+        printf(              "222222222222222222222222222222222222222|2222222222222222222222222222222222222222\n");
+        printf(              "|3333333333333333333333333333333333333333|33333333333333333333333333333333333333\n");
+        printf(              "44444444444444444444444444444444444444|4444444444444444444444444444444444444444|\n");
+        printf(              "55555555555555555555555555555555555555|55555555555555555555555555555555555555555\n");
+        printf(              "666666666666666666666666666666666666666|666666666666666666666666666666666666666|\nEnd\n");
+        Stdout_Flush();
+
+        waitMs(250);
+        SW_ClearPartialLine(2, 0, 40);
+        waitMs(250);
+        SW_ClearPartialLine(3, 40, 80);
+        waitMs(250);
+        SW_ClearPartialLine(4, 1, 41);
+        waitMs(250);
+        SW_ClearPartialLine(5, 39, 79);
+        waitMs(250);
+        SW_ClearPartialLine(6, 39, 80);
+        waitMs(250);
+        SW_ClearPartialLine(7, 40, 79);
+        waitMs(250);
     }
     
     if ((argc > 1) && (strcmp("-fpstdout", argv[1]) == 0))
@@ -1146,6 +1178,17 @@ void CMD_Test(u8 argc, char *argv[])
         printf("\e[1;25H\e[Z\e[6n");
         return;
     }
+
+    if ((argc > 1) && (strcmp("-srcwrap", argv[1]) == 0))
+    {
+        printf("\e[2J\e[?7h\e[s\e[?7l\e[u\e[18t\e[1;79Habcd\e[6n");
+        Stdout_Flush();
+        printf("\nCursor position should be: 1;80\n");
+        printf("Cursor position is at: %d;%d (Check logs for accuracy)\n", TTY_GetSY_A()+1, TTY_GetSX()+1);
+        return;
+    }
+
+    
 
     if ((argc > 1) && (strcmp("-hpa", argv[1]) == 0))
     {
@@ -2236,9 +2279,9 @@ void CMD_About(u8 argc, char *argv[])
 {
     if (sv_Font)
     {
-        printf(" SMDT - a dumb project created by smds\n");
+        printf(" %s - a dumb project created by smds\n", STATUS_TEXT_SHORT);
         printf(" Copyright (c) 2026 smds\n");
-        printf(" See SMDT github for more info:\n");
+        printf(" See %s github for more info:\n", STATUS_TEXT_SHORT);
         printf(" \e[36mgithub.com/SweMonkey/smdt\e[0m\n\n");
 
         printf(" This project incorporates some code by b1tsh1ft3r\n");
@@ -2254,9 +2297,9 @@ void CMD_About(u8 argc, char *argv[])
     }
     else
     {
-        printf("SMDT - a dumb project created by smds\n");
+        printf("%s - a dumb project created by smds\n", STATUS_TEXT_SHORT);
         printf("Copyright (c) 2026 smds\n");
-        printf("See SMDT github for more info:\n");
+        printf("See %s github for more info:\n", STATUS_TEXT_SHORT);
         printf("\e[36mgithub.com/SweMonkey/smdt\e[0m\n\n");
 
         printf("This project incorporates some code -\n - by b1tsh1ft3r\n");

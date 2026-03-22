@@ -1,3 +1,19 @@
+v0.34.1 Bugfixes:
+Added "Insert Blanks (ICH)" escape sequence
+Fixed "Delete Line (DL)" escape
+Fixed "Delete Character (DCH)" escape
+Fixed "Erase Character (ECH)" escape - Erroneously moved the cursor left before deletion causing the area to be shifted (Fixes dwarf fortress visual bugs)
+Fixed Insert mode (mode 4) - It now shifts cells to the right when enabled.
+
+      Please note that these escape codes are only working properly when using the software renderer.
+      The reason why is because the software renderer uses a RAM buffer for the screen content, while other text modes do not and therefore can't easily change screen content.
+
+Added the ability to boot straight into a telnet session from the bootscreen; Hold the backspace key or C button on a controller for the duration of the bootscreen.
+Added dummy escapes for all unimplemented character sets (ESC* ESC+ ESC- ESC. and ESC/) to avoid parser corruption.
+Screen is now redrawn when switching between main and alternate screen buffer in the terminal (software rendered mode only).
+Fixed "Horizontal Position Absolute (HPA)" escape - I buggered up the handling of out of bounds values... which also led me to a "bug" in CUP that would always reset HPA's X value to garbage...
+Fixed input device icon defaulting to mouse icon instead of controller icon.
+
 v0.34.0:
 This update has taken way to long to get pushed due to bug fixing and me getting distracted by adding new shiny things...
 I know for a fact that all the modifications to the terminal parser has introduced new bugs and/or compatability issues, I have tried my best to iron out most obvious bugs.

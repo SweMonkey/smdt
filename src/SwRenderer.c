@@ -55,6 +55,8 @@ static u8 *alt_attr  = NULL;
 static u8 *attrbuf; // Screen attribute buffer (points to either main or alt screen)
 static u8 *protbuf; // Screen protection buffer (only one for both main/alt!)
 
+static u8 LastBuffer = 0xFF;
+
 extern u8 ColorFG;
 extern u8 ColorBG;
 extern bool bIntense;
@@ -63,8 +65,14 @@ extern bool bInverse;
 
 void SW_SetBuffer()
 {
+    if (LastBuffer == BufferSelect) return;
+
     scrbuf  = BufferSelect ? alt_scr  : main_scr;
     attrbuf = BufferSelect ? alt_attr : main_attr;
+
+    SW_RedrawScreen();
+
+    LastBuffer = BufferSelect;
 }
 
 void SW_ResetProt()
@@ -273,6 +281,51 @@ void SW_FillScreen(u8 c)
     TTY_SetSY_A(0);
 }
 
+void SW_RedrawScreen()
+{
+    for (u16 i = 0; i < SCREEN_SIZE; i++)
+    {
+        u16 vram_off;
+        if (i & 1) vram_off = AVR_FONT0_POS + (i << 4) - 14;    // Odd X
+        else       vram_off = AVR_FONT0_POS + (i << 4);         // Even X
+
+        SW_RenderChar(i);    // Render glyph into 4x8 tile buffer
+        
+        *(vu16*)VDP_CTRL_PORT = 0x8F04;                        // Set VDP autoinc to 4
+        *(vu32*)VDP_CTRL_PORT = VDP_WRITE_VRAM_ADDR(vram_off); // Set VDP write address
+        
+        u16 *d = (u16*)tb_16;
+        for (u16 i = 0; i < 8; i++, d++)
+        {
+            *(vu16*)VDP_DATA_PORT = *d;
+        }
+    }
+}
+
+void SW_RedrawRow(u8 row)
+{
+    u16 i;
+    for (u16 j = 0; j < SCREEN_WIDTH; j++)
+    {
+        i = (row * SCREEN_WIDTH) + j;
+
+        u16 vram_off;
+        if (i & 1) vram_off = AVR_FONT0_POS + (i << 4) - 14;    // Odd X
+        else       vram_off = AVR_FONT0_POS + (i << 4);         // Even X
+
+        SW_RenderChar(i);    // Render glyph into 4x8 tile buffer
+        
+        *(vu16*)VDP_CTRL_PORT = 0x8F04;                        // Set VDP autoinc to 4
+        *(vu32*)VDP_CTRL_PORT = VDP_WRITE_VRAM_ADDR(vram_off); // Set VDP write address
+        
+        u16 *d = (u16*)tb_16;
+        for (u16 i = 0; i < 8; i++, d++)
+        {
+            *(vu16*)VDP_DATA_PORT = *d;
+        }
+    }
+}
+
 // This still has a bug; See "test -clearv 6" - it will lop the top and beginning of the text "/sram/" on the next line in the terminal
 void SW_ClearLine(u16 y, u16 line_count)
 {
@@ -287,6 +340,11 @@ void SW_ClearLine(u16 y, u16 line_count)
     s16 py = (y) % SCREEN_HEIGHT;
     u16 p = (py * SCREEN_WIDTH) + px;
     s32 num_bytes = (1280 * line_count);    // 1280 = 40 tiles * 32 bytes per tile  -- each tile contain 2 characters, hence 40 and not 80
+    s16 cx = TTY_GetSX();
+
+    num_bytes += (cx & ~1) * 16;    // Clear up to the cursor on current line
+    if (cx & 1) num_bytes += 32;    // If odd X then add an additional tile
+    // ^ this works... but it shouldn't? Shouldn't we redraw a single character?
 
     // Clear the RAM screen buffer
     ClearBuffer(p, (SCREEN_WIDTH * line_count), 0);
@@ -326,40 +384,54 @@ void SW_ClearLineSingle(u16 y)
 
 void SW_ClearPartialLine(u16 y, u16 from_x, u16 to_x)
 {
-    if (from_x >= to_x || from_x >= SCREEN_WIDTH) return;
+    u16 count = to_x - from_x;
 
+    if ((from_x >= to_x) || (from_x >= SCREEN_WIDTH) || (count == 0)) return;
     if (to_x > SCREEN_WIDTH) to_x = SCREEN_WIDTH;
 
     u16 py = y % SCREEN_HEIGHT;
 
     // Clear the RAM screen buffer
     u16 p = (py * SCREEN_WIDTH) + from_x;
-    u16 count = to_x - from_x;
+
+    ClearBuffer(p, count, 0);
+
+    // Simple way, but requires full row redraw
+    //SW_RedrawRow(y);
+    //return;
+
+    // --------------------
+
+    // More complex way, but only redraws at most 2 characters (worst case) or 0 (best case) while DMA filling the rest
 
     //kprintf(" RAM: p: $%X - count: %u - from: %u - to: %u", p, count, from_x, to_x);
-    ClearBuffer(p, count, 0);
+    memset(tb_16, 0, 16);
 
     if (count > 1)
     {
-        // Debug colours, replace VRAM fill value 0 with "colour"
-        //u16 a = random() & 0xF;
-        //u16 colour = (a << 4) | a;
-
         u16 vram_off = (AVR_FONT0 + ((p+1)>>1)) * 32;
         count = ((count-1)*16) + (!(from_x & 1) * 16);
 
-        //kprintf("VRAM: vram_off: $%X -> $%X - count: %u - odd: %u", vram_off, vram_off + count, count, from_x & 1);
+        if ((from_x & 1) && (to_x & 1)) count -= 16;
+        else if (to_x & 1) count -= 16;
 
-        DMA_doVRamFill(vram_off, count, 0, 1);
-        DMA_waitCompletion();
+        //kprintf("VRAM: vram_off: $%X -> $%X - count: %u - odd: %u", vram_off, vram_off + count, count, from_x & 1);
+        //kprintf("1. Start: $%X - Count: %u - Start_Odd: %u - End_Odd: %u", vram_off, count, from_x & 1, to_x & 1);
+        
+        if (count > 0)  // Do not DMA 0 bytes
+        {
+            DMA_doVRamFill(vram_off, count, 0, 1);
+            DMA_waitCompletion();
+        }
     }
 
-    // Redraw one character when the count is odd
+
+    // Redraw one character at the beginning when the start is odd
     if ((from_x & 1))
     {
         u16 vram_off = AVR_FONT0_POS + (p << 4) - 14;    // Odd X
-
-        memset(tb_16, 0, 16);
+        
+        //kprintf("2. Start: $%X - Count: %u - Start_Odd: %u - End_Odd: %u", vram_off, count, from_x & 1, to_x & 1);
 
         *(vu16*)VDP_CTRL_PORT = 0x8F04;                        // Set VDP autoinc to 4
         *(vu32*)VDP_CTRL_PORT = VDP_WRITE_VRAM_ADDR(vram_off); // Set VDP write address
@@ -370,21 +442,19 @@ void SW_ClearPartialLine(u16 y, u16 from_x, u16 to_x)
             *(vu16*)VDP_DATA_PORT = *d;
         }
     }
-}
 
-void SW_RedrawScreen()
-{
-    for (u16 i = 0; i < SCREEN_SIZE; i++)
+    // Redraw one character at the end when the end is odd
+    if (to_x & 1)
     {
-        u16 vram_off;
-        if (i & 1) vram_off = AVR_FONT0_POS + (i << 4) - 14;    // Odd X
-        else       vram_off = AVR_FONT0_POS + (i << 4);         // Even X
-
-        SW_RenderChar(i);    // Render glyph into 4x8 tile buffer
+        u16 vram_off = (AVR_FONT0_POS + (p << 4)) + count;    // Even X
         
+        if (from_x & 1) vram_off += 16; // If the start X is also odd then add +16 offset to start offset
+        
+        //kprintf("3. Start: $%X - Count: %u - Start_Odd: %u - End_Odd: %u", vram_off, count, from_x & 1, to_x & 1);
+
         *(vu16*)VDP_CTRL_PORT = 0x8F04;                        // Set VDP autoinc to 4
         *(vu32*)VDP_CTRL_PORT = VDP_WRITE_VRAM_ADDR(vram_off); // Set VDP write address
-        
+
         u16 *d = (u16*)tb_16;
         for (u16 i = 0; i < 8; i++, d++)
         {
@@ -393,39 +463,53 @@ void SW_RedrawScreen()
     }
 }
 
-void SW_ShiftLineDown(u8 num)
+// Scroll all lines within margin down <num> rows
+void SW_ShiftLinesDown(u8 num)
 {
+    if (num == 0) return;
+
     if (num >= SCREEN_HEIGHT)
     {
         SW_ClearScreen();
         return;
     }
 
-    s16 left  = DMarginLeft-1;
-    s16 right = DMarginRight-1;
+    s16 top    = DMarginTop;
+    s16 bottom = DMarginBottom;
+    s16 left   = DMarginLeft;
+    s16 right  = DMarginRight;
+
+    //kprintf("SW: num: %u - top: %d - bottom: %d - left: %d - right: %d", num, top, bottom, left, right);
 
     // Clamp margins
+    if (top < 0) top = 0;
+    if (bottom >= SCREEN_HEIGHT) bottom = SCREEN_HEIGHT - 1;
+    if (top >= bottom) return;
+
     if (left < 0) left = 0;
     if (right > SCREEN_WIDTH) right = SCREEN_WIDTH;
     if (left >= right) return;
 
+    u16 region_height = bottom - top + 1;
+    if (num >= region_height) num = region_height;
+
     u16 col_width = right - left;
     u8 default_attr = (CL_FG << 4) | CL_BG;
 
-    // Move rows bottom up to avoid overwrite
-    for (s16 row = SCREEN_HEIGHT - 1; row >= num; row--)
+    // Move relevant rows down
+    for (s16 row = bottom; row >= top + num; row--)
     {
-        u16 dst = row * SCREEN_WIDTH + left;
-        u16 src = (row - num) * SCREEN_WIDTH + left;
+        u16 dst = (row * SCREEN_WIDTH) + left;
+        u16 src = ((row - num) * SCREEN_WIDTH) + left;
 
         memmove(scrbuf  + dst, scrbuf  + src, col_width);
         memmove(attrbuf + dst, attrbuf + src, col_width);
     }
 
-    // Clear the top <num> rows inside margins
-    for (u8 row = 0; row < num; row++)
+    // Clear top lines of now empty region
+    for (s16 row = top; row < top + num; row++)
     {
-        u16 off = row * SCREEN_WIDTH + left;
+        u16 off = (row * SCREEN_WIDTH) + left;
 
         memset(scrbuf  + off, 0, col_width);
         memset(attrbuf + off, default_attr, col_width);
@@ -434,56 +518,150 @@ void SW_ShiftLineDown(u8 num)
     SW_RedrawScreen();
 }
 
-void SW_ShiftLineUp(u8 num)
+// Scroll all lines within margins up <num> rows
+void SW_ShiftLinesUp(u8 num)
 {
     if (num == 0) return;
+    
+    if (num >= SCREEN_HEIGHT)
+    {
+        SW_ClearScreen();
+        return;
+    }
 
-    // Horizontal margins
+    s16 top    = DMarginTop;
+    s16 bottom = DMarginBottom;
     s16 left  = DMarginLeft  - 1;
     s16 right = DMarginRight;
 
+    // Clamp margins
     if (left < 0) left = 0;
     if (right > SCREEN_WIDTH) right = SCREEN_WIDTH;
     if (left >= right) return;
-
-    u16 col_width = right - left;
-
-    // Vertical margins
-    s16 top    = DMarginTop;
-    s16 bottom = DMarginBottom;
 
     if (top < 0) top = 0;
     if (bottom >= SCREEN_HEIGHT) bottom = SCREEN_HEIGHT - 1;
     if (top >= bottom) return;
 
     u16 region_height = bottom - top + 1;
+    if (num >= region_height) num = region_height;
 
-    if (num >= region_height)
-        num = region_height;
-
+    u16 col_width = right - left;
     u8 default_attr = (CL_FG << 4) | CL_BG;
 
     // Shift up lines inside region
     //kprintf("Left: %u - Right: %u", left, right);
     //kprintf("Top: %u - Bottom: %u", top, bottom);
 
+    // Move relevant rows up
     for (s16 row = top; row <= bottom - num; row++)
     {
-        u16 dst = row * SCREEN_WIDTH + left;
-        u16 src = (row + num) * SCREEN_WIDTH + left;
+        u16 dst = (row * SCREEN_WIDTH) + left;
+        u16 src = ((row + num) * SCREEN_WIDTH) + left;
 
         memmove(scrbuf  + dst, scrbuf  + src, col_width);
         memmove(attrbuf + dst, attrbuf + src, col_width);
     }
 
-    // Clear bottom lines of region
+    // Clear bottom lines of now empty region
     for (s16 row = bottom - num + 1; row <= bottom; row++)
     {
-        u16 off = row * SCREEN_WIDTH + left;
+        u16 off = (row * SCREEN_WIDTH) + left;
 
         memset(scrbuf  + off, 0, col_width);
         memset(attrbuf + off, default_attr, col_width); // default_attr should be whatever the SGR state was left as
     }
 
     SW_RedrawScreen();
+}
+
+// Scroll all rows at and below <row> up <num> rows
+void SW_ShiftNumLinesUp(u8 row, u8 num)
+{
+    if (num == 0) return;
+
+    s16 top    = row;
+    s16 bottom = DMarginBottom;
+    s16 left   = DMarginLeft;
+    s16 right  = DMarginRight;
+
+    // Clamp margins
+    if (top < 0) top = 0;
+    if (bottom >= SCREEN_HEIGHT) bottom = SCREEN_HEIGHT - 1;
+    if (top > bottom) return;
+
+    if (left < 0) left = 0;
+    if (right > SCREEN_WIDTH) right = SCREEN_WIDTH;
+    if (left >= right) return;
+
+    u16 region_height = bottom - top + 1;
+    if (num >= region_height) num = region_height;
+
+    u16 col_width = right - left;
+    u8 default_attr = (CL_FG << 4) | CL_BG;
+
+    // Move relevant rows up
+    for (s16 r = top; r <= bottom - num; r++)
+    {
+        u16 dst = r * SCREEN_WIDTH + left;
+        u16 src = (r + num) * SCREEN_WIDTH + left;
+
+        memmove(scrbuf  + dst, scrbuf  + src, col_width);
+        memmove(attrbuf + dst, attrbuf + src, col_width);
+    }
+
+    // Clear bottom lines of now empty region
+    for (s16 r = bottom - num + 1; r <= bottom; r++)
+    {
+        u16 off = r * SCREEN_WIDTH + left;
+
+        memset(scrbuf  + off, 0, col_width);
+        memset(attrbuf + off, default_attr, col_width);
+    }
+
+    // Todo, redraw affected rows instead of the entire screen...
+    SW_RedrawScreen();
+}
+
+// Shift right by <num> cells
+void SW_ShiftRow_Right(u8 row, u8 from, u16 num)
+{
+    if (num == 0 || from >= SCREEN_WIDTH || from + num >= SCREEN_WIDTH) return;
+
+    row += C_YSTART;
+
+    u16 src = (row * SCREEN_WIDTH) + from; 
+    u16 dst = src + num;
+    u16 cnt = (SCREEN_WIDTH - from) - num;
+
+    //kprintf("SW_ShiftRow1: row: %u - from: %u - num: %u --- src: %u - dst: %u - cnt: %u", row, from, num, src, dst, cnt);
+
+    memmove(scrbuf  + dst, scrbuf  + src, cnt);
+    memmove(attrbuf + dst, attrbuf + src, cnt);
+
+    memset(scrbuf  + src, 0, num);
+    memset(attrbuf + src, ((CL_FG << 4) | CL_BG), num);
+
+    SW_RedrawRow(row);
+}
+
+// Shift left by <num> cells
+void SW_ShiftRow_Left(u8 row, u8 from, u16 num)
+{
+    //kprintf("SW_ShiftRow2: row: %u - from: %u - num: %d", row, from, num);
+
+    if (num == 0 || from >= SCREEN_WIDTH) return;
+
+    u16 src = (row * SCREEN_WIDTH) + from; 
+    u16 dst = src - num;
+    u16 cnt = (SCREEN_WIDTH - from);
+
+    //kprintf("SW_ShiftRow2: src: %u - dst: %u - cnt: %u", src, dst, cnt);
+
+    memmove(scrbuf  + dst, scrbuf  + src, cnt);
+    memmove(attrbuf + dst, attrbuf + src, cnt);
+
+    // Clear the void to the right here?
+
+    SW_RedrawRow(row);
 }

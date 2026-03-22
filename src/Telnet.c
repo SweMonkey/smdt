@@ -139,7 +139,7 @@ static u8 ESC_Type = 0;
 static u8 ESC_Param[10] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
 static u16 ESC_Param16 = 0xFFFF;
 static u8 ESC_ParamSeq = 0;
-static char ESC_Buffer[4] = {'\0','\0','\0','\0'};
+static char ESC_Buffer[5] = {'\0','\0','\0','\0', 0};
 static u8 ESC_BufferSeq = 0;
 static char SpecialCharacter = 0;
 
@@ -205,8 +205,9 @@ u8 C1_7Bit = 1;                         // 1 = S7C1T - 0/2 = S8C1T (7bit vs 8bit
 bool bCursorSaved[2] = {FALSE, FALSE};
 
 // Terminal functions
-void TF_DECSC();
-void TF_CUB(u8 num);
+static inline __attribute__((always_inline)) void TF_DECSC();
+static inline __attribute__((always_inline)) void TF_CUB(u8 num);
+static inline __attribute__((always_inline)) void TF_CUP(u8 nx, u8 ny);
 
 static const u8 CharMap1[256] =
 {   // DEC Special Character and Line Drawing Set
@@ -656,8 +657,8 @@ void TELNET_ParseRX(u8 byte)
             bPendingWrap = FALSE;
         break;
         case 0x08:  // Backspace - Should be the same as CUB(1)
-            //TTY_MoveCursor(TTY_CURSOR_LEFT, 1);
-            TF_CUB(1);
+            TTY_MoveCursor(TTY_CURSOR_LEFT, 1);
+            //TF_CUB(1);
         break;
         case 0x09:  // Horizontal tab
             #ifdef TRM_LOGGING
@@ -942,6 +943,25 @@ static void DoEscape(u8 byte)
 
                     return;
                 }
+                case '@':   // Insert Blanks (ICH) - "ESC[ Ⓝ @"
+                {
+                    u8 n = atoi(ESC_Buffer);
+
+                    // Default param
+                    n = n == 0   ? 1 : n;
+                    n = n == 255 ? 1 : n;
+
+                    s16 x = TTY_GetSX();
+                    s16 y = TTY_GetSY_A();
+
+                    if (sv_Font == FONT_SOFTWARE) SW_ShiftRow_Right(y, x, n);
+
+                    #if ESC_LOGGING >= 4
+                    kprintf("ESC[%u@ - Insert %d blanks at %d", n, n, x);
+                    #endif
+
+                    goto EndEscape;
+                }
 
                 case 'A':   // Cursor Up (CUU)
                 {
@@ -1082,17 +1102,18 @@ static void DoEscape(u8 byte)
                     // This sequence performs cursor position (CUP) with x set to the parameterized value and y set to the current cursor position. 
                     // There is no additional or different behavior for using HPA.
 
-                    if (ESC_Buffer[0] != '\0') ESC_Param[ESC_ParamSeq++] = atoi(ESC_Buffer);
-                    
-                    // Setup params for CUP, which have [y;x while HPA only have [x - Swap X and insert cursor Y
-                    ESC_Param[1] = ESC_Param[0];
-                    ESC_Param[0] = TTY_GetSY_A()+1;
+                    u8 y = TTY_GetSY_A()+1;
+                    u16 x = atoi16(ESC_Buffer);
+
+                    x = x > C_XMAX ? C_XMAX : x;    // CUP does bounds checking on its own. Only check if its larger than screen width here
                     
                     #if ESC_LOGGING >= 4
-                    kprintf("HPA - X: %u (Y: %u)", ESC_Param[1], ESC_Param[0]);
+                    kprintf("HPA - X: %u (Y: %u)", x, y);
                     #endif
 
-                    goto CUP;
+                    TF_CUP((u8)x, y);
+
+                    goto EndEscape;
                 }
                 
                 case 'I':   // Cursor Horizontal Forward Tabulation (CHT) - "ESC[ Ⓝ I" -- Same as Horizontal Tab (TAB) times Ⓝ
@@ -1118,13 +1139,14 @@ static void DoEscape(u8 byte)
                     switch (n)
                     {                    
                         case 0: // Clear screen from cursor down (Keep cursor position)
-                            TTY_ClearLine(TTY_GetSY()+2, C_YMAX - TTY_GetSY_A());
+                            //TTY_ClearLine(TTY_GetSY()+2, C_YMAX - TTY_GetSY_A());
+                            TTY_ClearLine(TTY_GetSY()+1, C_YMAX - TTY_GetSY_A());
                             bPendingWrap = FALSE;
                         break;
 
                         case 1: // Clear screen from cursor up (Keep cursor position)
                             //TTY_ClearLine(TTY_GetSY(), TTY_GetSY_A());
-                            TTY_ClearLine(TTY_GetSY() - TTY_GetSY_A(), TTY_GetSY_A());  // linecount+1 = inclusive
+                            TTY_ClearLine(TTY_GetSY() - TTY_GetSY_A(), TTY_GetSY_A()+1);  // linecount+1 = inclusive
                             bPendingWrap = FALSE;
                         break;
 
@@ -1138,6 +1160,13 @@ static void DoEscape(u8 byte)
                                 TRM_ClearPlane(BG_A);
                                 TRM_ClearPlane(BG_B);
                             }
+
+                            if (bANSI_SYS_Emulation)
+                            {
+                                TTY_SetSX(0);
+                                TTY_SetSY_A(0);
+                            }
+
                             bPendingWrap = FALSE;
                         break;
 
@@ -1213,7 +1242,7 @@ static void DoEscape(u8 byte)
                     // Insert blank line / shift lines downward (only available with software renderer)
                     if (sv_Font == FONT_SOFTWARE)
                     {
-                        SW_ShiftLineDown(n);
+                        SW_ShiftLinesDown(n);
                     }
 
                     // Move cursor to left margin
@@ -1226,17 +1255,32 @@ static void DoEscape(u8 byte)
 
                 case 'M':   // Delete Line (DL) - "ESC[ Ⓝ M"
                 {
-                    u8 n = atoi(ESC_Buffer);
-                    n = (n ? n : 1);
+                    u8 max_lines = (bPALSystem?29:27);
 
-                    TTY_ClearLine(sy % 32, (n % (bPALSystem?29:27)) + 1);
+                    if (vDECOM)
+                    {
+                        max_lines = DMarginBottom - DMarginTop;
+                    }
+
+                    u8 y = sy % 32;
+                    u8 n = atoi(ESC_Buffer);
+                    
+                    n = (n ? n : 1);
+                    max_lines = n > max_lines ? max_lines : n;
+
+                    if (sv_Font == FONT_SOFTWARE)
+                    {
+                        SW_ClearLine(y, max_lines);
+                        SW_ShiftNumLinesUp(y, max_lines);
+                    }
+                    else  TTY_ClearLine(y, max_lines);
 
                     if (vDECLRMM) TTY_SetSX(DMarginLeft);
                     else TTY_SetSX(0);
 
                     
                     #if ESC_LOGGING >= 2
-                    kprintf("\e[93mESC[%uM (Delete Line) - sy: %d\e[0m", n, sy % 32);
+                    kprintf("\e[92mESC[%uM (Delete Line) - sy: %d - max_lines: %d\e[0m", n, y, max_lines);
                     #endif
 
                     goto EndEscape;
@@ -1257,10 +1301,23 @@ static void DoEscape(u8 byte)
                         if ((cx + n) > C_XMAX) n = cx - C_XMAX;
                     }
 
-                    TTY_ClearPartialLine(sy % 32, cx, cx + n);
+                    u8 end  = cx + n;
+                    u16 row = sy % 32;
+
+                    if (sv_Font == FONT_SOFTWARE) SW_ShiftRow_Left(row, end, n);
 
                     #if ESC_LOGGING >= 2
-                    kprintf("\e[93mESC[%uP (Delete Character) - Not fully implemented; TODO: Move characters right of DCH to the left\e[0m", n);
+                    kprintf("\e[92mMoving: Y: %d - From: %d - Num: %d\e[0m", row, end, n);
+                    #endif
+
+                    cx   = (end - n) + 1;
+                    end += 1;
+
+                    TTY_ClearPartialLine(row, cx, end);
+
+                    #if ESC_LOGGING >= 2
+                    kprintf("\e[92mESC[%uP (Delete Character)\e[0m", n);
+                    kprintf("\e[92mClearing: Y: %d - From: %d - To: %d\e[0m", row, cx, end);
                     #endif
 
                     goto EndEscape;
@@ -1317,8 +1374,6 @@ static void DoEscape(u8 byte)
 
                     s16 oldsx = TTY_GetSX();
                     s16 oldsy = TTY_GetSY_A();
-                    
-                    TTY_MoveCursor(TTY_CURSOR_LEFT, 1);
 
                     for (u16 i = 0; i < n; i++)
                     {
@@ -1329,6 +1384,12 @@ static void DoEscape(u8 byte)
                     TTY_SetSY_A(oldsy);
 
                     TTY_MoveCursor(TTY_CURSOR_DUMMY);
+
+                    #if ESC_LOGGING >= 3
+                    kprintf("\e[93mErase Character (ECH): From %u to %u\e[0m", oldsx, oldsx + n);
+                    #endif
+
+                    bPendingWrap = FALSE;
 
                     goto EndEscape;
                 }
@@ -1494,7 +1555,6 @@ static void DoEscape(u8 byte)
                     goto EndEscape;
                 }
 
-                CUP:
                 case 'H':   // Set Cursor Position (CUP) - "ESC[ Ⓝ ; Ⓝ H" -- Move cursor to upper left corner if no parameters or to yy;xx
                 case 'f':   // Alias: Set Cursor Position - "ESC[ Ⓝ ; Ⓝ f"
                 {
@@ -1503,40 +1563,7 @@ static void DoEscape(u8 byte)
                     u8 nx = ESC_Param[1];
                     u8 ny = ESC_Param[0];
 
-                    // Bounds check (255 param missing, 0 = invalid/default)
-                    nx = nx == 255 ? 1 : nx;    // x
-                    nx = nx == 0   ? 1 : nx;
-                    ny = ny == 255 ? 1 : ny;    // y
-                    ny = ny == 0   ? 1 : ny;
-                    
-                    #if ESC_LOGGING >= 4
-                    kprintf("CUP - X: %u - Y: %u", nx, ny);
-                    #endif
-                    
-                    if (vDECOM)
-                    {
-                        // Cap against margins
-                        nx += DMarginLeft;
-                        ny += DMarginTop;
-
-                        nx = nx > DMarginRight  ? DMarginRight  : nx;
-                        ny = ny > DMarginBottom ? DMarginBottom : ny;
-                    }
-                    else
-                    {
-                        // Cap against screen
-                        nx = nx > C_XMAX ? C_XMAX : nx;
-                        ny = ny > C_YMAX ? C_YMAX : ny;
-                    }
-
-                    nx--;
-                    ny--;
-
-                    TTY_SetSX(nx);
-                    TTY_SetSY_A(ny);
-
-                    TTY_MoveCursor(TTY_CURSOR_DUMMY);   // Dummy
-                    bPendingWrap = FALSE;
+                    TF_CUP(nx, ny);
 
                     goto EndEscape;
                 }
@@ -3541,6 +3568,51 @@ static void DoEscape(u8 byte)
             goto EndEscape;
         }
 
+        case '*':   // G2 charset
+        {
+            #ifdef ESC_LOGGING
+            kprintf("\e[91mUnimplemented G2 charset $%X ESC * %c at $%lX\e[0m", byte, (char)byte, RXBytes-1);
+            #endif
+
+            goto EndEscape;
+        }
+
+        case '+':   // G3 charset
+        {
+            #ifdef ESC_LOGGING
+            kprintf("\e[91mUnimplemented G3 charset $%X ESC + %c at $%lX\e[0m", byte, (char)byte, RXBytes-1);
+            #endif
+
+            goto EndEscape;
+        }
+
+        case '-':   // G1 charset
+        {
+            #ifdef ESC_LOGGING
+            kprintf("\e[91mUnimplemented G1 charset $%X ESC - %c at $%lX\e[0m", byte, (char)byte, RXBytes-1);
+            #endif
+
+            goto EndEscape;
+        }
+
+        case '.':   // G2 charset
+        {
+            #ifdef ESC_LOGGING
+            kprintf("\e[91mUnimplemented G2 charset $%X ESC . %c at $%lX\e[0m", byte, (char)byte, RXBytes-1);
+            #endif
+
+            goto EndEscape;
+        }
+
+        case '/':   // G3 charset
+        {
+            #ifdef ESC_LOGGING
+            kprintf("\e[91mUnimplemented G3 charset $%X ESC / %c at $%lX\e[0m", byte, (char)byte, RXBytes-1);
+            #endif
+
+            goto EndEscape;
+        }
+
         case '?':   // Mode set
         {
             if (byte == 'h')
@@ -4112,24 +4184,20 @@ static void DoEscape(u8 byte)
                     case 'D':   // ESC D    Index (IND) - Cursor down - at bottom of region, scroll up
                     {
                         #if ESC_LOGGING >= 2
-                        kprintf("ESC D - Cursor down (+scroll?)");
+                        kprintf("\e[93m\"ESC D\" Index (IND) - NOT FULLY IMPLEMENTED! At $%lX\e[0m", RXBytes-1);
                         #endif
 
-                        // Uhh... this needs testing because this just looks wrong
-                        if (TTY_GetSY_A() >= DMarginBottom) TTY_DrawScrollback(1);
-                        else
-                        {
-                            if (bLinefeedMode) TTY_SetSX(0);  // Convert \n to \n\r
+                        // TODO: Take margins into account and possible scrolling region up
+                        TTY_MoveCursor(TTY_CURSOR_DOWN, 1);
 
-                            TTY_MoveCursor(TTY_CURSOR_DOWN, 1);
-                        }
+                        bPendingWrap = FALSE;
                         
                         goto EndEscape;
                     }
 
                     case 'M':   // ESC M    Reverse Index (RI) https://terminalguide.namepad.de/seq/a_esc_cm/  (Old note: Moves cursor one line up, scrolling if needed)
                         #ifdef ESC_LOGGING
-                        kprintf("\e[93m\"ESC M\" Reverse Index NOT IMPLEMENTED! At $%lX\e[0m", RXBytes-1);
+                        kprintf("\e[93m\"ESC M\" Reverse Index (RI) - NOT FULLY IMPLEMENTED! At $%lX\e[0m", RXBytes-1);
                         #endif
 
                         if (TTY_GetSY_A() > DMarginTop) TTY_MoveCursor(TTY_CURSOR_UP, 1);
@@ -4263,7 +4331,10 @@ static void DoEscape(u8 byte)
                 
                     default:    // By default skip this round and parse it later
                         #if ESC_LOGGING >= 2
-                        if ((ESC_Type != '[') && (ESC_Type != ']') && (ESC_Type != '(') && (ESC_Type != ')')) kprintf("\e[91;5mSkipping: ESC %c ($%X) at $%lX\e[0m", ESC_Type, ESC_Type, RXBytes-1);
+                        if ((ESC_Type != '[') && (ESC_Type != ']') && 
+                            (ESC_Type != '(') && (ESC_Type != ')') && 
+                            (ESC_Type != '*') && (ESC_Type != '+') && 
+                            (ESC_Type != '-') && (ESC_Type != '.') && (ESC_Type != '/')) kprintf("\e[91;5mSkipping: ESC %c ($%X) at $%lX\e[0m", ESC_Type, ESC_Type, RXBytes-1);
                         #endif
 
                         #if ESC_LOGGING >= 5
@@ -4332,7 +4403,7 @@ static void ResetSequence()
         SpecialCharacter = 0;
 }
 
-void TF_DECSC()
+static inline __attribute__((always_inline)) void TF_DECSC()
 {
         u8 buffer = BufferSelect == 80 ? 1 : 0;
 
@@ -4358,9 +4429,49 @@ void TF_DECSC()
         #endif
 }
 
-void TF_CUB(u8 num)
+static inline __attribute__((always_inline)) void TF_CUB(u8 num)
 {
     TTY_MoveCursor(TTY_CURSOR_LEFT, num);
+    return;
+}
+
+static inline __attribute__((always_inline)) void TF_CUP(u8 nx, u8 ny)
+{
+    // Bounds check (255 param missing, 0 = invalid/default)
+    nx = nx == 255 ? 1 : nx;    // x
+    nx = nx == 0   ? 1 : nx;
+    ny = ny == 255 ? 1 : ny;    // y
+    ny = ny == 0   ? 1 : ny;
+    
+    #if ESC_LOGGING >= 4
+    kprintf("CUP - X: %u - Y: %u", nx, ny);
+    #endif
+    
+    if (vDECOM)
+    {
+        // Cap against margins
+        nx += DMarginLeft;
+        ny += DMarginTop;
+
+        nx = nx > DMarginRight  ? DMarginRight  : nx;
+        ny = ny > DMarginBottom ? DMarginBottom : ny;
+    }
+    else
+    {
+        // Cap against screen
+        nx = nx > C_XMAX ? C_XMAX : nx;
+        ny = ny > C_YMAX ? C_YMAX : ny;
+    }
+
+    nx--;
+    ny--;
+
+    TTY_SetSX(nx);
+    TTY_SetSY_A(ny);
+
+    TTY_MoveCursor(TTY_CURSOR_DUMMY);   // Dummy
+    bPendingWrap = FALSE;
+
     return;
 }
 

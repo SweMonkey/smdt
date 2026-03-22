@@ -32,13 +32,17 @@ void SB_ResetStatusBar()
     }
     else if (bMouse)
     {
+        SB_SetStatusIcon(ICO_MOUSE_OK, ICO_POS_0);
+    }
+    else if (JOY_getJoypadType(JOY_1) != JOY_TYPE_UNKNOWN)
+    {
         SB_SetStatusIcon(ICO_JP_OK, ICO_POS_0);
     }
     else
     {
-        SB_SetStatusIcon(ICO_MOUSE_OK, ICO_POS_0);
+        SB_SetStatusIcon(ICO_ID_UNKNOWN, ICO_POS_0);
     }
-
+        
     if (bRLNetwork || bXPNetwork)
     {
         SB_SetStatusIcon(ICO_NET_IDLE_RECV, ICO_POS_1);

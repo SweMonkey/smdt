@@ -327,7 +327,7 @@ static void WriteHistory()
 u16 Enter_Terminal(u8 argc, char *argv[])
 {
     SetupTerminal();
-    printf("SMDT Command Shell v0.3\n");
+    printf("%s Command Shell v0.3\n", STATUS_TEXT_SHORT);
     printf("Type \e[32mhelp\e[0m for available commands%s", sv_Font?" - ":"\n");
     printf("Press \e[32mF8\e[0m for quick menu\n\n");
 

@@ -4,13 +4,13 @@
 #include <genesis.h>
 
 // Title bar prefix
-#define STATUS_VER_STR "v0.34.0"
+#define STATUS_VER_STR "v0.34.1"
 #define STATUS_TEXT "SMDT v34"
 #define STATUS_TEXT_SHORT "SMDT"
 
 #define SMDT_VMAJOR_INT 0
 #define SMDT_VMINOR_INT 34
-#define SMDT_VREV_INT 0
+#define SMDT_VREV_INT 1
 
 // VRAM memory addresses for various graphics, in tile units (/32)
 #define AVR_BGBLOCK 0       // $0000 - $01FF
@@ -35,7 +35,7 @@ extern u16 AVR_WINDOW;
 
 
 // Check if a character is printable
-#define isPrintable(x) (x>0x1F)//((x != '\n')&&(x))
+#define isPrintable(x) (x>0x1F)
 
 // Tile macro for clearing window plane (Use with TRM_ClearArea)
 #define TRM_CLEAR_WINDOW (AVR_UI)   // For clearing inside windows or on the status bar
@@ -84,6 +84,7 @@ char *strtok(char *s, char d);
 #define tolower_string(s) u16 _ti = 0;while(s[_ti]){s[_ti]=(char)tolower((u8)s[_ti]);_ti++;}
 
 char *strncat(char *to, const char *from, u16 num);
+u16 vsnprintf(char *buf, u16 size, const char *fmt, va_list args);
 u16 snprintf(char *buffer, u16 size, const char *fmt, ...) __attribute__ ((format (printf, 3, 4)));
 
 void *memmove(void *dest, const void *src, u32 n);

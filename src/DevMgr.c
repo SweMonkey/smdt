@@ -135,6 +135,7 @@ void DetectDevices()
 
     bKeyboard = FALSE;
     bMouse = FALSE;
+    SB_SetStatusIcon(ICO_ID_UNKNOWN, ICO_POS_0);
 
     // -- PS/2 Keyboard setup --------------------------
     bool ps2_r = FALSE;
@@ -190,7 +191,7 @@ void DetectDevices()
     }
 
     // -- Joypad setup ---------------------------------
-    if (!bMouse && (!bKeyboard || ((DRV_KBPS2.PAssign != DP_Port1) && (DRV_KBSATURN.PAssign != DP_Port1))) ) // Only enable joypad if there is no keyboard detected, or if port 1 is free
+    if (!bMouse && (!bKeyboard || ((DRV_KBPS2.PAssign != DP_Port1) && (DRV_KBSATURN.PAssign != DP_Port1))) && (JOY_getJoypadType(JOY_1) != JOY_TYPE_UNKNOWN)) // Only enable joypad if there is no keyboard detected, or if port 1 is free
     {
         DRV_Joypad.Id.sName = "Joypad";
         DRV_Joypad.Id.Bitmask = 0x40;
