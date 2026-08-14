@@ -14,7 +14,8 @@ u16 AVR_WINDOW  = AVR_WINDOW_START;
 
 void TRM_SetWinHeight(u8 h)
 {
-    *((vu16*) VDP_CTRL_PORT) = 0x9200 | ((h & 0x7F) | (WinBottom?0x80:0));
+    u8 wh = WinBottom ? ((bPALSystem ? 30 : 28) - h) : h;
+    *((vu16*) VDP_CTRL_PORT) = 0x9200 | ((wh & 0x7F) | (WinBottom?0x80:0));
 }
 
 void TRM_SetWinWidth(u8 w)
@@ -27,7 +28,7 @@ void TRM_SetWinParam(bool from_bottom, bool from_right, u8 w, u8 h)
     WinBottom = from_bottom;
     WinRight = from_right;
     WinWidth = w;
-    WinHeight = h;
+    WinHeight = from_bottom ? ((bPALSystem ? 30 : 28) - h) : h;
     
     *((vu16*) VDP_CTRL_PORT) = 0x9100 | ((WinWidth  & 0x7F) | (WinRight ?0x80:0));  // Set window width and left/right
     *((vu16*) VDP_CTRL_PORT) = 0x9200 | ((WinHeight & 0x7F) | (WinBottom?0x80:0));  // Set window height and top/bottom
@@ -43,6 +44,18 @@ void TRM_DrawChar(const u8 c, u8 x, u8 y, u8 palette)
 {
     *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(VDP_WINDOW + (((x & 63) + ((y & 31) << 6)) * 2));
     *((vu16*) VDP_DATA_PORT) = TILE_ATTR_FULL(palette, 1, 0, 0, AVR_UI + c - 32);
+}
+
+void TRM_SetTile(const u16 tile, u8 x, u8 y, u8 palette)
+{
+    *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(VDP_WINDOW + (((x & 63) + ((y & 31) << 6)) * 2));
+    *((vu16*) VDP_DATA_PORT) = TILE_ATTR_FULL(palette, 1, 0, 0, tile);
+}
+
+void TRM_SetTileAttr(const u16 tile_attr, u8 x, u8 y)
+{
+    *((vu32*) VDP_CTRL_PORT) = VDP_WRITE_VRAM_ADDR(VDP_WINDOW + (((x & 63) + ((y & 31) << 6)) * 2));
+    *((vu16*) VDP_DATA_PORT) = tile_attr;
 }
 
 // Draw text using the first UI font (Dark BG)

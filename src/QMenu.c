@@ -8,7 +8,7 @@
 #include "Keyboard.h"       // sv_KeyLayout
 #include "Mouse.h"          // MHitRect
 #include "Screensaver.h"    // sv_bScreensaver
-#include "UI.h"             // UI_ApplyTheme
+#include "UI.h"             // UI_ApplyThemeColour
 #include "IRC.h"            // IRC_SetFontSize
 #include "WinMgr.h"
 #include "Palette.h"
@@ -51,6 +51,7 @@ void WINFN_Pointer();
 void WINFN_ColourPalette();
 void WINFN_Wrapmode();
 void WINFN_ShowDateIRC();
+void WINFN_ViewBufferSel();
 
 // Extern forward decl.
 void PrintCWD();
@@ -86,7 +87,7 @@ extern bool sv_bEnableUTF8;
 extern u8 sv_IRCFont;
 extern u8 sv_TelnetFont;
 extern u8 sv_TerminalFont;
-extern u8 sv_ThemeUI;
+extern u8 sv_UI_ThemeColour;
 extern u8 sv_ShowJoinQuitMsg;
 extern u8 sv_WrapAtScreenEdge;
 
@@ -253,17 +254,15 @@ static struct s_menu
      "SV (Swedish)"}
 },
 {//13
-    7,
+    5,
     0, 255, 0,
     NULL, WINFN_DebugSel, NULL,
     "Debug",
-    {15, 23, 255, 255, 255, 255, 255},
+    {15, 23, 41, 255, 255},
     {"TX/RX stats",
      "RX Buffer stats",
-     "HexView - RX",
-     "HexView - TX",
-     "HexView - Stdout",
-     "HexView - Screen",
+     "HexViewer",
+     "VDP Debugger",
      "System Info"}
 },
 {//14
@@ -302,7 +301,7 @@ static struct s_menu
     "BG Colour",
     {254, 254, 254},
     {"Black",
-     "Light mode",
+     "Dark gray",
      "Random"}
 },
 {//18
@@ -539,6 +538,17 @@ static struct s_menu
     {"Off",
      "On"}
 },
+{//41
+    4,
+    0, 255, 0,
+    NULL, WINFN_ViewBufferSel, NULL,
+    "HexViewer",
+    {255, 255, 255, 255},
+    {"Rx Buffer",
+     "Tx Buffer",
+     "Stdout",
+     "Screen (Main)"}
+},
 };
 
 static const MRect qrect_data[] =
@@ -591,7 +601,7 @@ void SetupQItemTags()
     MainMenu[22].tagged_entry = sv_LineMode > 1 ? 0 : sv_LineMode;  // !!
     MainMenu[24].tagged_entry = sv_bHighCL;
     MainMenu[25].tagged_entry = sv_bScreensaver;
-    MainMenu[28].tagged_entry = sv_ThemeUI;
+    MainMenu[28].tagged_entry = sv_UI_ThemeColour;
     MainMenu[29].tagged_entry = sv_Backspace;           // !!
     MainMenu[32].tagged_entry = sv_WrapAtScreenEdge;
     MainMenu[33].tagged_entry = sv_MsgFilter << 3;
@@ -737,14 +747,17 @@ void SetupQItemTags()
 
 static void DrawEntry(u8 idx)
 {
+    u8 height = MainMenu[idx].num_entries;
+    u8 yoff = bStatusAtTop ? 0 : SB_StatusY - (height + 5);
+
     for (u8 i = 0; i < MainMenu[idx].num_entries; i++)
     {
-        TRM_DrawText((char*)QFrame[3], 1, MenuPosY+4+i, PAL1);  // Draw left/right window border around menu item text
-        TRM_DrawText(MainMenu[idx].text[i], MenuPosX+2, MenuPosY+4+i, PAL1);    // Draw menu item text
+        TRM_DrawText((char*)QFrame[3], 1, yoff + MenuPosY+4+i, PAL1);  // Draw left/right window border around menu item text
+        TRM_DrawText(MainMenu[idx].text[i], MenuPosX+2, yoff + MenuPosY+4+i, PAL1);    // Draw menu item text
     }
 
     // Redraw selected menu item text (highlight)
-    TRM_DrawText(MainMenu[idx].text[SelectedIdx], MenuPosX+2, MenuPosY+4+SelectedIdx, PAL0);
+    TRM_DrawText(MainMenu[idx].text[SelectedIdx], MenuPosX+2, yoff + MenuPosY+4+SelectedIdx, PAL0);
 }
 
 static void MarkEntry(u8 idx)
@@ -753,6 +766,7 @@ static void MarkEntry(u8 idx)
 
     u8 entry = MainMenu[idx].tagged_entry;
     u8 num   = MainMenu[idx].num_entries;
+    u8 yoff = bStatusAtTop ? 0 : SB_StatusY - (num + 5);
 
     // Multiple active entries
     if (entry > 7 && entry != 255)
@@ -763,7 +777,7 @@ static void MarkEntry(u8 idx)
         {
             if (tags & (1 << i))
             {
-                int y = MenuPosY + 4 + i;
+                int y = yoff + MenuPosY + 4 + i;
 
                 TRM_DrawChar('>', MenuPosX + 1, y, PAL1);
                 TRM_DrawChar('<', MenuPosX + 2 + strlen(MainMenu[idx].text[i]), y, PAL1);
@@ -773,7 +787,7 @@ static void MarkEntry(u8 idx)
     // Single active entry
     else if (entry < num)
     {
-        u8 y = MenuPosY + 4 + entry;
+        u8 y = yoff + MenuPosY + 4 + entry;
 
         TRM_DrawChar('>', MenuPosX + 1, y, PAL1);
         TRM_DrawChar('<', MenuPosX + 2 + strlen(MainMenu[idx].text[entry]), y, PAL1);
@@ -782,20 +796,23 @@ static void MarkEntry(u8 idx)
 
 static void DrawMenu(u8 idx)
 {
+    u8 height = MainMenu[idx].num_entries;
+    u8 yoff = bStatusAtTop ? 0 : SB_StatusY - (height + 5);
+
     MainMenu[MenuIdx].selected_entry = SelectedIdx;   // Mark previous menu selection entry
 
     MenuIdx = idx;
     SelectedIdx = MainMenu[MenuIdx].selected_entry;   // Get menu selection entry from new menu
 
-    TRM_SetWinHeight(MainMenu[idx].num_entries+5);
+    TRM_SetWinHeight(height + 5);
 
-    TRM_DrawText((char*)QFrame[0], 1, 1, PAL1);    // Draw the top of the title bar frame
-    TRM_DrawText((char*)QFrame[1], 1, 2, PAL1);    // Draw the middle of the title bar frame
-    TRM_DrawText((char*)QFrame[2], 1, 3, PAL1);    // Draw the bottom of the title bar frame
-    TRM_DrawText((char*)QFrame[4], 1, MainMenu[MenuIdx].num_entries+4, PAL1);   // Draw the bottom of the window frame
+    TRM_DrawText((char*)QFrame[0], 1, yoff + 1, PAL1);    // Draw the top of the title bar frame
+    TRM_DrawText((char*)QFrame[1], 1, yoff + 2, PAL1);    // Draw the middle of the title bar frame
+    TRM_DrawText((char*)QFrame[2], 1, yoff + 3, PAL1);    // Draw the bottom of the title bar frame
+    TRM_DrawText((char*)QFrame[4], 1, yoff + height + 4, PAL1);   // Draw the bottom of the window frame
 
     // Insert the menu title into the title bar
-    TRM_DrawText(MainMenu[MenuIdx].title, 2, 2, PAL0);
+    TRM_DrawText(MainMenu[MenuIdx].title, 2, yoff + 2, PAL0);
 
     MarkEntry(MenuIdx);
 }
@@ -849,23 +866,31 @@ static void ExitMenu()
 
 static void UpMenu()
 {
-    TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+4+SelectedIdx, PAL1);
+    u8 height = MainMenu[MenuIdx].num_entries;
+    u8 yoff = bStatusAtTop ? 0 : SB_StatusY - (height + 5);
+
+    TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, yoff+MenuPosY+4+SelectedIdx, PAL1);
     SelectedIdx = (SelectedIdx == 0 ? MainMenu[MenuIdx].num_entries-1 : SelectedIdx-1);
-    TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+4+SelectedIdx, PAL0);
+    TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, yoff+MenuPosY+4+SelectedIdx, PAL0);
 }
 
 static void DownMenu()
 {
-    TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+4+SelectedIdx, PAL1);
+    u8 height = MainMenu[MenuIdx].num_entries;
+    u8 yoff = bStatusAtTop ? 0 : SB_StatusY - (height + 5);
+
+    TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, yoff+MenuPosY+4+SelectedIdx, PAL1);
     SelectedIdx = (SelectedIdx == MainMenu[MenuIdx].num_entries-1 ? 0 : SelectedIdx+1);
-    TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, MenuPosY+4+SelectedIdx, PAL0);
+    TRM_DrawText(MainMenu[MenuIdx].text[SelectedIdx], MenuPosX+2, yoff+MenuPosY+4+SelectedIdx, PAL0);
 }
 
 u16 QMenu_Open()
 {
-    TRM_SetWinHeight(10);
-    TRM_ClearArea(0, 1, 40, 32, PAL1, TRM_CLEAR_BG);
-            
+    u8 y = bStatusAtTop ? 1 : 0;
+    u8 h = bStatusAtTop ? 32 : SB_StatusY - 1;
+
+    TRM_ClearArea(0, y, 40, h, PAL1, (TTY_GetFont() == FONT_SOFTWARE ? TRM_CLEAR_INVISIBLE : TRM_CLEAR_BG));
+
     DrawMenu(0);
 
     return 0;
@@ -926,8 +951,8 @@ void WINFN_BGColor()
             TTY_ReloadPalette();
         break;
         case 1:
-            sv_CBGCL = 0xAAA;
-            TTY_SetDarkColours();
+            sv_CBGCL = 0x444;
+            TTY_ReloadPalette();
         break;
         case 2:
             sv_CBGCL = random() & 0x666;
@@ -948,7 +973,7 @@ void WINFN_BGColor()
 
 void WINFN_FGColor()
 {
-    if (sv_Font != FONT_4x8_1) return;
+    if (TTY_GetFont() != FONT_4x8_1) return;
     u16 r = random();
 
     switch (SelectedIdx)
@@ -1203,43 +1228,14 @@ void WINFN_DebugSel()
 {
     switch (SelectedIdx)
     {
-        case 2:
-        {
-            char *fn[] = {"/sram/system/tty_in.io"};
-
-            WinMgr_Close(W_QMenu);
-            WinMgr_Open(W_HexView, 1, fn);
-            break;
-        }
-
         case 3:
         {
-            char *fn[] = {"/sram/system/tty_out.io"};
-
             WinMgr_Close(W_QMenu);
-            WinMgr_Open(W_HexView, 1, fn);
+            WinMgr_Open(W_VDPView, 0, NULL);
             break;
         }
 
         case 4:
-        {
-            char *fn[] = {"/sram/system/stdout.io"};
-
-            WinMgr_Close(W_QMenu);
-            WinMgr_Open(W_HexView, 1, fn);
-            break;
-        }
-
-        case 5:
-        {
-            char *fn[] = {"/sram/system/screen.io"};
-
-            WinMgr_Close(W_QMenu);
-            WinMgr_Open(W_HexView, 1, fn);
-            break;
-        }
-
-        case 6:
         {
             WinMgr_Close(W_QMenu);
             WinMgr_Open(W_InfoView, 0, NULL);
@@ -1328,7 +1324,7 @@ void WINFN_HScOff()
     }
 
     HScroll = sv_HSOffset;
-    if (!sv_Font || (sv_Font == FONT_SOFTWARE))
+    if (!TTY_GetFont() || (TTY_GetFont() == FONT_SOFTWARE))
     {
         VDP_setHorizontalScroll(BG_A, HScroll);
         VDP_setHorizontalScroll(BG_B, HScroll);
@@ -1405,8 +1401,8 @@ void WINFN_Cursor_CL()
 
 void WINFN_UI_Theme()
 {
-    sv_ThemeUI = SelectedIdx;
-    UI_ApplyTheme();
+    sv_UI_ThemeColour = SelectedIdx;
+    UI_ApplyThemeColour();
 }
 
 void WINFN_Backspace()
@@ -1476,7 +1472,7 @@ void WINFN_Brightness()
 
     SetColor( 0, sv_CBGCL);
     SetColor( 1, 0x00E);
-    SetColor( 4, 0x0E0);
+    SetColor( 4, sv_CursorCL);
     SetColor( 6, 0xEEE);
     SetColor( 7, 0x0C0);
     SetColor(17, sv_CBGCL); // Mouse pointer outline (temp) - Window text BG Normal / Terminal text BG
@@ -1486,7 +1482,7 @@ void WINFN_Brightness()
     SetColor(54, 0x444);    // Screensaver colour 0
     SetColor(55, 0xEEE);    // Screensaver colour 1
 
-    UI_ApplyTheme();
+    UI_ApplyThemeColour();
 }
 
 void WINFN_Pointer()
@@ -1510,4 +1506,49 @@ void WINFN_Wrapmode()
 void WINFN_ShowDateIRC()
 {
     sv_bShowTime = SelectedIdx;
+}
+
+void WINFN_ViewBufferSel()
+{
+    switch (SelectedIdx)
+    {
+        case 0:
+        {
+            char *fn[] = {"\1tty_in"};
+
+            WinMgr_Close(W_QMenu);
+            WinMgr_Open(W_HexView, 1, fn);
+            break;
+        }
+
+        case 1:
+        {
+            char *fn[] = {"\1tty_out"};
+
+            WinMgr_Close(W_QMenu);
+            WinMgr_Open(W_HexView, 1, fn);
+            break;
+        }
+
+        case 2:
+        {
+            char *fn[] = {"/sram/system/stdout.io"};
+
+            WinMgr_Close(W_QMenu);
+            WinMgr_Open(W_HexView, 1, fn);
+            break;
+        }
+
+        case 3:
+        {
+            char *fn[] = {"/sram/system/screen.io"};
+
+            WinMgr_Close(W_QMenu);
+            WinMgr_Open(W_HexView, 1, fn);
+            break;
+        }
+    
+        default:
+        break;
+    }
 }

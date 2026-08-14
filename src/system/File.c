@@ -10,11 +10,12 @@ static char Buffer_printf[MAX_PRINTF_BUF];
 
 static u16 FD_Count = 0;    // Open file descriptors - Not used for anything other than limiting the user/os to MAX_FD number of open files at once 
 
-extern SM_File *FILE_INTERNAL_tty_in;
-extern SM_File *FILE_INTERNAL_tty_out;
+extern SM_File *FILE_INTERNAL_tty;
 extern SM_File *FILE_INTERNAL_stdin;
 extern SM_File *FILE_INTERNAL_stdout;
 extern SM_File *FILE_INTERNAL_stderr;
+
+s16 TTY_GetSY();
 
 
 SM_File *F_GetFreeFD()
@@ -50,11 +51,10 @@ SM_File *F_Open(const char *filename, FileMode openmode)
     p++;    
 
     // Map special I/O pseudo-files
-    if ((strcmp(filename+p, "stdin.io")   == 0) && (FILE_INTERNAL_stdin   != NULL)) return FILE_INTERNAL_stdin;
-    if ((strcmp(filename+p, "stdout.io")  == 0) && (FILE_INTERNAL_stdout  != NULL)) return FILE_INTERNAL_stdout;
-    if ((strcmp(filename+p, "stderr.io")  == 0) && (FILE_INTERNAL_stderr  != NULL)) return FILE_INTERNAL_stderr;
-    if ((strcmp(filename+p, "tty_in.io")  == 0) && (FILE_INTERNAL_tty_in  != NULL)) return FILE_INTERNAL_tty_in;
-    if ((strcmp(filename+p, "tty_out.io") == 0) && (FILE_INTERNAL_tty_out != NULL)) return FILE_INTERNAL_tty_out;
+    if ((strcmp(filename+p, "stdin.io")  == 0) && (FILE_INTERNAL_stdin  != NULL)) return FILE_INTERNAL_stdin;
+    if ((strcmp(filename+p, "stdout.io") == 0) && (FILE_INTERNAL_stdout != NULL)) return FILE_INTERNAL_stdout;
+    if ((strcmp(filename+p, "stderr.io") == 0) && (FILE_INTERNAL_stderr != NULL)) return FILE_INTERNAL_stderr;
+    if ((strcmp(filename+p, "tty.io")    == 0) && (FILE_INTERNAL_tty    != NULL)) return FILE_INTERNAL_tty;
 
     s32 r = FS_OpenFile(filename, openmode, &file->f);
 
@@ -65,8 +65,9 @@ SM_File *F_Open(const char *filename, FileMode openmode)
         return NULL;
     }
 
-    file->io_buf = NULL;
-
+    file->in_buf  = NULL;
+    file->out_buf = NULL;
+        
     size_t len = strlen(filename);
     file->fname = malloc(len + 1);
     if (file->fname) 
@@ -119,11 +120,11 @@ u16 F_Read(void *dest, u32 size, u32 count, SM_File *file)
 
     if ((file->f.flags & FM_RDWR) || (file->f.flags & FM_RDONLY))
     {
-        if (file->f.flags & FM_IO && file->io_buf != NULL)
+        if (file->f.flags & FM_IO && file->in_buf != NULL)
         {
             //kprintf("Read from IO file");
 
-            Buffer *b = file->io_buf;
+            Buffer *b = file->in_buf;
 
             u8 *data = (u8 *)dest;
             u32 total = size * count;
@@ -155,10 +156,11 @@ u16 F_Write(void *src, u32 size, u32 count, SM_File *file)
 
     if ((file->f.flags & FM_RDWR) || (file->f.flags & FM_WRONLY))
     {
-        if (file->f.flags & FM_IO && file->io_buf != NULL)
+        if (file->f.flags & FM_IO && file->out_buf != NULL)
         {
-            Buffer *b = file->io_buf;
+            Buffer *b = file->out_buf;
 
+            s16 start = TTY_GetSY();
             const u8 *data = (const u8 *)src;
             u32 total = size * count;
             u32 written = 0;
@@ -167,8 +169,13 @@ u16 F_Write(void *src, u32 size, u32 count, SM_File *file)
             {
                 if (!Buffer_Push(b, data[i])) 
                 {
-                    Stdout_Flush();                    
-                    break;  // stop if full
+                    Stdout_Flush();
+                    start = TTY_GetSY();
+                }
+                if ((TTY_GetSY() - start) > (bPALSystem?27:25))
+                {
+                    start = TTY_GetSY();
+                    MoreFunc();
                 }
 
                 written++;

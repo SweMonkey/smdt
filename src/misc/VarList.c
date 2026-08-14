@@ -3,6 +3,7 @@
 #include "IRC.h"                // sv_Username, sv_QuitStr, sv_IRCFont
 #include "Screensaver.h"        // sv_bScreensaver
 #include "Terminal.h"           // 
+#include "Palette.h"            // sv_CLPalette
 #include "Telnet.h"             // sv_AllowRemoteEnv
 #include "Keyboard.h"           // sv_KeyLayout
 #include "devices/XP_Network.h" // sv_ConnTimeout, sv_ReadTimeout, sv_DelayTime
@@ -13,11 +14,11 @@
 extern u8 sv_IRCFont;
 extern u8 sv_TelnetFont;
 extern u8 sv_TerminalFont;
-extern u8 sv_ThemeUI;
+extern u8 sv_UI_ThemeColour;
 extern s8 sv_CBrightness;
 extern u8 sv_PointerStyle;
 
-bool sv_bLinefeedMode = TRUE;   // Should default to FALSE
+bool sv_bLinefeedMode = FALSE;   // Should default to FALSE
 bool sv_bNoEcho = FALSE;
 u8 sv_LineMode = 0;
 u8 sv_Backspace = 0;
@@ -53,7 +54,7 @@ SM_VarList VarList[] =
     {ST_BYTE, &sv_IRCFont,          "ircfont"},
     {ST_BYTE, &sv_TelnetFont,       "telnetfont"},
     {ST_BYTE, &sv_TerminalFont,     "termfont"},
-    {ST_BYTE, &sv_ThemeUI,          "themeui"},
+    {ST_BYTE, &sv_UI_ThemeColour,   "themecolour"},
     {ST_BYTE, &sv_TimeZone,         "timezone"},
     {ST_SARR, &sv_TimeServer,       "timeserver"},
     {ST_WORD, &sv_EpochStart,       "epoch"},

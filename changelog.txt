@@ -1,3 +1,70 @@
+v0.34.2:
+Driver bugfixes:
+      PS/2 keyboard init messages were never flushed to screen at bootscreen, causing the message to first appear when booted into the terminal shell.
+
+Terminal/Telnet bugfixes:
+      HScroll offset was updated and read too late in the terminal init sequence, thus causing the hscroll offset to always default to 0.
+      When the \e#8 escape code was run it did not make sure the cursor sprite was moved to the correct row/colum.
+      Erroneous order of operations when switching between main and alt buffers; Caused screen to be wiped then redrawn and then wiped again briefly when switching from alt to main buffer. See \e?1049h and \e?1049l modesetting.
+      Linemode is now set to 0 (None) when the server requests/demands to turn off LINMODE.
+      Fixed insert line (ESC[ Ⓝ L) escape; it would move all lines from top margin instead of from the cursor Y position.
+      DOIT key (Return/Enter) now handles the combinations of linemode/linefeed correctly, as well as a lone CR is now followed by NUL.
+      The Erase Display (ED) (ESC[J) escape with no parameter was off by 1 in the Y position. This has probably something to do with the fact that I have reworked some things related to VSCROLL, and may not have even been a bug in previous versions of SMDT.
+
+System bugfixes:
+      Correct serial speed is now setup during startup, previously it was always initialized to 4800 baud regardless of the selected speed.
+      Cursor colour is no longer reset to default green when changing brightness.
+      The <>| key now works when using the Swedish keyboard layout and a PS/2 keyboard.
+      Forwardslash/Divide key on numpad now prints '/' when using the Swedish keyboard layout instead of '-'.
+      NumLock now toggles the keys on the numpad as it should, shift + numpad key also works as it should. This also fixes the formerly disabled '2468' keys on numpad.
+      DebugStreamer had a few issues capturing key presses, this is now fixed.
+      Mouse sprite is now updated correctly when at top left corner (0, 0); I had a condition where the sprite attributes would not be updated if the mouse x/y was 0, this caused the moose pointer to be jittery at that corner.
+      Fixed screensaver being inhibited when using a mouse; Mouse polling loop would always run even when there was no new events causing the screensaver to think it should reset.
+      Fixed mouse pointer being unable to reach the bottom when running on a PAL system; I didn't account for the extra screen height when checking for the bottom border.
+
+Shell bugfixes:
+      Directory listing (ls) command now replaces unprintable filename characters with '?'.
+      <More> function didn't respond to any keys when a mouse (?) was plugged in.
+      <More> function now works more than once per command if printing multiple screens worth of text.
+      <More> function should now kick in when doing directory listing in directories with many files.
+      History queue repeated the first entry if a user pressed up once then pressed down, which forced the user to press down twice to clear the prompt.
+
+IRC bugfixes:
+      Use correct epoch in the info window when running the IRC client; IRC client modifies the epoch variable which causes the info window to show the wrong year.
+      Minor modifications to word wrapping in the IRC client; 
+            1. Final character in a word could be printed offscreen (to the right). 
+            2. After a word wrap the next line could start with a blankspace.
+
+Known issues:
+      Hardware (PAL) - <More> function seems to have a few issues when using a PS/2 keyboard;
+            1. It sometimes acts as if the user is holding a key down continously, thus skipping <more> pause - Is the return key stuck in down state again?
+
+Terminal: Added initial mouse tracking/reporting support.
+Terminal: Added a few shortcuts in the software font renderer. Some timing tests shows it being faster than the old text renderers (in best case scenario):
+            1. Skip if new character is identical to screen character.
+            2. Skip if correct character is already rendered in the tilebuffer.
+Telnet: Added "Authentication Option" [RFC2941] and "Encryption Option" [RFC2946] to the IAC parser. The response from SMDT default to IAC DONT for both cases.
+Telnet: SMDT now responds and acts accordingly if "IAC DONT LINEMODE" is received.
+Telnet: The telnet client will now only use its own internal rxbuffer and yield when vblank happens. Any unprocessed data will be consumed once vblank is over. Only when this internal buffer is empty will it be filled with new data.
+System: Moved and created common palette handling and conversion from terminal code to the palette handler to remove redundant code.
+System: Use "safer" text printing for all messages that can end up on the boot screen. What this means is that we can't rely on printf (fprintf to stdout) being available at boot...
+System: New debug logging system to replace all the old ifdef'd kdebug messages. This new one provides more information/more uniform debug messages to kdebug.
+System: Added experimental statusbar positioning, default is at the top but can be moved to the bottom. The variable to change this is not exposed in the SMDT settings... future TODO.
+System: The external interrupt (Rx) and the SendChar (Tx) has been rewritten in inline assembly.
+System: Cleaned up the exception functions. They are now also called directly from the relevant exception vector instead of going through the SGDK callbacks.
+System: RX IRQ (EXT INT) is now called directly from the EXT INT vector instead of going through SGDK callbacks.
+System: Various cleanups in the startup code.
+System: tty_in and tty_out has been merged into a single pseudofile; tty.io - on write to file it sends data to serial port, on read it reads data from serial port.
+Misc: Various modulus removals and cleanups.
+UI: Added a VDP debugger window - TODO: Add mouse events/support.
+UI: The tabview widget now uses less horizontal space.
+UI: Added horizontal scrollbar (pretty much copy paste of the vertical one...).
+UI: Outside edges of windows are now transparent if using the software renderer.
+UI: Changed strings "US", "Europe" and "Japan" into "Genesis" and "Mega Drive" in the info viewer.
+QuickMenu: Grouped all hexviewers together into its own submenu (Debug->HexViewer) to clear up menu space.
+Removed: Gopher client has finally been removed; it was a buggy and nonworking mess because it has not been maintained and kept up to date with the rest of the SMDT code base.
+
+
 v0.34.1 Bugfixes:
 Added "Insert Blanks (ICH)" escape sequence
 Fixed "Delete Line (DL)" escape

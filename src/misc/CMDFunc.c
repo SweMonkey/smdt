@@ -28,7 +28,6 @@ SM_CMDList CMDList[] =
 {
     {"telnet",  CMD_LaunchTelnet,   "<address:port>"},
     {"irc",     CMD_LaunchIRC,      "<address:port>"},
-    {"gopher",  CMD_LaunchGopher,   "<address>"},
     {"echo",    CMD_Echo,           "- Echo string to screen"},
     {"kbc",     CMD_KeyboardSend,   "- Send command to keyboard"},
     {"tmattr",  CMD_SetAttr,        "- Set terminal attributes"},
@@ -77,19 +76,6 @@ void CMD_LaunchTelnet(u8 argc, char *argv[])
 void CMD_LaunchIRC(u8 argc, char *argv[])
 {
     ChangeState(PS_IRC, argc, argv);
-}
-
-void CMD_LaunchGopher(u8 argc, char *argv[]) 
-{
-    #ifndef EMU_BUILD
-    if (argc < 2)
-    {
-        printf("\e[91mNo address specified!\e[0m\n");
-        return;
-    }
-    #endif
-
-    ChangeState(PS_Gopher, argc, argv);
 }
 
 void CMD_SetAttr(u8 argc, char *argv[])
@@ -556,12 +542,8 @@ void CMD_Free(u8 argc, char *argv[])
         return;
     }
 
-    if (bMegaCD)
-    {
-        printf("\n─ Mega Drive ──────────────────────────\n");
-    }
-
-    // May need an "else print \n" here?
+    if (bMegaCD) printf("\n─ Mega Drive ──────────────────────────\n");
+    else         printf("\n─ Main ────────────────────────────────\n");
 
     printf("%20s %5u bytes\n", "Free:", MEM_getFree());
     printf("%20s %5u bytes\n", "Largest free block:", MEM_getLargestFreeBlock());
@@ -580,6 +562,22 @@ void CMD_Free(u8 argc, char *argv[])
     for (u8 i = 0; i < c; i++) printf("▒");    // System reserved
     printf("\e[0m\n");
 
+    printf("\n─ Aux ─────────────────────────────────\n");
+
+    u16 zFree = 8192;
+    u16 zUsed = 0;
+
+    printf("%20s %5u bytes\n", "Free:", zFree);
+    printf("%20s %5u bytes\n", "Used:", zUsed);
+
+    a = zFree/205;
+    b = zUsed/205;
+
+    printf("\n\e[32m");
+    for (u8 i = 0; i < a; i++) printf("█");    // Total Free
+    printf("\e[31m");
+    for (u8 i = 0; i < b; i++) printf("█");    // Used
+    printf("\e[0m\n");
 
     if (bMegaCD)
     {
@@ -621,19 +619,32 @@ void CMD_Test(u8 argc, char *argv[])
 {
     if ((argc > 1) && (strcmp("-timing_im", argv[1]) == 0))
     {
-        u32 frame = 0;  // Frames elapsed
+        u32 frame = 0;  // Frames elapsed4
         u16 num = 0;    // Number of characters printed
 
-        u16 hv = 0;                         // Last hv counter value
-        u16 hvc = 0;                        // Current hv counter value
-        u16 fc = bPALSystem ? 250 : 300;    // How many frames we should run the test for
-        u16 nf = bPALSystem ? 50 : 60;      // How many frames there are in a second
+        u16 hv = 0;                             // Last hv counter value
+        u16 hvc = 0;                            // Current hv counter value
+        const u16 fc = bPALSystem ? 250 : 300;  // How many frames we should run the test for
+        const u16 nf = bPALSystem ? 50 : 60;    // How many frames there are in a second
+        bool bRandom = FALSE;
+
+        char c = 'A';
+
+        if (argc > 2) 
+        {
+            if (strcmp("-random", argv[2]) == 0)
+            {
+                bRandom = TRUE;
+            }
+            else c = argv[2][0];
+        }
 
         SYS_disableInts();
         
         while (frame < fc)
         {
-            TTY_PrintChar('A');
+            if (bRandom) c = (random() + ' ') & 127;
+            TTY_PrintChar(c);
             num++;
 
             hvc = *((vu16*)(VDP_HVCOUNTER_PORT));
@@ -651,8 +662,8 @@ void CMD_Test(u8 argc, char *argv[])
         }
 
         SYS_enableInts();
-        printf("\nManaged to print %u characters in %lu seconds (Insert mode ON)\n = %lu characters/s\n = %lu characters/frame\n\n", num, frame/nf, num/(frame/nf), num/frame);
-        kprintf("\nManaged to print %u characters in %lu seconds (Insert mode ON)\n = %lu characters/s\n = %lu characters/frame\n\n", num, frame/nf, num/(frame/nf), num/frame);
+        printf("\nManaged to print %u characters in %lu seconds (Revert cursor mode)\n = %lu characters/s\n = %lu characters/frame\n\n", num, frame/nf, num/(frame/nf), num/frame);
+        kprintf("\nManaged to print %u characters in %lu seconds (Revert cursor mode)\n = %lu characters/s\n = %lu characters/frame\n\n", num, frame/nf, num/(frame/nf), num/frame);
         return;
     }
 
@@ -661,10 +672,10 @@ void CMD_Test(u8 argc, char *argv[])
         u32 frame = 0;  // Frames elapsed
         u16 num = 0;    // Number of characters printed
 
-        u16 hv = 0;                         // Last hv counter value
-        u16 hvc = 0;                        // Current hv counter value
-        u16 fc = bPALSystem ? 250 : 300;    // How many frames we should run the test for
-        u16 nf = bPALSystem ? 50 : 60;      // How many frames there are in a second
+        u16 hv = 0;                             // Last hv counter value
+        u16 hvc = 0;                            // Current hv counter value
+        const u16 fc = bPALSystem ? 250 : 300;  // How many frames we should run the test for
+        const u16 nf = bPALSystem ? 50 : 60;    // How many frames there are in a second
 
         while (frame < fc)
         {
@@ -684,8 +695,8 @@ void CMD_Test(u8 argc, char *argv[])
             }
         }
 
-        printf("\nManaged to print %u characters in %lu seconds (Insert mode OFF)\n = %lu characters/s\n = %lu characters/frame\n\n", num, frame/nf, num/(frame/nf), num/frame);
-        kprintf("\nManaged to print %u characters in %lu seconds (Insert mode OFF)\n = %lu characters/s\n = %lu characters/frame\n\n", num, frame/nf, num/(frame/nf), num/frame);
+        printf("\nManaged to print %u characters in %lu seconds\n = %lu characters/s\n = %lu characters/frame\n\n", num, frame/nf, num/(frame/nf), num/frame);
+        kprintf("\nManaged to print %u characters in %lu seconds\n = %lu characters/s\n = %lu characters/frame\n\n", num, frame/nf, num/(frame/nf), num/frame);
         return;
     }
 
@@ -704,6 +715,88 @@ void CMD_Test(u8 argc, char *argv[])
         {
             TELNET_ParseRX('E');
         }
+        return;
+    }
+
+    // Temporary test to load themes from "disk"
+    // Later I will probably write up a custom "theme" file format to load the
+    // correct/required files (gui tileset, mouse pointer, palette, icons, font)
+    // Currently only hackishly loads gui tileset and palette.
+    // Preliminary dir listing:
+    // theme/w95.theme
+    // theme/win95/gt.bin
+    // theme/win95/mptr.bin
+    // theme/win95/palette.bin
+    // theme/win95/icons.bin
+    // theme/win95/font.bin
+    // --
+    // the w95.theme file will refer to the correct files for the resources
+    // they can either be "default", that is to say not include resources not needed.
+    if ((argc > 2) && (strcmp("-theme", argv[1]) == 0))
+    {
+        char fn_buf[FILE_MAX_FNBUF];
+        FS_ResolvePath(argv[2], fn_buf);
+
+        kprintf("1. Free: %u", MEM_getFree());
+
+        SM_File *f = F_Open(fn_buf, FM_RDONLY);
+
+        if (f)
+        {
+            F_Seek(f, 0, SEEK_END);
+            u16 size = F_Tell(f);
+
+            u8 *buf = (u8*)malloc(size);
+
+            if (buf)
+            {
+                memset(buf, 0, size);
+                F_Seek(f, 0, SEEK_SET);
+                F_Read(buf, size, 1, f);
+
+                //VDP_loadTileSet(&GFX_GUI, AVR_UI, DMA);
+                VDP_loadTileData((u32*)buf, AVR_UI + 0x60, 0x60, DMA);
+            }
+
+            free(buf);
+            F_Close(f);
+        }
+        else return;
+
+        kprintf("2. Free: %u", MEM_getFree());
+
+        FS_ResolvePath(argv[2], fn_buf);
+
+        u16 slen = strlen(fn_buf);
+        fn_buf[slen-3] = 'p';   // :)
+        fn_buf[slen-2] = 'a';
+        fn_buf[slen-1] = 'l';
+
+        f = F_Open(fn_buf, FM_RDONLY);
+
+        if (f)
+        {
+            F_Seek(f, 0, SEEK_END);
+            u16 size = F_Tell(f);
+
+            u8 *buf = (u8*)malloc(size);
+
+            if (buf)
+            {
+                memset(buf, 0, size);
+                F_Seek(f, 0, SEEK_SET);
+                F_Read(buf, size, 1, f);
+
+                SetPalette(PAL1, (u16*)buf);
+                SetColor(3, (u16)(buf[8]<<8));
+            }
+
+            free(buf);
+            F_Close(f);
+        }
+
+        kprintf("3. Free: %u", MEM_getFree());
+
         return;
     }
     
@@ -820,7 +913,7 @@ void CMD_Test(u8 argc, char *argv[])
     if ((argc > 1) && (strcmp("-bktxt", argv[1]) == 0))
     {
         Stdout_Flush();
-        sv_Font = 0;
+        TTY_SetvFont(FONT_8x8_16);
         sv_BoldFont = FALSE;
         TTY_Init(TF_ClearScreen | TF_ReloadFont | TF_ResetVariables);
         TRM_SetWinHeight(0);
@@ -829,12 +922,12 @@ void CMD_Test(u8 argc, char *argv[])
         SetColor(17, 0x8E6);
         SetColor(50, 0x8E6);
         SetColor(39, 0);
-        printf("────────────────────────────────────────\n\n");
-        printf(" SEGA SC-3000 BASIC Level 3 ver 1.0   \n\n");
-        printf("    Export Version With Diereses      \n\n");
-        printf("     Copyright 1983 (C) by NITEC      \n\n");
-        printf("────────────────────────────────────────\n\n");
-        printf(" %u Bytes free\n", MEM_getFree());
+        printf("────────────────────────────────────────\n\r");
+        printf(" SEGA SC-3000 BASIC Level 3 ver 1.0       \n\r");
+        printf("    Export Version With Diereses          \n\r");
+        printf("     Copyright 1983 (C) by NITEC          \n\r");
+        printf("────────────────────────────────────────\n\r");
+        printf(" %u Bytes free\n\r", MEM_getFree());
         printf("Ready\n\r");
 
         Stdout_Flush();
@@ -998,7 +1091,7 @@ void CMD_Test(u8 argc, char *argv[])
     if ((argc > 2) && (strcmp("-ftitle", argv[1]) == 0))
     {
         SB_SetStatusText(argv[2]);
-        SB_ResetStatusText();
+        SB_SetTitleMaxLen(28);
         return;
     }
 
@@ -1010,9 +1103,9 @@ void CMD_Test(u8 argc, char *argv[])
 
     if ((argc > 1) && (strcmp("-dmclock", argv[1]) == 0))
     {
-        printf("\e[91mWarning: Z80 & PSG clock is now set to 7.6 MHz\e[0m\n\r");
-        *((vu32*) 0xC00018) = 0x100;   // Set 
-        *((vu16*) 0xC0001C) = 1;       // Set 
+        //printf("\e[91mWarning: Z80 & PSG clock is now set to 7.6 MHz\e[0m\n\r");
+        //*((vu32*) 0xC00018) = 0x100;   // Set 
+        //*((vu16*) 0xC0001C) = 1;       // Set 
         return;
     }
 
@@ -1031,6 +1124,8 @@ void CMD_Test(u8 argc, char *argv[])
         printf("This is another long string that should have another line of text under it witho\nut any space inbetween them\n\n");
 
         printf("\e[15;1H--------------------------------------------------------------------------------\r\n\e[16;1HThere should be no empty line above this text!\n");
+
+        Stdout_Flush();
 
         return;
     }
@@ -1073,7 +1168,7 @@ void CMD_Test(u8 argc, char *argv[])
         return;
     }
 
-    if ((argc > 2) && (strcmp("-clearv", argv[1]) == 0))
+    if ((argc > 2) && (strcmp("-clearv", argv[1]) == 0))    // Requires vscroll to be reset!
     {
         printf("\e[2J\e[1;1H1   \n2   \n3   \n4   \n5   \n6   \n7   \n8   \n9   \n10  \n11  \n12  \n13  \n14  \n15  \n16  \n17  \n18  \n19  \n20  \n21  \n22  \n");
         Stdout_Flush();
@@ -1082,6 +1177,11 @@ void CMD_Test(u8 argc, char *argv[])
         SW_ClearLine(14, n);
 
         kprintf("Clearing lines 14 -> %u", 14 + n);
+    }
+
+    if ((argc > 2) && (strcmp("-rseq", argv[1]) == 0))
+    {
+        printf("\e%s", argv[2]);
     }
 
     if ((argc > 1) && (strcmp("-clearp", argv[1]) == 0))
@@ -1096,17 +1196,17 @@ void CMD_Test(u8 argc, char *argv[])
         Stdout_Flush();
 
         waitMs(250);
-        SW_ClearPartialLine(2, 0, 40);
+        SW_ClearPartialLine(1, 0, 40);
         waitMs(250);
-        SW_ClearPartialLine(3, 40, 80);
+        SW_ClearPartialLine(2, 40, 80);
         waitMs(250);
-        SW_ClearPartialLine(4, 1, 41);
+        SW_ClearPartialLine(3, 1, 41);
         waitMs(250);
-        SW_ClearPartialLine(5, 39, 79);
+        SW_ClearPartialLine(4, 39, 79);
         waitMs(250);
-        SW_ClearPartialLine(6, 39, 80);
+        SW_ClearPartialLine(5, 39, 80);
         waitMs(250);
-        SW_ClearPartialLine(7, 40, 79);
+        SW_ClearPartialLine(6, 40, 79);
         waitMs(250);
     }
     
@@ -1118,7 +1218,7 @@ void CMD_Test(u8 argc, char *argv[])
 
     if ((argc > 1) && (strcmp("-fptx", argv[1]) == 0))
     {
-        F_Printf(tty_out, "Hello, is this thing on? %s\n", "maybe...");
+        F_Printf(tty, "Hello, is this thing on? %s\n", "maybe...");
         return;
     }
 
@@ -1145,6 +1245,33 @@ void CMD_Test(u8 argc, char *argv[])
     if ((argc > 1) && (strcmp("-cr", argv[1]) == 0))
     {
         printf("\e[255;0H\e[79Ca");
+        return;
+    }
+
+
+    // Test escape followed by another escape ($1B $1B) - should not cause the parser to get stuck
+    if ((argc > 1) && (strcmp("-th", argv[1]) == 0))
+    {
+        printf("Test\e[0m\e\e[91m Hang\e[m\n\r");
+        return;
+    }
+        
+    if ((argc > 1) && (strcmp("-randsc", argv[1]) == 0))
+    {
+        if (TTY_GetFont() != FONT_SOFTWARE) return;
+        
+        SW_ResetProt();
+        
+        for (u8 y = 0; y < 32; y++)
+        {
+        for (u8 x = 0; x < 80; x++)
+        {
+            SW_SetChar(x, y, random() & 0xFF);
+            SW_SetAttr(x, y, random() & 0xFF);
+        }   
+        }
+        
+        SW_RedrawScreen();
         return;
     }
 
@@ -1646,10 +1773,132 @@ void CMD_Test(u8 argc, char *argv[])
         return;
     }
 
+    if ((argc > 1) && (strcmp("-tc", argv[1]) == 0))
+    {
+        Stdout_Push("\033[48:2:1:2:3m");
+        Stdout_Flush();
+        Stdout_Push("\033P$qm\033\\");
+        Stdout_Flush();
+        
+        return;
+    }
+
+    if ((argc > 1) && (strcmp("-ttc", argv[1]) == 0))
+    {
+        /*Stdout_Push("\033[38;2;255;100;0mTRUECOLOR\033[0m\n");
+        Stdout_Flush();
+
+        kprintf("\033[38;2;255;100;0mTRUECOLOR\033[0m");*/
+
+        /*for (u16 colnum = 0; colnum < 77; colnum++) 
+        {
+            u16 r = 255-(colnum*255/76);
+            u16 g = (colnum*510/76);
+            u16 b = (colnum*255/76);
+            if (g > 255) g = 510-g;
+
+            printf("\033[48;2;%d;%d;%dm", r,g,b);
+            printf("\\");
+            Stdout_Flush();
+            printf("\033[38;2;%d;%d;%dm", 255-r,255-g,255-b);
+            printf("\\\033[0m");
+            Stdout_Flush();
+        }
+        printf("\n");*/
+
+        Stdout_Push("RGB_888 to RGBI_1111 test\n");
+        Stdout_Flush();
+        
+        /*
+        u16 i = 0;
+        for (u16 b = 0; b < 256; b+=32) 
+        for (u16 g = 0; g < 256; g+=32) 
+        for (u16 r = 0; r < 256; r+=32)
+        {
+            //printf("\033[48;2;%d;%d;%dm\033[38;2;%d;%d;%dm█\033[0m", r,g,b, (255-r) & 255,(255-g) & 255, (255-b) & 255);
+            printf("\033[38;2;%d;%d;%dm█\033[0m", r,g,b);
+            Stdout_Flush();
+
+            kprintf("R: %02X - G: %02X - B: %02X", r, g, b);
+
+            if (i > 30)
+            {
+                i = 0;
+                printf("\n");
+            } else i++;
+        }
+        printf("\n");*/
+        /*
+        int i = 0;
+        for (int b = 0; b < 8; b++)
+        {
+            for (int g = 0; g < 8; g++)
+            {
+                for (int r = 0; r < 8; r++)
+                {
+                    printf("\033[38;2;%u;%u;%um█", r*32, g*32, b*32);
+
+                    if (++i % 64 == 0) printf("\n");
+
+                    Stdout_Flush();
+                }
+            }
+        }
+        printf("\033[0m");
+        Stdout_Flush();
+        */
+       
+        for (u16 b = 0; b < 256; b+=32)
+        {
+            for (u16 g = 0; g < 256; g+=32)
+            {
+                for (u16 r = 0; r < 256; r+=32)
+                {
+                    printf("\033[38;2;%d;%d;%dm█\033[0m", r, g, b);
+                    Stdout_Flush();
+                }
+            }
+            printf("\n");
+            Stdout_Flush();
+        }
+        return;
+    }
+
+    
+  
+    if ((argc > 1) && (strcmp("-osc4", argv[1]) == 0))
+    {
+        printf("\e]4;%u;%s\e\\", 0, "cyan");
+        Stdout_Flush();
+    }
+
+    if ((argc > 1) && (strcmp("-osc10", argv[1]) == 0))
+    {
+        printf("\033]10;green\033\\");
+        Stdout_Flush();
+    }
+    
+    if ((argc > 1) && (strcmp("-osc11", argv[1]) == 0))
+    {
+        printf("\033]11;red\033\\");
+        Stdout_Flush();
+    }
+
+    if ((argc > 1) && (strcmp("-osc1011", argv[1]) == 0))
+    {
+        printf("\033]10;red;blue\033\\");
+        Stdout_Flush();
+    }
+
+    if ((argc > 1) && (strcmp("-osc1112", argv[1]) == 0))
+    {
+        printf("\033]11;red;blue\033\\");
+        Stdout_Flush();
+    }
 
     if ((argc > 1) && (strcmp("-erase", argv[1]) == 0))
     {    
-        if (!sv_Font)
+        if (!TTY_GetFont())
         {
             printf("0123456789ABCDEF0123456789ABCDEF01234567\n");
             Stdout_Flush();
@@ -1703,7 +1952,7 @@ void CMD_Test(u8 argc, char *argv[])
 
         kprintf("n= %u", n);
 
-        if (!sv_Font)
+        if (!TTY_GetFont())
         {
             Stdout_Push("0123456789ABCDEF0123456789ABCDEF01234567\n");
             Stdout_Flush();
@@ -1943,15 +2192,15 @@ void CMD_PrintBuffer(u8 argc, char *argv[])
 {    
     if ((argc == 3) && strcmp(argv[1], "rx") == 0)
     {
-        printf("$%X\n\n", RxBuffer.data[atoi16(argv[2]) % BUFFER_LEN]);
+        printf("$%X\n\n", RxBuffer.data[atoi16(argv[2]) & (BUFFER_LEN-1)]);
     }
     else if ((argc == 3) && strcmp(argv[1], "tx") == 0)
     {
-        printf("$%X\n\n", TxBuffer.data[atoi16(argv[2]) % BUFFER_LEN]);
+        printf("$%X\n\n", TxBuffer.data[atoi16(argv[2]) & (BUFFER_LEN-1)]);
     }
     else if ((argc == 3) && strcmp(argv[1], "stdout") == 0)
     {
-        printf("$%X\n\n", StdoutBuffer.data[atoi16(argv[2]) % BUFFER_LEN]);
+        printf("$%X\n\n", StdoutBuffer.data[atoi16(argv[2]) & (BUFFER_LEN-1)]);
     }
     else
     {
@@ -2277,7 +2526,7 @@ date        - Show date and time\n\n");
 
 void CMD_About(u8 argc, char *argv[])
 {
-    if (sv_Font)
+    if (TTY_GetFont())
     {
         printf(" %s - a dumb project created by smds\n", STATUS_TEXT_SHORT);
         printf(" Copyright (c) 2026 smds\n");

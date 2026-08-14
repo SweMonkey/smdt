@@ -43,6 +43,7 @@ bool KB_PS2_Init(DevPort port)
         if ((ret == 0xFE) || (ret == 0xEE)) // FE = Fail+Resend, EE = Successfull echo back
         {
             printf(" \e[92mFound PS/2 keyboard @ %u:%u ($%X)\e[0m\n", DRV_KBPS2.PAssign, s, ret);
+            Stdout_Flush();
 
             KB_SetPoll_Func(&KB_PS2_Poll);
             KB_SetLED_Func(&KB_PS2_SetLED);
@@ -151,7 +152,7 @@ bool KB_PS2_Poll(u8 *r)
 u8 KB_PS2_SendCommand(u8 cmd)
 {
     u8 bit = 0;
-    u8 parity = (cmd % 2) << KB_DT;
+    u8 parity = (cmd & 1) << KB_DT;
 
     DEV_SetCtrl(DRV_KBPS2, 0x1);    // (1) Set data as input and clock as output
     DEV_ClrData(DRV_KBPS2);         // (1) Hold clock low for at least 100 microseconds

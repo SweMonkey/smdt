@@ -2,36 +2,37 @@
 #define UTILS_H_INCLUDED
 
 #include <genesis.h>
+#include "DLog.h"
 
 // Title bar prefix
-#define STATUS_VER_STR "v0.34.1"
+#define STATUS_VER_STR "v0.34.2"
 #define STATUS_TEXT "SMDT v34"
 #define STATUS_TEXT_SHORT "SMDT"
 
 #define SMDT_VMAJOR_INT 0
 #define SMDT_VMINOR_INT 34
-#define SMDT_VREV_INT 1
+#define SMDT_VREV_INT 2
 
 // VRAM memory addresses for various graphics, in tile units (/32)
-#define AVR_BGBLOCK 0       // $0000 - $01FF
-#define AVR_CURSOR  0x10    // $0200 - $02DF
-#define AVR_POINTER 0x17    // $02E0 - $02FF
-#define AVR_ICONS   0x18    // $0300 - $03FF
-#define AVR_SCRSAV  0x30    // $0400 - $05FF
-#define AVR_FONT0   0x100   // $0800 - $47FF
-#define AVR_FONT1   0x300   // $4800 - $87FF
-#define AVR_UI      0x40    // $8800 - $9FFF
+#define AVR_BGBLOCK 0       // Background colour blocks $0000 - $01FF
+#define AVR_CURSOR  0x10    // Cursor tile              $0200 - $02DF
+#define AVR_POINTER 0x17    // Mouse pointer tile       $02E0 - $02FF
+#define AVR_ICONS   0x18    // Icon tiles               $0300 - $03FF
+#define AVR_SCRSAV  0x30    // Screensaver sprite tiles $0400 - $05FF
+#define AVR_FONT0   0x100   // Font 0 tiles             $0800 - $47FF
+#define AVR_FONT1   0x300   // Font 1 tiles             $4800 - $87FF
+#define AVR_UI      0x40    // GUI tiles                $8800 - $9FFF
 
 // VRAM memory addresses for VDP tables
-extern u16 AVR_HSCROLL;
-#define AVR_HSCROLL_START 0xA000  // $A000 - $A3FF
-#define AVR_SAT_START     0xAC00  // $AC00 - $AFFF 
-extern u16 AVR_SAT;
-#define AVR_WINDOW_START  0xB000  // $B000 - $BFFF
-extern u16 AVR_WINDOW;
-#define AVR_PLANE_A       0xC000  // $C000 - $DFFF
-#define AVR_PLANE_B       0xE000  // $E000 - $FFFF
-#define AVR_FONT0_POS     (AVR_FONT0*32)
+extern u16 AVR_HSCROLL;           // Current hscroll table address
+#define AVR_HSCROLL_START 0xA000  // Fixed horizontal scroll table  $A000 - $A3FF
+#define AVR_SAT_START     0xAC00  // Fixed sprite attribute table   $AC00 - $AFFF 
+extern u16 AVR_SAT;               // Current SAT address
+#define AVR_WINDOW_START  0xB000  // Fixed window plane address     $B000 - $BFFF
+extern u16 AVR_WINDOW;            // Current window plane address
+#define AVR_PLANE_A       0xC000  // Plane A address                $C000 - $DFFF
+#define AVR_PLANE_B       0xE000  // Plane B address                $E000 - $FFFF
+#define AVR_FONT0_POS     (AVR_FONT0*32)    // Font 0 VRAM address
 
 
 // Check if a character is printable
@@ -44,21 +45,12 @@ extern u16 AVR_WINDOW;
 
 // Debugging
 //#define EMU_BUILD 1   // Enable to build specialized debug version meant to run on emulators (networking is disabled, faster startup)
-//#define ATT_LOGGING   // Log attribute changes
-//#define IRC_LOGGING 1 // Log IRC debug messages (1 = Unhandled CMD only, 2 = LOG EVERYTHING)
-//#define TRM_LOGGING   // Log terminal debug messages
-//#define IAC_LOGGING   // Log IAC data
-//#define ESC_LOGGING 4 // Log ESC data (1 = Log prioritised info, 2 = log misc errors and warnings, 3 = log spam, 4 = log everything spam)
-//#define OSC_LOGGING
-//#define UTF_LOGGING   // Log UTF-8 messages
-//#define KB_DEBUG      // Log keyboard debug messages
-//#define GOP_LOGGING
 //#define DEBUG_STREAM
 //#define SHOW_FRAME_USAGE
 #define ENABLE_CLOCK
 
-extern bool bPALSystem;
-extern bool bHardReset;
+extern bool bPALSystem; // Indicates if this system is a PAL region console
+extern bool bHardReset; // Indicates if the last system reset was a hard or soft reset
 
 typedef u16 U16Callback(void);
 typedef bool BoolCallback(void);
@@ -69,6 +61,8 @@ void TRM_SetWinParam(bool from_bottom, bool from_right, u8 w, u8 h);
 void TRM_ResetWinParam();
 
 void TRM_DrawChar(const u8 c, u8 x, u8 y, u8 palette);
+void TRM_SetTile(const u16 tile, u8 x, u8 y, u8 palette);
+void TRM_SetTileAttr(const u16 tile_attr, u8 x, u8 y);
 void TRM_DrawText(const char *str, u16 x, u16 y, u8 palette);
 void TRM_ClearArea(u16 x, u16 y, u16 w, u16 h, u8 palette, u16 tile);
 void TRM_ClearPlane(VDPPlane plane);

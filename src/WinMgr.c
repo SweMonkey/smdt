@@ -4,6 +4,7 @@
 #include "windows/HexView.h"
 #include "windows/FavView.h"
 #include "windows/InfoView.h"
+#include "windows/VDPView.h"
 
 static bool bWindowOpen = FALSE;
 static u8 CurrentWinID = 255;
@@ -22,6 +23,7 @@ static const WM_Window WList[] =
     {W_HexView,  NULL,          HexView_Close,  HexView_Input},
     {W_FavView,  FavView_Open,  FavView_Close,  FavView_Input},
     {W_InfoView, InfoView_Open, InfoView_Close, InfoView_Input},
+    {W_VDPView,  VDPView_Open,  VDPView_Close,  VDPView_Input},
 };
 
 
@@ -41,24 +43,13 @@ void WinMgr_Open(WinID winid, u8 argc, char *argv[])
 
     switch (winid)
     {
-        case W_QMenu:
-            QMenu_Open();
-        break;
-
-        case W_HexView:
-            ret = HexView_Open(argv[0]);
-        break;
-
-        case W_FavView:
-            ret = FavView_Open();
-        break;
-
-        case W_InfoView:
-            ret = InfoView_Open();
-        break;
+        case W_QMenu: QMenu_Open(); break;
+        case W_HexView: ret = HexView_Open(argv[0]); break;
+        case W_FavView: ret = FavView_Open(); break;
+        case W_InfoView: ret = InfoView_Open(); break;
+        case W_VDPView: ret = VDPView_Open(); break;
     
-        default:
-        break;
+        default: break;
     }
 
     if (ret)

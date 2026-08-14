@@ -4,8 +4,8 @@
 
 static TMBuffer *TMB_Ptr = NULL;   // Work buffer
 
-#define TMBATTR_BGA(addr) (sv_Font?(((tptr->BufferA[addr] & 0x80) ? 0 : 0x4000) + 0x100 + AVR_FONT0):(0x2100 + AVR_FONT0))
-#define TMBATTR_BGB(addr) (sv_Font?(((tptr->BufferA[addr] & 0x80) ? 0 : 0x4000) + 0x100 + AVR_FONT0):(0x4000            ))
+#define TMBATTR_BGA(addr) (TTY_GetFont()?(((tptr->BufferA[addr] & 0x80) ? 0 : 0x4000) + 0x100 + AVR_FONT0):(0x2100 + AVR_FONT0))
+#define TMBATTR_BGB(addr) (TTY_GetFont()?(((tptr->BufferA[addr] & 0x80) ? 0 : 0x4000) + 0x100 + AVR_FONT0):(0x4000            ))
 
 
 void TMB_UploadBuffer(TMBuffer *tptr)
@@ -125,7 +125,7 @@ void TMB_PrintChar(u8 c)
 
     u16 addr = 0;
 
-    if (sv_Font)   // 4x8 font
+    if (TTY_GetFont())   // 4x8 font
     {
         addr = ((TMB_Ptr->sy & 31) << TMB_SIZE_SELECTOR) + (TMB_Ptr->sx >> 1);
 

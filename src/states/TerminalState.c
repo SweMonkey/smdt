@@ -170,8 +170,11 @@ static u8 ParseInputString(void)
     // Pop the TxBuffer back into inbuf
     while (Buffer_Pop(&TxBuffer, &data) && (i < INPUT_SIZE-1))
     {
-        inbuf[i] = data;
-        i++;
+        if (data >= ' ')    // Don't add non-printable characters to the buffer
+        {
+            inbuf[i] = data;
+            i++;
+        }
     }
 
     // Clear TxBuffer input
@@ -245,11 +248,11 @@ static u8 DoBackspace()
 
     TTY_MoveCursor(TTY_CURSOR_LEFT, 1);
 
-    if (!sv_Font)
+    if (!TTY_GetFont())
     {
         VDP_setTileMapXY(BG_B, TILE_ATTR_FULL(2, 0, 0, 0, 0), TTY_GetSX()+BufferSelect, sy);
     }
-    else if (sv_Font == FONT_SOFTWARE)
+    else if (TTY_GetFont() == FONT_SOFTWARE)
     {
         SW_PrintChar(' ');
     }
@@ -266,13 +269,13 @@ static u8 DoBackspace()
 void ShellDrawClockUpdate()
 {
     TimeToStr_TimeNoSec(&SystemTime, TimeString);
-    TRM_DrawText(TimeString, 30, 0, PAL1);
+    TRM_DrawText(TimeString, 30, SB_StatusY, PAL1);
     ClockLastTime = SystemTime.minute;
 }
 
 static void SetupTerminal()
 {
-    sv_Font = sv_TerminalFont;
+    TTY_SetvFont(sv_TerminalFont);
     TELNET_Init(TF_Everything);
 
     // Variable overrides (TTY/Telnet)
@@ -297,6 +300,8 @@ static void SetupTerminal()
 
     //DoTimeSync(sv_TimeServer);
     ShellDrawClockUpdate();
+
+    SB_SetTitleMaxLen(28);
 
     ClearArgv();
     MEM_pack();
@@ -328,7 +333,7 @@ u16 Enter_Terminal(u8 argc, char *argv[])
 {
     SetupTerminal();
     printf("%s Command Shell v0.3\n", STATUS_TEXT_SHORT);
-    printf("Type \e[32mhelp\e[0m for available commands%s", sv_Font?" - ":"\n");
+    printf("Type \e[32mhelp\e[0m for available commands%s", TTY_GetFont()?" - ":"\n");
     printf("Press \e[32mF8\e[0m for quick menu\n\n");
 
     PrintCWD();
@@ -382,39 +387,50 @@ void Input_Terminal()
 {
     if (bWindowActive || bRunningCMD) return;
 
-    if (is_KeyDown(KEY_UP))
+    if ((is_KeyDown(KEY_UP) || is_KeyDown(KEY_KP8_UP)) && (LCPos < 2))
     {
-        if (strlen(LastCommand[LCPos]) > 0)
+        if ((strlen(LastCommand[1]) > 0)) LCPos++;
+
+        if (strlen(LastCommand[LCPos-1]) > 0)
         {
             while (DoBackspace());
 
-            Stdout_Push(LastCommand[LCPos]);
+            Stdout_Push(LastCommand[LCPos-1]);
 
-            for (u16 i = 0; i < strlen(LastCommand[LCPos]); i++) Buffer_Push(&TxBuffer, LastCommand[LCPos][i]);
+            for (u16 i = 0; i < strlen(LastCommand[LCPos-1]); i++) Buffer_Push(&TxBuffer, LastCommand[LCPos-1][i]);
         }
-
-        if ((LCPos == 0) && (strlen(LastCommand[1]) > 0)) LCPos = 1;
 
         Stdout_Flush();
     }
 
-    if (is_KeyDown(KEY_DOWN))
+    if (is_KeyDown(KEY_DOWN) || is_KeyDown(KEY_KP2_DOWN))
     {
         while (DoBackspace());
 
-        if (LCPos == 1) 
+        if (LCPos > 0)
         {
-            LCPos = 0;
+            LCPos--;
+            Stdout_Push(LastCommand[LCPos-1]);
 
-            Stdout_Push(LastCommand[LCPos]);
-
-            for (u16 i = 0; i < strlen(LastCommand[LCPos]); i++) Buffer_Push(&TxBuffer, LastCommand[LCPos][i]);
+            for (u16 i = 0; i < strlen(LastCommand[LCPos-1]); i++) Buffer_Push(&TxBuffer, LastCommand[LCPos-1][i]);
         }
 
         Stdout_Flush();
     }
 
-    if (is_KeyDown(KEY_DELETE))
+    if (is_KeyDown(KEY_LEFT) || is_KeyDown(KEY_KP4_LEFT))
+    {
+    }
+
+    if (is_KeyDown(KEY_RIGHT) || is_KeyDown(KEY_KP6_RIGHT))
+    {
+    }
+
+    if (is_KeyDown(KEY_INSERT) || is_KeyDown(KEY_KP0_INS))
+    {
+    }
+
+    if (is_KeyDown(KEY_DELETE) || is_KeyDown(KEY_KP_DECIMAL))
     {
     }
 

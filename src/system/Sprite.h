@@ -24,6 +24,9 @@
 #define SPRITE_POINTER 2     // Mouse pointer
 #define SPRITE_IRC     4     // IRC Text box
 
+extern u8 LastSprite;
+extern u8 LastSpriteSize;
+
 void SP_Setup();
 
 #endif // SPRITE_H_INCLUDED

@@ -1,5 +1,4 @@
 
-#include "Exception.h"
 #include "Utils.h"
 #include "Terminal.h"
 #include "Telnet.h"
@@ -31,7 +30,6 @@ static inline void InitException()
 
     TELNET_Init(TF_Everything);
     bNoEcho = FALSE;
-    v_LineMode = LMSM_EDIT;
     bLinefeedMode = TRUE;
     TTY_SetFontSize(FONT_8x8_16);
     TTY_ReloadPalette();
@@ -48,6 +46,8 @@ static inline void WaitForInput()
     Stdout_Push("\n\e[97m  Press any key to reboot  \e[30;40m");
     Stdout_Flush();
     
+    while (KB_Poll(&kbdata));   // Flush any data that the keyboard may have in its buffer
+
     while(1)
     {
         while (KB_Poll(&kbdata))
@@ -57,6 +57,7 @@ static inline void WaitForInput()
 
         if (is_AnyKey())
         {
+            VDP_setEnable(FALSE);
             SYS_hardReset();
         }
 
@@ -87,9 +88,10 @@ static inline void PrintStack()
 {
     u32 *sp = (u32*)registerState[15];
 
-    for (u8 i = 0; i < 20; i+=2)
+    for (u8 i = 0; i < 16; i+=2)
     {
-        printf("  SP+%02X: \e[96m%08lX\e[0m    SP+%02X: \e[96m%08lX\e[0m\n", i*4, *(sp + (i + 0)), (i+1)*4, *(sp + (i + 1)));
+        printf("  SP+%02X: \e[96m%08lX\e[0m    SP+%02X: \e[96m%08lX\e[0m\n",     i*4, *(sp + (i + 0)), 
+                                                                             (i+1)*4, *(sp + (i + 1)));
     }
 }
 
@@ -222,18 +224,4 @@ void __attribute__ ((noinline)) int_chkinst()
     PrintStack();
 
     WaitForInput();
-}
-
-void SetupExceptions()
-{
-    busErrorCB = int_buserror;
-    addressErrorCB = int_addresserror;
-    illegalInstCB = int_illegal;
-    zeroDivideCB = int_zerodivide;
-    errorExceptionCB = int_error;
-    trapvInstCB = int_trapv;
-    privilegeViolationCB = int_privviolation;
-    traceCB = int_trace;
-    line1x1xCB = int_line1x1x;
-    chkInstCB = int_chkinst;
 }

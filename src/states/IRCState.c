@@ -1,6 +1,6 @@
 #include "StateCtrl.h"
 #include "IRC.h"
-#include "Terminal.h"   // sv_Font, sv_HSOffset
+#include "Terminal.h"   // TTY_GetFont(), sv_HSOffset
 #include "Buffer.h"
 #include "Input.h"
 #include "Utils.h"
@@ -56,12 +56,12 @@ void IRC_PrintChar(u8 c);
 
 u16 Enter_IRC(u8 argc, char *argv[])
 {
-    if (sv_Font == FONT_SOFTWARE)
+    if (TTY_GetFont() == FONT_SOFTWARE)
     {
         SP_Setup();
     }
 
-    sv_Font = sv_IRCFont;
+    TTY_SetvFont(sv_IRCFont);
     EpochSave = sv_EpochStart;
 
     if (IRC_Init() == EXIT_FAILURE) return EXIT_FAILURE;
@@ -72,18 +72,19 @@ u16 Enter_IRC(u8 argc, char *argv[])
     // Adjust horizontal wrap position depending on font and tilemap size
     if (TMB_TILEMAP_WIDTH == 128)
     {
-        if (!sv_Font) C_XMAX = 126; // Wrap at >126
+        if (!TTY_GetFont()) C_XMAX = 126; // Wrap at >126
         else C_XMAX = 254;          // Wrap at >254
     }
     else if (TMB_TILEMAP_WIDTH == 64)
     {
-        if (!sv_Font) C_XMAX = 62; // Wrap at >62
+        if (!TTY_GetFont()) C_XMAX = 62; // Wrap at >62
         else C_XMAX = 126;         // Wrap at >126
     }
 
     // Setup window plane to accomodate user list window on the right side
     TRM_SetWinParam(FALSE, TRUE, 20, 1);
-    SB_SetStatusText(STATUS_TEXT_SHORT);
+    SB_ResetStatusText();
+    SB_SetTitleMaxLen(33 - IRC_MAX_CHANNELS);
 
     UserWin = malloc(sizeof(SM_Window));
     if (UserWin == NULL)
@@ -229,16 +230,16 @@ void ChangePage(u8 num)
 {
     if (num >= IRC_MAX_CHANNELS) return;
 
-    char TitleBuf[40];
+    char TitleBuf[128];
     PG_CurrentIdx = num;
 
     if (strcmp(PG_Buffer[PG_CurrentIdx]->Title, PG_EMPTYNAME) == 0)
     {
-        snprintf(TitleBuf, 31, "%s %s (%u)                              ", STATUS_TEXT_SHORT, PG_Buffer[PG_CurrentIdx]->Title, num+1);
+        snprintf(TitleBuf, 128, "%s %s (%u)", STATUS_TEXT_SHORT, PG_Buffer[PG_CurrentIdx]->Title, num+1);
     }
     else
     {
-        snprintf(TitleBuf, 35-IRC_MAX_CHANNELS, "%s %-*s", STATUS_TEXT_SHORT, 35-IRC_MAX_CHANNELS, PG_Buffer[PG_CurrentIdx]->Title);
+        snprintf(TitleBuf, 128, "%s %s", STATUS_TEXT_SHORT, PG_Buffer[PG_CurrentIdx]->Title);
     }
 
     bPG_HasNewMessages[num] = FALSE;
@@ -338,11 +339,11 @@ u8 ParseTx()
                 }
                 else if (strcmp(PG_Buffer[ch]->Title, PG_EMPTYNAME) == 0) // See if there is an empty page
                 {
-                    char TitleBuf[40];
-                    strncpy(PG_Buffer[ch]->Title, command, 32);
+                    char TitleBuf[128];
+                    strncpy(PG_Buffer[ch]->Title, command, 16);
                     TMB_SetActiveBuffer(PG_Buffer[ch]);
 
-                    snprintf(TitleBuf, 35-IRC_MAX_CHANNELS, "%s %-*s", STATUS_TEXT_SHORT, 35-IRC_MAX_CHANNELS, PG_Buffer[PG_CurrentIdx]->Title);
+                    snprintf(TitleBuf, 128, "%s %s", STATUS_TEXT_SHORT, PG_Buffer[PG_CurrentIdx]->Title);
                     SB_SetStatusText(TitleBuf);
                     bPG_UpdateMessage = TRUE;
                     break;
@@ -363,7 +364,7 @@ u8 ParseTx()
         }
         else if (strcmp(command, "part") == 0)
         {
-            char TitleBuf[40];
+            char TitleBuf[128];
             char ChanNameBuf[64];
             u8 last_pg = PG_CurrentIdx;
 
@@ -519,7 +520,7 @@ void Input_IRC()
 
     if (is_KeyDown(KEY_KP1_END))
     {
-        if (!sv_Font)
+        if (!TTY_GetFont())
         {
             HScroll += 8;
             VDP_setHorizontalScroll(BG_A, HScroll);
@@ -535,7 +536,7 @@ void Input_IRC()
 
     if (is_KeyDown(KEY_KP3_PGDN))
     {
-        if (!sv_Font)
+        if (!TTY_GetFont())
         {
             HScroll -= 8;
             VDP_setHorizontalScroll(BG_A, HScroll);
@@ -605,12 +606,12 @@ void Input_IRC()
     // Toggle user list window and request NAMES list from remote server, list will be recieved at a later point
     if (is_KeyDown(KEY_TAB))
     {
-        char req[40];
+        char req[64];
         u16 i = 0;
 
         PG_UserNum = 0;
         UserListScroll = 0;
-        memset(req, 0, 40);
+        memset(req, 0, 64);
 
         TRM_ClearArea(26, 1, 14, 25, PAL1, TRM_CLEAR_BG); // Clear area where the user list window will be drawn
 
@@ -621,7 +622,7 @@ void Input_IRC()
             TRM_SetWinParam(FALSE, TRUE, 13, 1);
 
             #ifndef EMU_BUILD
-            snprintf(req, 40, "NAMES %s\n", PG_Buffer[PG_CurrentIdx]->Title);
+            snprintf(req, 64, "NAMES %s\n", PG_Buffer[PG_CurrentIdx]->Title);
 
             Buffer_Flush(&TxBuffer);
 

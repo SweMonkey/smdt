@@ -15,21 +15,21 @@
 #define D_COLUMNS_40 64
 
 // Max number of columns available
-#define DCOL4_64  80//126   // Using 4x8 font with 64 wide tilemap
-#define DCOL4_128 80//254   // Using 4x8 font with 128 wide tilemap
-#define DCOL8_64  40//39    // Using 8x8 font with 64 wide tilemap
-#define DCOL8_128 40//126   // Using 8x8 font with 128 wide tilemap
+#define DCOL4_64  80    // Using 4x8 font with 64 wide tilemap
+#define DCOL4_128 80    // Using 4x8 font with 128 wide tilemap
+#define DCOL8_64  40    // Using 8x8 font with 64 wide tilemap
+#define DCOL8_128 40    // Using 8x8 font with 128 wide tilemap
 
 // Default cursor minmaxing
 #define C_YMAX_PAL 29
 #define C_YMAX_NTSC 27
 #define C_HTAB 8
 #define C_VTAB 2
-#define C_YSTART 1  // 0 if no window plane
-#define C_SYSTEM_YMAX (bPALSystem ? C_YMAX_PAL : C_YMAX_NTSC)   // Uh... wat... fixme
+#define C_YSTART 0
+#define C_SYSTEM_YMAX (bPALSystem ? C_YMAX_PAL : C_YMAX_NTSC)
 
 // Default X/Y Scroll
-#define D_VSCROLL 0
+#define D_VSCROLL -8 // -8 if status bar is at top, 0 if at bottom
 
 // Default FG/BG colors
 #define CL_FG 7
@@ -83,20 +83,19 @@ extern bool bPendingWrap;
 
 extern u16 sv_CBGCL;
 extern u16 sv_CFG0CL;   // Custom text colour for 4x8 font
-extern u16 sv_CFG1CL;   // Custom text antialiasing colour for 4x8 font 
-extern u8 sv_CLPalette;
+extern u16 sv_CFG1CL;   // Custom text antialiasing colour for 4x8 font
 
 extern const char * const TermTypeList[];
 
 // Font
-extern u8 sv_Font;
 extern u8 sv_BoldFont;
 extern u8 EvenOdd;
 extern u8 sv_bHighCL;
 
 void TTY_Init(TTY_InitFlags flags);
-void TTY_SetDarkColours();
 void TTY_ReloadPalette();
+void TTY_SetvFont(u8 font);
+u8 TTY_GetFont();
 void TTY_SetFontSize(u8 size);
 
 void TTY_PrintChar(u8 c);
@@ -114,7 +113,7 @@ s16 TTY_GetSY_A();          // Get SY without VScroll   (VScroll gets removed in
 void TTY_SetSY(s16 y);      // Set SY + VScroll         (VScroll does NOT get added in function)
 s16 TTY_GetSY();            // Get SY + VScroll         (VScroll does NOT get removed in function)
 
-void TTY_SetVScroll(s16 v);     // Add to vscroll
+void TTY_SetVScroll(s16 v);     // Add to vscroll (Should probably rename this function...)
 s16 TTY_GetVScroll();           // Get vscroll
 void TTY_SetVScrollAbs(s16 v);  // Set vscroll to absolute value
 void TTY_ResetVScroll();        // Reset vscroll to default value (0)

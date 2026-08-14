@@ -12,8 +12,8 @@ const ROMHeader rom_header =
     "JKRDM           ",                                 // Device support
     0x00000000,                                         // ROM start address
     0x000FFFFF,                                         // ROM end address
-    0xE0FF0000,                                         // RAM start address
-    0xE0FFFFFF,                                         // RAM end address
+    0x00FF0000,                                         // RAM start address
+    0x00FFFFFF,                                         // RAM end address
     "RA",                                               // SRAM enabled
     0xF820,                                             // SRAM 8 bit ODD
     0x00200001,                                         // SRAM start address

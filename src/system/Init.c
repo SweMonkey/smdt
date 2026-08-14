@@ -5,7 +5,7 @@
 #include "Input.h"
 #include "../res/system.h"
 #include "Utils.h"
-#include "UI.h"         // UI_ApplyTheme
+#include "UI.h"         // UI_ApplyThemeColour
 #include "Network.h"
 #include "Terminal.h"
 #include "Telnet.h"
@@ -14,7 +14,6 @@
 #include "Keyboard.h"
 
 #include "misc/ConfigFile.h"
-#include "misc/Exception.h"
 
 #include "system/PseudoFile.h"
 #include "system/File.h"
@@ -28,9 +27,8 @@ void SystemInit(bool hardReset)
 {
     VDP_setEnable(FALSE);
     SYS_disableInts();
-    SetupExceptions();
 
-    sv_CBrightness = 0; // Set full brightness during boot
+    sv_CBrightness = 0; // Set full screen brightness during boot
 
     SetPalette(PAL0, palette_black);
     SetPalette(PAL1, palette_black);
@@ -87,40 +85,42 @@ void SystemInit(bool hardReset)
     TRM_ClearArea(0, 0, 40, (bPALSystem ? 30 : 28), PAL1, TRM_CLEAR_BG);
 
     // Setup default window parameters
-    TRM_SetWinParam(FALSE, FALSE, 0, 1);
+    SB_SetStatusPosition(TRUE);
 
     // Upload initial tilesets to VRAM
-    VDP_loadTileSet(&GFX_BGBLOCKS,   AVR_BGBLOCK, DMA);
-    VDP_loadTileSet(&GFX_POINTER,    AVR_POINTER, DMA);
-    VDP_loadTileSet(&GFX_CURSOR,     AVR_CURSOR,  DMA);
-    VDP_loadTileSet(&GFX_ICONS,      AVR_ICONS,   DMA);
-    VDP_loadTileSet(&GFX_ASCII_MENU, AVR_UI,      DMA);
-    VDP_loadTileSet(&GFX_SCRSAV,     AVR_SCRSAV,  DMA);
+    VDP_loadTileSet(&GFX_BGBLOCKS, AVR_BGBLOCK, DMA);
+    VDP_loadTileSet(&GFX_POINTER,  AVR_POINTER, DMA);
+    VDP_loadTileSet(&GFX_CURSOR,   AVR_CURSOR,  DMA);
+    VDP_loadTileSet(&GFX_SCRSAV,   AVR_SCRSAV,  DMA);
+    VDP_loadTileSet(&GFX_ICONS,    AVR_ICONS,   DMA);
 
     // Initialize terminal for boot output text
-    sv_Font = FONT_8x8_16;
+    TTY_SetvFont(FONT_8x8_16);
     //sv_BoldFont = TRUE;
     TELNET_Init(TF_Everything);
     bLinefeedMode = TRUE;
-    bAutoFlushStdout = TRUE;
-    SetColor(4, 0);    // Set cursor colour back to black to hide it
+    bAutoFlushStdout = TRUE;    // Force flush all text in stdout to screen during boot
+    SetColor(4, 0);             // Set cursor colour back to black to hide it
     UploadPalette();
 
+    // Setup sprites
     SP_Setup();
-    
+
     VDP_setEnable(TRUE);
  
     Stdout_Push(" \e[97mInitializing system...\e[0m\n");
 
+    // Initialize the window manager
     WinMgr_Init();
 
+    // Set the default statusbar icons
     SB_SetStatusIcon(ICO_ID_UNKNOWN,    ICO_POS_0);
     SB_SetStatusIcon(ICO_NET_IDLE_RECV, ICO_POS_1);
     SB_SetStatusIcon(ICO_NET_IDLE_SEND, ICO_POS_2);
     SB_SetStatusIcon(ICO_NONE,          ICO_POS_3);
 
     Stdout_Push(" \e[97mMounting filesystems...\e[0m\n");
-    FS_Init();
+    FS_Init();  // Initialize and mount any present filesystems
 
     Stdout_Push(" \e[97mLoading system configuration...\e[0m\n");
     if (CFG_LoadData()) 
@@ -130,17 +130,16 @@ void SystemInit(bool hardReset)
     }
     else Stdout_Push(" \e[92mSuccessfully loaded config file\e[0m\n");
 
+    // Initialize input subsystem (used for joypads, keyboards and mice)
     Input_Init();
-    
-    SYS_setExtIntCallback(NET_RxIRQ);   // Set external IRQ callback
 
     // Enable interrupts during driver init, certain devices will need ExtIRQ working for detection
-    VDP_setReg(0xB, 0x8);               // Enable VDP ext interrupt (Enable: 8 - Disable: 0)
+    VDP_setReg(0xB, 0x8);               // Enable VDP ext interrupt (Register $B -- Enable: 8 - Disable: 0)
     SYS_enableInts();
     SYS_setInterruptMaskLevel(0);       // Enable all interrupts
 
     Stdout_Push(" \e[97mConfiguring devices...\e[0m\n");
-    DeviceManager_Init();
+    DeviceManager_Init();   // Initializes device manager, detect connected devices and initializes any drivers needed
 
     SYS_disableInts();
 
@@ -181,7 +180,7 @@ void SystemInit(bool hardReset)
     SetColor( 6, 0xEEE);    // Icon Normal
     SetColor( 7, 0x0C0);    // Icon Green (Previously in slot 3)
     SetColor(18, 0xEEE);    // Window text FG Normal - This is set to black during boot, revert it back
-    UI_ApplyTheme();
+    UI_ApplyThemeColour();
 
     // Set VBlank IRQ callback - Do not set it earlier in boot process!
     SYS_setVBlankCallback(VBlank);
@@ -189,19 +188,22 @@ void SystemInit(bool hardReset)
     //ChangeState(PS_Debug, 0, NULL);
     //ChangeState(PS_Telnet, 0, NULL);
     //ChangeState(PS_IRC, 0, NULL);
-    //ChangeState(PS_Gopher, 0, NULL);
 
     u8 kbdata;
-    if (KB_Poll(&kbdata)) KB_Interpret_Scancode(kbdata);
+    if (KB_Poll(&kbdata)) KB_Interpret_Scancode(kbdata);    // Manually poll the keyboard to detect if the backspace key (or C button on a controller) is pressed during boot
 
     VDP_setEnable(FALSE);
+
+    // If the user is holding backspace or the C button then change directly into a telnet session
     if (is_KeyDown(KEY_BACKSPACE))
     {
         ChangeState(PS_Telnet, 0, NULL);
     }
+    // Otherwise go into the default terminal shell session
     else
     {
         ChangeState(PS_Terminal, 0, NULL);
     }
+
     VDP_setEnable(TRUE);
 }

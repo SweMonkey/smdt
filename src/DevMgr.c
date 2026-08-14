@@ -51,6 +51,8 @@ bool bMouse = FALSE;
 bool bKeyboard = FALSE;
 DevPort sv_ListenPort = DP_Port2;   // Default UART port to listen on
 
+extern char sv_Baud[];
+
 
 /// @brief Get four bit device identifier (Sega devices only)
 /// @param p Port to check (DP_Port1, DP_Port2, DP_Port3)
@@ -186,7 +188,7 @@ void DetectDevices()
 
     if (!bKeyboard)
     {
-        Stdout_Push(" \e[93mNo keyboard found.\e[0m\n");
+        Stdout_Push(" \e[93mNo keyboard found\e[0m\n");
         kprintf("No keyboard found - Press F1 to continue");
     }
 
@@ -254,7 +256,16 @@ void DetectDevices()
 
     DevList[DevSeq++] = &DRV_UART;
     SetDevicePort(&DRV_UART, sv_ListenPort);
-    *((vu8*) DRV_UART.SCtrl) = 0x38;
+
+    // Setup serial port speed based on the first character in the sv_Baud variable
+    switch (sv_Baud[0])
+    {
+        case '3': *((vu8*) DRV_UART.SCtrl) = 0xF8; break;   // 300 baud
+        case '1': *((vu8*) DRV_UART.SCtrl) = 0xB8; break;   // 1200 baud
+        case '2': *((vu8*) DRV_UART.SCtrl) = 0x78; break;   // 2400 baud  
+        default:  *((vu8*) DRV_UART.SCtrl) = 0x38; break;   // 4800 baud
+    }
+    
     
     Stdout_Push(" \e[97mChecking for network adapters...\e[0m\n");
 

@@ -24,11 +24,28 @@ NET_PingIP_CB *PingIPCB = NULL;
 // Rx IRQ
 void NET_RxIRQ()
 {
-    if ((*(vu8*)DRV_UART.SCtrl & 6) != 2) return;   // Check Ready/RxError flag in serial control register, Bail if no byte is ready or if there was an Rx error
+    vu8 RxData;
+    vu16 RxFail;
 
-    SYS_setInterruptMaskLevel(7);
-    Buffer_Push(&RxBuffer, *(vu8*)DRV_UART.RxData);
-    SYS_setInterruptMaskLevel(0);
+    __asm__ __volatile__
+    (
+        "moveq   #1, %1            \n\t"  // Set RxFail to true
+        "btst    #2, (%[serial])   \n\t"  // RX error?
+        "bne.s   1f                \n\t"
+        "btst    #1, (%[serial])   \n\t"  // RX ready?
+        "beq.s   1f                \n\t"
+        "move.b  -2(%[serial]), %0 \n\t"  // Move received byte to RxData variable
+        "moveq   #0, %1            \n\t"  // Set RxFail to false to indicate a successful byte was received
+        "1:"
+        : /* outputs */
+            "=d"(RxData), "=d"(RxFail)
+        : /* inputs */
+            [serial] "a"(DRV_UART.SCtrl)
+        : /* clobbered regs */
+            "cc"
+    );
+
+    if (!RxFail) Buffer_Push_IRQ(&RxBuffer, RxData);
 }
 
 void NET_SendChar(const u8 c)
@@ -49,13 +66,14 @@ void NET_SendChar(const u8 c)
         __asm__ __volatile__
         (
             "1:                         \n\t"
-            "btst #0, (%[serial])       \n\t"   // Test serial control register bit 0
-            "bne.s 1b                   \n\t"   // and wait until Tx is not full
+            "btst #0, (%[serial])       \n\t"   // Tx full?
+            "bne.s 1b                   \n\t"   // If so loop back until it is empty
             "move.b %[c], -4(%[serial]) \n\t"   // Send byte 'c' to Tx register
         : /* outputs */
         : /* inputs */
-            [c] "d"(c), [serial] "a"((vu8*)DRV_UART.SCtrl)
+            [c] "d"(c), [serial] "a"(DRV_UART.SCtrl)
         : /* clobbered regs */
+            "cc"
         );
     }
 
@@ -66,7 +84,7 @@ void NET_SendChar(const u8 c)
 void NET_BufferChar(const u8 c)
 {    
     if ((v_LineMode & LMSM_EDIT) == 0) NET_SendChar(c);
-    else Buffer_Push(&TxBuffer, c);
+    else Buffer_Push_IRQ(&TxBuffer, c);
 }
 
 // Pop and transmit data in TxBuffer
@@ -74,7 +92,7 @@ void NET_TransmitBuffer()
 {
     u8 data;
 
-    while (Buffer_Pop(&TxBuffer, &data)) NET_SendChar(data);
+    while (Buffer_Pop(&TxBuffer, &data))  NET_SendChar(data);
 }
 
 void NET_SendString(const char *str)

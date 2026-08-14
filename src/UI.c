@@ -2,6 +2,8 @@
 #include "Utils.h"      // TRM_DrawChar()
 #include "Network.h"    // TxBuffer
 #include "Palette.h"
+#include "Terminal.h"
+#include "../res/system.h"
 
 // -- Window --
 static const u8 Frame[30][40] = 
@@ -40,14 +42,30 @@ static const u8 Frame[30][40] =
 };
 
 static SM_Window *Target = NULL;
-u8 sv_ThemeUI = 0;
+u8 sv_UI_ThemeColour = 0;
+//u8 sv_UI_Theme = 0;
 bool bModalWindowActive = FALSE;
 
 
-/// @brief Apply UI theme
-void UI_ApplyTheme()
+/// @brief Load GUI theme
+void UI_LoadTheme()
 {
-    switch (sv_ThemeUI)
+    switch (TTY_GetFont())
+    {
+        case FONT_SOFTWARE:
+            VDP_loadTileSet(&GFX_GUI, AVR_UI, DMA);
+        break;
+    
+        default:
+            VDP_loadTileSet(&GFX_GUI_OPAQUE, AVR_UI, DMA);
+        break;
+    }
+}
+
+/// @brief Apply UI theme colours
+void UI_ApplyThemeColour()
+{
+    switch (sv_UI_ThemeColour)
     {
         case 0: // Dark blue
             SetColor( 2, 0xEEE);    // Window title FG (+Selected text colour)
@@ -278,6 +296,21 @@ void UI_CreateWindow(SM_Window *w, const char *title, UI_WindowFlags flags)
     }
 }
 
+void UI_RedrawWindowFrame()
+{
+    if (Target == NULL) return;
+    memcpy(Target->WinBuffer, Frame, 1200);
+    memset(Target->WinAttribute, PAL1, 1200);
+
+    const char *c = Target->Title;
+    u8 x = 1;
+    while (*c) 
+    {
+        Target->WinAttribute[1][x] = PAL0;
+        Target->WinBuffer[1][x++] = *c++;
+    }
+}
+
 /// @brief Draw text string
 /// @param x X position
 /// @param y Y position
@@ -409,6 +442,11 @@ void UI_DrawVLine(u8 x, u8 y, u8 height)
         else Target->WinBuffer[y+i+3][x+1] = 0xCF;
     }
 
+    if (Target->WinBuffer[y+2][x+1] == 0xA3) // Is there a vertical line to the left of this line?
+    {
+        Target->WinBuffer[y+2][x+1] = 0x8F;
+    }
+
     if (y == 0)
     {
         Target->WinBuffer[2][x+1] = 0xDC;
@@ -432,11 +470,23 @@ void UI_DrawHLine(u8 x, u8 y, u8 width)
 
     for (u8 i = 0; i < width; i++)
     {
-        if (Target->WinBuffer[y+3][x+i+1] == 0xCF)
+        if (Target->WinBuffer[y+3][x+i+1] == 0xCF)  // Does this line intersect a vertical line?
         {
-            Target->WinBuffer[y+3][x+i+1] = 0xD9;
+            if (Target->WinBuffer[y+2][x+i+1] == 0xCF)
+            {
+                Target->WinBuffer[y+3][x+i+1] = 0xD9;   // Cross
+            }
+            else 
+            {
+                Target->WinBuffer[y+3][x+i+1] = 0xD7;   // T
+            }
         }
         else Target->WinBuffer[y+3][x+i+1] = 0xD0;
+    }
+
+    if (Target->WinBuffer[y+3][x] == 0xCF) // Is there a vertical line to the left of this line?
+    {
+        Target->WinBuffer[y+3][x] = 0xD5;
     }
 
     if (x == 0)
@@ -538,7 +588,7 @@ void UI_DrawWindow(u8 x, u8 y, u8 width, u8 height, bool bChild, const char *tit
     for (u8 i = 0; i < width-2; i++)
     {
         Target->WinBuffer[y+3][x+2+i] = 0xC1 - m;
-        Target->WinBuffer[y+4][x+2+i] = 0xC4 - m;
+        Target->WinBuffer[y+4][x+2+i] = 0xC4;
         Target->WinBuffer[y+5][x+2+i] = 0xC7 - m;
 
         Target->WinBuffer[y+3+height-1][x+2+i] = 0xCD - m;
@@ -616,6 +666,48 @@ void UI_DrawVScrollbar(u8 x, u8 y, u8 height, u8 selected, u16 min, u16 max, u16
     }
 }
 
+/// @brief Draw a horizontal scrollbar
+/// @param x X position
+/// @param y Y position
+/// @param width Width of scrollbar
+/// @param min Min value of scrollbar
+/// @param max Max value of scrollbar
+/// @param pos Position of slider / Value of scrollbar
+void UI_DrawHScrollbar(u8 x, u8 y, u8 width, u8 selected, u16 min, u16 max, u16 pos)
+{
+    if (Target == NULL) return;
+    if (max <= min) return;
+
+    y += 3;
+
+    u8 scrollArea = width-1;
+    if (scrollArea < 1) return;
+
+    UI_ClearRect(x, y-3, width, 1);
+
+    // Tile
+    Target->WinBuffer[y][x] = (selected == 0 ? 0x9B : 0xBB);        // Left arrow
+    Target->WinBuffer[y][x+width] = (selected == 2 ? 0x9C : 0xBC);  // Right arrow
+
+    if (pos < min) pos = min;
+    if (pos > max) pos = max;
+
+    u16 range = max - min;
+
+    // Max slider width
+    u8 sliderWidth = scrollArea * scrollArea / (range + scrollArea);
+    if (sliderWidth < 1) sliderWidth = 1;
+    if (sliderWidth > scrollArea) sliderWidth = scrollArea;
+
+    // Slider position
+    u8 travelArea = scrollArea - sliderWidth;
+    u8 sliderPos = (u32)(pos - min) * travelArea / range;
+
+    for (u8 i = 0; i < sliderWidth; i++)
+    {
+        Target->WinBuffer[y][x + 1 + sliderPos + i] = 0xBF; // Force non selected slider
+    }
+}
 
 /// @brief Draw an item list widget
 /// @param x X position
@@ -720,8 +812,8 @@ void UI_DrawSpinbox(u8 x, u8 y, u8 width, const char *caption, s32 *num, u16 sel
         Target->WinBuffer[y+3][x+width-1] = 0xB5;
         Target->WinBuffer[y+3][x+width  ] = 0xB6;
 
-        Target->WinBuffer[y+4][x+width-1] = 0x9B;
-        Target->WinBuffer[y+4][x+width  ] = 0x9C;
+        Target->WinBuffer[y+4][x+width-1] = 0x93;
+        Target->WinBuffer[y+4][x+width  ] = 0x94;
 
         Target->WinBuffer[y+5][x+width-1] = 0x99;
         Target->WinBuffer[y+5][x+width  ] = 0x9A;
@@ -909,10 +1001,26 @@ void UI_DrawTabs(u8 x, u8 y, u8 w, u8 num_tabs, u8 active_tab, u8 selected, cons
     {
         len = strlen(tab_text[i]);
 
-        Target->WinBuffer[y+3][x+o] = ((x+o) == 0 ? 0xA4 : 0xA7);               // Left tab side
-        Target->WinBuffer[y+3][x+len+1+o] = ((x+len+1+o) == 39 ? 0xA6 : 0xA9);  // Right tab side
+        // Is this the last tab? Draw right border (right of this tab) in addition to the combined right+left border (left of this tab)
+        if (i == num_tabs-1)
+        {
+            Target->WinBuffer[y+3][x+o] = ((x+o) == 0 ? 0xA4 : 0xA7);               // Combinded right+left tab side
+            Target->WinBuffer[y+3][x+len+1+o] = ((x+len+1+o) == 39 ? 0xA6 : 0xA9);  // Right tab side
+        }
+        // Else draw a combined right+left border (right of this tab)
+        else
+        {
+            Target->WinBuffer[y+3][x+o] = ((x+o) == 0 ? 0xA4 : 0xA7);   // Combinded right+left tab side
+        }
 
         c = len; while (c--) Target->WinBuffer[y+2][x+1+c+o] = (y == 0) ? 0xA5 : 0xA8;    // Top tab side
+
+        // If we're doing multiple rows of tabs then make sure to not overwrite the above tab
+        // This repaints the single bottom line tile (0xA8) for tabs with a double (top and bottom) line tile (0x90)
+        if (Target->WinBuffer[y+2][x+1+o] == 0xA8)
+        {
+            c = len; while (c--) Target->WinBuffer[y+2][x+1+c+o] = 0x90;
+        }
 
         if (active_tab == i)
         {
@@ -921,7 +1029,7 @@ void UI_DrawTabs(u8 x, u8 y, u8 w, u8 num_tabs, u8 active_tab, u8 selected, cons
 
         UI_DrawText(x+o, y, (selected == i ? PAL0 : PAL1), tab_text[i]);
 
-        o += len+2;
+        o += len + 1;
     }
 
     if (x ==  0) Target->WinBuffer[y+4][0]    = 0xA2;   // Point where the left window border meets the tab bar

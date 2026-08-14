@@ -18,12 +18,7 @@ static const u16 YAddr_Table[] =
     0x7800, 0x7D00, 0x8200, 0x8700, 0x8C00, 0x9100, 0x9600, 0x9B00
 };
 
-/*static const u16 AttrExpansion[] =
-{
-    0x0000, 0x1111, 0x2222, 0x3333, 0x4444, 0x5555, 0x6666, 0x7777, 
-    0x8888, 0x9999, 0xAAAA, 0xBBBB, 0xCCCC, 0xDDDD, 0xEEEE, 0xFFFF
-};*/
-
+// Table for attribute expansion (4 bit -> 16 bit)
 static const u16 AttrExpansion[] =
 {
     0x0000, 0x1111, 0x2222, 0x3333, 0x4444, 0x5555, 0x6666, 0x7777, 0x8888, 0x9999, 0xAAAA, 0xBBBB, 0xCCCC, 0xDDDD, 0xEEEE, 0xFFFF,
@@ -56,6 +51,8 @@ static u8 *attrbuf; // Screen attribute buffer (points to either main or alt scr
 static u8 *protbuf; // Screen protection buffer (only one for both main/alt!)
 
 static u8 LastBuffer = 0xFF;
+static u8 LastChar = 0xFF;
+static u8 LastAttr = 0xFF;
 
 extern u8 ColorFG;
 extern u8 ColorBG;
@@ -70,7 +67,7 @@ void SW_SetBuffer()
     scrbuf  = BufferSelect ? alt_scr  : main_scr;
     attrbuf = BufferSelect ? alt_attr : main_attr;
 
-    SW_RedrawScreen();
+    //SW_RedrawScreen();
 
     LastBuffer = BufferSelect;
 }
@@ -96,8 +93,20 @@ static void ClearBuffer(u16 start, u16 size, u8 c)
 
 u8 SW_GetChar(u8 x, u8 y)
 {
-    u8 ny = y % 80;
+    u8 ny = y & (SCREEN_HEIGHT-1);
     return scrbuf[(ny * SCREEN_WIDTH) + x];
+}
+
+void SW_SetChar(u8 x, u8 y, u8 c)
+{
+    u8 ny = y & (SCREEN_HEIGHT-1);
+    scrbuf[(ny * SCREEN_WIDTH) + x] = c;
+}
+
+void SW_SetAttr(u8 x, u8 y, u8 a)
+{
+    u8 ny = y & (SCREEN_HEIGHT-1);
+    attrbuf[(ny * SCREEN_WIDTH) + x] = a;
 }
 
 void SW_ClearScreen()
@@ -144,43 +153,23 @@ void SW_Setup()
 {
     if (main_scr == NULL) main_scr = malloc(SCREEN_SIZE);
 
-    if (main_scr == NULL)
-    {
-        kprintf("Unable to allocate screen buffer 0\n");
-        return;
-    }
+    if (main_scr == NULL) return;
 
     if (alt_scr == NULL) alt_scr = malloc(SCREEN_SIZE);
 
-    if (alt_scr == NULL)
-    {
-        kprintf("Unable to allocate screen buffer 1\n");
-        return;
-    }
+    if (alt_scr == NULL) return;
 
     if (main_attr == NULL) main_attr = malloc(SCREEN_SIZE);
 
-    if (main_attr == NULL)
-    {
-        kprintf("Unable to allocate attribute buffer 0\n");
-        return;
-    }
+    if (main_attr == NULL) return;
 
     if (alt_attr == NULL) alt_attr = malloc(SCREEN_SIZE);
 
-    if (alt_attr == NULL)
-    {
-        kprintf("Unable to allocate attribute buffer 1\n");
-        return;
-    }
+    if (alt_attr == NULL) return;
 
     if (protbuf == NULL) protbuf = malloc(SCREEN_SIZE);
 
-    if (protbuf == NULL)
-    {
-        kprintf("Unable to allocate protection buffer\n");
-        return;
-    }
+    if (protbuf == NULL) return;
 
     u8 default_attr = (CL_FG << 4) | CL_BG;
     memset(main_scr,  0, SCREEN_SIZE);
@@ -210,29 +199,49 @@ void SW_Setup()
 
 static inline __attribute__((always_inline)) void SW_RenderChar(u16 idx)
 {
-    u16 Char_Off = scrbuf[idx]; Char_Off *= 16;
-    u16 Attr     = attrbuf[idx];
-    u16 BG_CL    = AttrExpansion[Attr & 0xF];
-    u16 FG_CL    = AttrExpansion[Attr & 0xF0]; 
-    const u16 *v = (const u16 *)(GFX_ASCII_TERM_SMALL_SW + Char_Off);
+    u8 Char = scrbuf[idx];    // Character to print
+    u8 Attr = attrbuf[idx];   // BG & FG attribute for character
+
+    if ((LastChar == Char) && (LastAttr == Attr)) return;   // Do not render the glyph if the tb (tilebuffer) already have the correct data in it
+
+    u16 Char_Off = Char * 16;                   // Character offset in bitmap
+    u16 BG_CL    = AttrExpansion[Attr & 0xF];   // Expands BG attribute from 4 bits ($0-$F) to 16 bit ($0000-$FFFF)
+    u16 FG_CL    = AttrExpansion[Attr & 0xF0];  // Same as above, but for FG
+    const u16 *v = (const u16 *)(GFX_ASCII_TERM_SMALL_SW + Char_Off);   // Pointer to the start of the correct glyph in ROM
 
     for (u16 it = 0; it < 8; it++, v++)
     {
         tb_16[it] = (BG_CL & ~*v) | (FG_CL & *v);
+
+        /*
+        This loop will set all high bits in the glyph to the foreground colour index
+        and all the low bits to the background colour index.
+        It does 4 pixels every iteration (16 bits)
+        */
     }
+
+    LastChar = Char;
+    LastAttr = Attr;
 }
 
 inline __attribute__((always_inline)) void SW_PrintChar(u8 c)
 {
-    s16 px = TTY_GetSX();                       // Character X position
-    s16 py = (TTY_GetSY() + C_YSTART) & 0x1F;   // Character Y position
-    u16 p  = (py * SCREEN_WIDTH) + px;          // Character offset
+    s16 px = TTY_GetSX();               // Character X position
+    s16 py = TTY_GetSY() & 0x1F;        // Character Y position
+    u16 p  = (py * SCREEN_WIDTH) + px;  // Character offset
 
     // Assign BG/FG colour to attribute byte
     u8 attr = (bInverse || bReverseColour ? 
                                             ((ColorBG * 16) | ColorFG) : // Flip BG/FG colours when the bInverse is true
                                             ((ColorFG * 16) | ColorBG) );// Todo: add bIntense flag - force use of upper 8 colours
-                                            
+
+    // Skip the entire print process if the character and attribute on the screen already exists
+    if ((scrbuf[p] == c) && (attrbuf[p] == attr)) 
+    {
+        protbuf[p] = CharProtAttr;  // Set cell protection attribute
+        return;
+    }
+
     if (!protbuf[p]) scrbuf[p] = c; // If cell is not protected then set cell to character 'c'
     attrbuf[p] = attr;              // Set cell colour attribute
     protbuf[p] = CharProtAttr;      // Set cell protection attribute
@@ -326,7 +335,6 @@ void SW_RedrawRow(u8 row)
     }
 }
 
-// This still has a bug; See "test -clearv 6" - it will lop the top and beginning of the text "/sram/" on the next line in the terminal
 void SW_ClearLine(u16 y, u16 line_count)
 {
     // Are we clearing enough lines to clean the entire screen? If so just call the dedicated function for screen wipe
@@ -335,9 +343,14 @@ void SW_ClearLine(u16 y, u16 line_count)
         SW_ClearScreen();
         return;
     }
+    else if (line_count == 1)
+    {
+        SW_ClearLineSingle(y);
+        return;
+    }
 
     s16 px = 0;
-    s16 py = (y) % SCREEN_HEIGHT;
+    s16 py = y & (SCREEN_HEIGHT-1);
     u16 p = (py * SCREEN_WIDTH) + px;
     s32 num_bytes = (1280 * line_count);    // 1280 = 40 tiles * 32 bytes per tile  -- each tile contain 2 characters, hence 40 and not 80
     s16 cx = TTY_GetSX();
@@ -379,7 +392,20 @@ void SW_ClearLine(u16 y, u16 line_count)
 
 void SW_ClearLineSingle(u16 y)
 {
-    SW_ClearLine(y, 1);
+    s16 px = 0;
+    s16 py = y & (SCREEN_HEIGHT-1);
+    u16 p = (py * SCREEN_WIDTH) + px;
+    s32 num_bytes = 1280;    // 1280 = 40 tiles * 32 bytes per tile  -- each tile contain 2 characters, hence 40 and not 80
+
+    // Clear the RAM screen buffer
+    ClearBuffer(p, SCREEN_WIDTH, 0);
+
+    // Clear the VRAM buffer
+    u16 vram_off = YAddr_Table[py]; // VRAM Y offset
+    vram_off += AVR_FONT0_POS;      // + VRAM screen buffer offset
+
+    DMA_doVRamFill(vram_off, num_bytes, 0, 1);
+    DMA_waitCompletion();
 }
 
 void SW_ClearPartialLine(u16 y, u16 from_x, u16 to_x)
@@ -389,7 +415,7 @@ void SW_ClearPartialLine(u16 y, u16 from_x, u16 to_x)
     if ((from_x >= to_x) || (from_x >= SCREEN_WIDTH) || (count == 0)) return;
     if (to_x > SCREEN_WIDTH) to_x = SCREEN_WIDTH;
 
-    u16 py = y % SCREEN_HEIGHT;
+    u16 py = y & (SCREEN_HEIGHT-1);
 
     // Clear the RAM screen buffer
     u16 p = (py * SCREEN_WIDTH) + from_x;
@@ -424,7 +450,6 @@ void SW_ClearPartialLine(u16 y, u16 from_x, u16 to_x)
             DMA_waitCompletion();
         }
     }
-
 
     // Redraw one character at the beginning when the start is odd
     if ((from_x & 1))
@@ -463,7 +488,7 @@ void SW_ClearPartialLine(u16 y, u16 from_x, u16 to_x)
     }
 }
 
-// Scroll all lines within margin down <num> rows
+// Scroll all lines starting from cursor Y (within margins) down <num> rows
 void SW_ShiftLinesDown(u8 num)
 {
     if (num == 0) return;
@@ -474,7 +499,7 @@ void SW_ShiftLinesDown(u8 num)
         return;
     }
 
-    s16 top    = DMarginTop;
+    s16 top    = TTY_GetSY_A();
     s16 bottom = DMarginBottom;
     s16 left   = DMarginLeft;
     s16 right  = DMarginRight;
@@ -482,7 +507,7 @@ void SW_ShiftLinesDown(u8 num)
     //kprintf("SW: num: %u - top: %d - bottom: %d - left: %d - right: %d", num, top, bottom, left, right);
 
     // Clamp margins
-    if (top < 0) top = 0;
+    if (top < DMarginTop) top = DMarginTop;
     if (bottom >= SCREEN_HEIGHT) bottom = SCREEN_HEIGHT - 1;
     if (top >= bottom) return;
 
@@ -531,7 +556,7 @@ void SW_ShiftLinesUp(u8 num)
 
     s16 top    = DMarginTop;
     s16 bottom = DMarginBottom;
-    s16 left  = DMarginLeft  - 1;
+    s16 left  = DMarginLeft - 1;
     s16 right = DMarginRight;
 
     // Clamp margins

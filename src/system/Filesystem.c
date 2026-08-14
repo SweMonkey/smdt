@@ -169,8 +169,25 @@ void FS_ListDir(char *dir)
             case LFS_TYPE_REG:
             {
                 u8 nlen = strlen(info.name);
-                printf("%s%-30s\e[0m %4lu %s\n", ((info.name[nlen-2] == 'i') && (info.name[nlen-1] == 'o') ? "\e[95m" : ""), info.name, info.size >= 1024 ? info.size/1024 : info.size, info.size >= 1024 ? "KB" : "B");
-                Stdout_Flush();
+
+                // Special handling for IO (pseudofiles)
+                if ((info.name[nlen-2] == 'i') && (info.name[nlen-1] == 'o'))
+                {
+                    printf("\e[95m%s\e[0m\n", info.name);
+                }
+                else    // Regular file
+                {
+                    for (u8 i = 0; i < nlen; i++)
+                    {
+                        if (info.name[i] < ' ') Stdout_PushByte('?');   // Replace unprintable filename characters with '?' (hack)
+                        else if (Stdout_PushByte(info.name[i]) == FALSE)
+                        {
+                            Stdout_Flush();
+                        }
+                    }
+                    printf("%-*s %4lu %s\n", 30-nlen, " ", info.size >= 1024 ? info.size/1024 : info.size, info.size >= 1024 ? "KB" : "B");
+                }
+
                 break;
             }
 

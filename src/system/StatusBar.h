@@ -26,7 +26,15 @@
 // Undefined icon/
 #define ICO_NONE  5
 
+extern bool bStatusAtTop;
+extern u8 SB_StatusY;
+
+void SB_SetTitleMaxLen(u8 len);
+void SB_SetStatusPosition(bool top);
+void SB_SetStatusTextQ(const char *t);
 void SB_SetStatusText(const char *t);
+void SB_ScrollText();
+void SB_ClearStatusText();
 void SB_ResetStatusText();
 void SB_ResetStatusBar();
 void SB_SetStatusIcon(const char icon, u16 pos);

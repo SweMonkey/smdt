@@ -22,7 +22,6 @@ extern PRG_State TelnetState;
 extern PRG_State IRCState;
 extern PRG_State DebugState;
 extern PRG_State TerminalState;
-extern PRG_State GopherState;
 
 static PRG_State *CurrentState = &DummyState;
 static PRG_State *PrevState = &DummyState;
@@ -43,16 +42,16 @@ void VBlank()
     PAL_setColor(0, 0x00A);
     #endif
 
-    while (KB_Poll(&kbdata))
+    #ifndef SHOW_FRAME_USAGE
+    UploadPalette();
+    #endif
+    
+    /*while (KB_Poll(&kbdata))
     {
         KB_Interpret_Scancode(kbdata);
     }
 
-    if (bMouse) Mouse_Poll();
-    
-    #ifndef SHOW_FRAME_USAGE
-    UploadPalette();
-    #endif
+    if (bMouse) Mouse_Poll();*/
 
     if (is_KeyDown(KEY_RWIN) || is_KeyDown(KEY_F8) || is_KeyUp(sv_MBind_Menu))
     {
@@ -63,14 +62,15 @@ void VBlank()
     {   
         CurrentState->Input();
     }
-
+    
     InputTick();        // Pump IO system
     #ifdef ENABLE_CLOCK
     TickClock();        // Clock will drift when interrupts are disabled!
     #endif
     ScreensaverTick();  // Screensaver counter/animation
     CR_Blink();         // Cursor blink
-
+    SB_ScrollText();    // Scroll statusbar text (if length > 36)
+    
     bWindowActive = WinMgr_isWindowOpen();
 
     #ifdef SHOW_FRAME_USAGE
@@ -94,59 +94,20 @@ void ChangeState(State new_state, u8 argc, char *argv[])
 
     switch (new_state)
     {
-    case PS_Dummy:
-    {
-        CurrentState = &DummyState;
-        break;
-    }
-
-    case PS_Telnet:
-    {
-        CurrentState = &TelnetState;
-        break;
-    }
-
-    case PS_Debug:
-    {
-        CurrentState = &DebugState;
-        break;
-    }
-
-    case PS_IRC:
-    {
-        CurrentState = &IRCState;
-        break;
-    }
-
-    case PS_Terminal:
-    {
-        CurrentState = &TerminalState;
-        break;        
-    }
-
-    case PS_Gopher:
-    {
-        CurrentState = &GopherState;
-        break;        
-    }
-    
-    default:
-    {
-        CurrentState = &DummyState;
-        break;
-    }
+        case PS_Dummy   : CurrentState = &DummyState;    break;
+        case PS_Telnet  : CurrentState = &TelnetState;   break;
+        case PS_Debug   : CurrentState = &DebugState;    break;
+        case PS_IRC     : CurrentState = &IRCState;      break;
+        case PS_Terminal: CurrentState = &TerminalState; break;
+        default         : CurrentState = &DummyState;    break;
     }
 
     CurrentStateEnum = new_state;
-
-    SB_SetStatusText(STATUS_TEXT_SHORT);
-    SB_ResetStatusText();
 
     SetColor(4, sv_CursorCL);
 
     SYS_enableInts();
 
-    //SYS_setVBlankCallback(NULL);
     SC_RetValue = CurrentState->Enter(argc, argv);
     ScreensaverInit();
     SetupQItemTags();
@@ -172,10 +133,6 @@ void RevertState()
     CurrentState->Exit();
 
     SYS_disableInts();
-
-    SB_SetStatusText(STATUS_TEXT_SHORT);
-    SB_ResetStatusText();
-    SB_ResetStatusBar();
 
     CurrentState = PrevState;
     CurrentStateEnum = PrevStateEnum;
@@ -247,6 +204,13 @@ void StateTick()
         LastTxState = !txActive;
     }
     TxUpdate = 0;
+    
+    while (KB_Poll(&kbdata))
+    {
+        KB_Interpret_Scancode(kbdata);
+    }
+
+    if (bMouse) Mouse_Poll();
 
     CurrentState->Run();
 

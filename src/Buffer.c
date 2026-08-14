@@ -38,19 +38,34 @@ u16 Buffer_GetNum(Buffer *b)
 /// @return FALSE is returned if the buffer is full (data is dropped). TRUE on successful push
 inline __attribute__((always_inline)) bool Buffer_Push(Buffer *b, u8 data)
 {
-    u16 next;
+    bool r = TRUE;
+    u16 next = (b->head + 1) & (BUFFER_LEN - 1);    // next is where head will point to after this write.
 
-    next = b->head + 1;  // next is where head will point to after this write.
-    if (next == BUFFER_LEN)
-        next = 0;
+    // If the head + 1 == tail, then the circular buffer is full
+    // Check against tail-1 here because we still want to have room for the current data
+    // while still reporting that we're full (Old function would drop data and report full)
+    if (next == ((b->tail-1) & (BUFFER_LEN - 1)))  // tail-1 may underflow, adding a wrapper to it just in case (although seems to work just fine without it)
+    {
+        r = FALSE;
+    }
 
-    if (next == b->tail) // if the head + 1 == tail, circular buffer is full
-        return FALSE;
+    b->data[b->head] = data; // Load data and then move
+    b->head = next;          // head to next data offset.
 
-    b->data[b->head] = data;  // Load data and then move
-    b->head = next;           // head to next data offset.
+    return r;
+}
 
-    return TRUE;  // return success to indicate successful push.
+/// @brief Push byte into buffer at head - For use in interrupts
+/// @param b Pointer to buffer
+/// @param data Byte data to push into buffer
+inline __attribute__((always_inline)) void Buffer_Push_IRQ(Buffer *b, u8 data)
+{
+    u16 next = (b->head + 1) & (BUFFER_LEN - 1);    // next is where head will point to after this write.
+
+    if (next == b->tail) return;  // If the head + 1 == tail, then the circular buffer is full
+
+    b->data[b->head] = data; // Load data and then move
+    b->head = next;          // head to next data offset.
 }
 
 /// @brief Push string into buffer at head
@@ -67,7 +82,7 @@ bool Buffer_PushString(Buffer *b, const char *str)
         }
         str++;
     }
-    return TRUE; // all characters pushed successfully
+    return TRUE;
 }
 
 /// @brief Pop buffer data at tail into return byte
@@ -76,18 +91,12 @@ bool Buffer_PushString(Buffer *b, const char *str)
 /// @return FALSE is returned if the buffer is empty. TRUE on successful pop.
 inline __attribute__((always_inline)) bool Buffer_Pop(Buffer *b, u8 *data)
 {
-    u16 next;
+    if (b->head == b->tail) return FALSE;  // If the head == tail, then we don't have any data
 
-    if (b->head == b->tail)  // if the head == tail, we don't have any data
-        return FALSE;
+    *data = b->data[b->tail];                   // Read data and then move
+    b->tail = (b->tail + 1) & (BUFFER_LEN - 1); // tail to next offset.
 
-    next = b->tail + 1;   // next is where tail will point to after this read.
-    if (next == BUFFER_LEN) next = 0;
-
-    *data = b->data[b->tail];  // Read data and then move
-    b->tail = next;            // tail to next offset.
-
-    return TRUE;  // return success to indicate successful pop.
+    return TRUE;
 }
 
 /// @brief Pop the byte at the head of buffer
@@ -95,7 +104,7 @@ inline __attribute__((always_inline)) bool Buffer_Pop(Buffer *b, u8 *data)
 /// @return FALSE if the buffer is empty. TRUE on successful pop.
 bool Buffer_ReversePop(Buffer *b)
 {
-    if (b->head == b->tail)  // if the head == tail, we don't have any data
+    if (b->head == b->tail)  // If the head == tail, we don't have any data
         return FALSE;
 
     if (b->head == 0) b->head = BUFFER_LEN-1;
@@ -129,14 +138,12 @@ void Buffer_Flush0(Buffer *b)
 void Buffer_PeekLast(Buffer *b, u16 num, u8 r[]) 
 {
     // Calculate the size of valid data in the buffer
-    u16 size = (b->head >= b->tail)
-               ? (b->head - b->tail)
-               : (BUFFER_LEN - b->tail + b->head);
+    u16 size = (b->head >= b->tail) ? (b->head - b->tail) : (BUFFER_LEN - b->tail + b->head);
 
     // Determine the actual number of bytes to copy
     u16 bytesToCopy = (num > size) ? size : num;
 
-    // Ensure the result array is fully zero-filled if no valid data is available
+    // Ensure the result array is fully cleared if no valid data is available
     if (bytesToCopy == 0) 
     {
         for (u16 i = 0; i < num; i++) r[i] = 0;
@@ -144,17 +151,15 @@ void Buffer_PeekLast(Buffer *b, u16 num, u8 r[])
     }
 
     // Calculate the starting index for reading
-    u16 start = (b->head >= bytesToCopy)
-                ? (b->head - bytesToCopy)
-                : (BUFFER_LEN + b->head - bytesToCopy);
+    u16 start = (b->head >= bytesToCopy) ? (b->head - bytesToCopy) : (BUFFER_LEN + b->head - bytesToCopy);
 
     // Copy the valid bytes into the result array
     for (u16 i = 0; i < bytesToCopy; i++) 
     {
-        u16 index = (start + i) % BUFFER_LEN;
+        u16 index = (start + i) & (BUFFER_LEN-1);
         r[i] = b->data[index];
     }
 
-    // Null-terminate/zero-fill the remainder of the array
+    // Clear the return array r
     for (u16 i = bytesToCopy; i < num; i++) r[i] = 0;
 }

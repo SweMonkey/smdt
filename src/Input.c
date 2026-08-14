@@ -70,15 +70,21 @@ u8 get_KeyPress(u16 key)
 
 inline void set_KeyPress(u16 key, u8 KeyState)
 {
-    if (KeyMap[key & KM_SZ] == KEYSTATE_NONE) KeyMap[key & KM_SZ] = KeyState;
-    else if (key > 0x1EF) KeyMap[key & KM_SZ] = KeyState;   // Don't remember the reason why the above if excludes KEYSTATE_NONE, but to play it safe I'll just leave it alone and add this line for mouse state change to NONE
-
+    if (KeyMap[key & KM_SZ] == KEYSTATE_NONE) 
+    {
+        KeyMap[key & KM_SZ] = KeyState;
+    }
+    else if (key > 0x1EF)   // Don't remember the reason why the above if excludes KEYSTATE_NONE, but to play it safe I'll just leave it alone and add this line for mouse state change to NONE
+    {
+        KeyMap[key & KM_SZ] = KeyState;
+    }
+    
     InactiveCounter = -1;
 }
 
 inline void InputTick()
 {
     WinMgr_Input();
-
-    memset(KeyMap, KEYSTATE_NONE, KM_SZ - 0xF); // Don't touch the last 16 states (mouse code will take care of it)
+    
+    memset(KeyMap, KEYSTATE_NONE, KM_SZ /*- 0xF*/); // Last 16 states are for the mouse
 }

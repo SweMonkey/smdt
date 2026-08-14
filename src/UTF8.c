@@ -1,6 +1,6 @@
 #include "UTF8.h"
 #include "Telnet.h" // NextByte / NC_Data
-#include "Utils.h"  // UTF_LOGGING
+#include "Utils.h"
 
 // https://www.utf8-chartable.de/unicode-utf8-table.pl
 // https://www.ascii-code.com/CP437
@@ -59,7 +59,7 @@ static const u8 TB_C2[] =
     // 0     1     2     3     4     5     6     7     8     9     A     B     C     D     E     F
     0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, // 80-8F
     0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, // 90-9F
-    0x20, 0xAD, 0x9B, 0x9C, 0x3F, 0x9D, 0x7C, 0x15, 0x3F, 0x3F, 0xA6, 0xAE, 0xAA, 0x3F, 0x3F, 0x3F, // A0-AF    A6 = BROKEN BAR (Using VERTICAL BAR since it looks the same as BROKEN BAR in smdt) - A4 = ¤ (not in ASCII, using 0xF)
+    0x20, 0xAD, 0x9B, 0x9C, 0x3F, 0x9D, 0x7C, 0x15, 0x22, 0x3F, 0xA6, 0xAE, 0xAA, 0x3F, 0x3F, 0x3F, // A0-AF    A6 = BROKEN BAR (Using VERTICAL BAR since it looks the same as BROKEN BAR in smdt) - A4 = ¤ (not in ASCII, using 0xF)
     0xF8, 0xF1, 0xFD, 0x3F, 0x3F, 0xE6, 0x14, 0xFA, 0x3F, 0x3F, 0xA7, 0xAF, 0xAC, 0xAB, 0x3F, 0xA8, // B0-BF
 };
 
@@ -68,7 +68,7 @@ static const u8 TB_C3[] =
 {
     // 0     1     2     3     4     5     6     7     8     9     A     B     C     D     E     F
     0x3F, 0x3F, 0x3F, 0x3F, 0x8E, 0x8F, 0x92, 0x80, 0x3F, 0x82, 0x3F, 0x3F, 0x3F, 0x3F, 0x3F, 0x3F, // 80-8F
-    0x3F, 0xA5, 0x3F, 0x3F, 0x3F, 0x3F, 0x99, 0x3F, 0x3F, 0x97, 0x3F, 0x3F, 0x9A, 0x3F, 0x3F, 0xE1, // 90-9F    99 = `SMALL LETTER U WITH GRAVE` (should be `CAPITAL LETTER U WITH GRAVE` but it is not in ASCII) --- Substitute @ 9F: E1=Beta, Should be: sharp S (ß)
+    0x3F, 0xA5, 0x3F, 0x3F, 0x3F, 0x3F, 0x99, 0xF9, 0x3F, 0x97, 0x3F, 0x3F, 0x9A, 0x3F, 0x3F, 0xE1, // 90-9F    99 = `SMALL LETTER U WITH GRAVE` (should be `CAPITAL LETTER U WITH GRAVE` but it is not in ASCII) --- Substitute @ 9F: E1=Beta, Should be: sharp S (ß)
     0x85, 0xA0, 0x83, 0x3F, 0x84, 0x86, 0x91, 0x87, 0x8A, 0x82, 0x88, 0x89, 0x8D, 0xA1, 0x8C, 0x8B, // A0-AF
     0x3F, 0xA4, 0x95, 0xA2, 0x93, 0x3F, 0x94, 0xF6, 0x3F, 0x97, 0xA3, 0x96, 0x81, 0x3F, 0x3F, 0x98, // B0-BF
 };
@@ -343,7 +343,6 @@ void UTF8_Init()
     UTF_Bytes = 0;
 }
 
-#ifdef UTF_LOGGING
 // From Sik, https://gendev.spritesmind.net/forum/viewtopic.php?f=2&t=2480
 u32 Decode_UTF8(const u8 *text)
 {
@@ -372,7 +371,6 @@ u32 Decode_UTF8(const u8 *text)
           (text[2] & 0x3F) << 6 |
           (text[3] & 0x3F);
 }
-#endif
 
 void DoUTF8(u8 byte)
 {
@@ -385,18 +383,14 @@ void DoUTF8(u8 byte)
         {
             if ((UTF_Buffer[i] & 0xC0) != 0x80)
             {
-                #ifdef UTF_LOGGING
-                kprintf(" -- Found non-UTF8 byte ---------------------------------------------------------------------------");
-                #endif 
+                UTF_LOG(" -- Found non-UTF8 byte -------------------------------------");
 
                 for (u8 b = 0; b < UTF_Seq; b++)
                 {
                     NextByte = (NextByte != NC_UTF8 ? NextByte : NC_SkipUTF);
                     TELNET_ParseRX(UTF_Buffer[b]);
     
-                    #ifdef UTF_LOGGING
-                    kprintf("Skipping non-UTF8 byte: $%X - Byte that caused skipping: $%X - Position. $%lX", UTF_Buffer[b], UTF_Buffer[i], RXBytes);
-                    #endif
+                    UTF_LOG("Skipping non-UTF8 byte: $%X - Byte that caused skipping: $%X", UTF_Buffer[b], UTF_Buffer[i]);
                 }
 
                 UTF_Seq = 0;
@@ -414,9 +408,7 @@ void DoUTF8(u8 byte)
             case 0xC0:
                 OutChar = UTF_TablePtr_2seq[UTF_Buffer[0] & 0x1F][UTF_Buffer[1] & 0x3F];
                 
-                #ifdef UTF_LOGGING
-                if ((OutChar == 0) || (OutChar == 0x3F)) kprintf("Unfilled UTF8 character: $%X $%X (Codepoint: U+%04lX) @ $%lX", (UTF_Buffer[0] & 0x1F) + 0xC0, (UTF_Buffer[1] & 0x3F) + 0x80, Decode_UTF8(UTF_Buffer), RXBytes);
-                #endif
+                if ((OutChar == 0) || (OutChar == 0x3F)) UTF_LOG("Unfilled UTF8 character: $%X $%X (Codepoint: U+%04lX)", (UTF_Buffer[0] & 0x1F) + 0xC0, (UTF_Buffer[1] & 0x3F) + 0x80, Decode_UTF8(UTF_Buffer));
 
                 UTF_Buffer[0] = 0;
                 UTF_Buffer[1] = 0;
@@ -425,9 +417,7 @@ void DoUTF8(u8 byte)
             case 0xE0:
                 OutChar = UTF_TablePtr_E0[UTF_Buffer[1]][(UTF_Buffer[2]-0x80) & 0x3F];
                 
-                #ifdef UTF_LOGGING
-                if ((OutChar == 0) || (OutChar == 0x20)) kprintf("Unfilled UTF8 character: $%X $%X $%X (Codepoint: U+%04lX) -- Table entry: $%X $%X", (UTF_Buffer[0] & 0x1F) + 0xE0, UTF_Buffer[1] & 0x3F, UTF_Buffer[2] & 0x3F, Decode_UTF8(UTF_Buffer), UTF_Buffer[1], (UTF_Buffer[2]-0x80) & 0x3F);
-                #endif
+                if ((OutChar == 0) || (OutChar == 0x20)) UTF_LOG("Unfilled UTF8 character: $%X $%X $%X (Codepoint: U+%04lX) Table entry: $%X $%X", (UTF_Buffer[0] & 0x1F) + 0xE0, UTF_Buffer[1] & 0x3F, UTF_Buffer[2] & 0x3F, Decode_UTF8(UTF_Buffer), UTF_Buffer[1], (UTF_Buffer[2]-0x80) & 0x3F);
 
                 UTF_Buffer[0] = 0;
                 UTF_Buffer[1] = 0;
@@ -437,9 +427,7 @@ void DoUTF8(u8 byte)
             case 0xF0:
                 OutChar = '?';
 
-                #ifdef UTF_LOGGING
-                kprintf("Unfilled UTF8 character: $%X $%X $%X $%X (Codepoint: U+%04lX)", (UTF_Buffer[0] & 0x1F) + 0xF0, UTF_Buffer[1] & 0x3F, UTF_Buffer[2] & 0x3F, UTF_Buffer[3] & 0x3F, Decode_UTF8(UTF_Buffer));
-                #endif
+                UTF_LOG("Unfilled UTF8 character: $%X $%X $%X $%X (Codepoint: U+%04lX)", (UTF_Buffer[0] & 0x1F) + 0xF0, UTF_Buffer[1] & 0x3F, UTF_Buffer[2] & 0x3F, UTF_Buffer[3] & 0x3F, Decode_UTF8(UTF_Buffer));
 
                 UTF_Buffer[0] = 0;
                 UTF_Buffer[1] = 0;

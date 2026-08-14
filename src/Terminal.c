@@ -8,6 +8,7 @@
 #include "Screensaver.h"
 #include "Palette.h"
 #include "SwRenderer.h"
+#include "UI.h"             // UI_LoadTheme()
 
 #include "misc/VarList.h"
 #include "system/Sprite.h"
@@ -26,9 +27,9 @@ bool bLinefeedMode = FALSE; // Applications generally expect this mode to be uns
 char sv_Baud[5] = "4800";   // Report this baud speed to remote servers if they ask
 
 // Font
-u8 sv_Font = FONT_SOFTWARE; // Font size. 0 = 8x8 16 colour - 1 = 4x8 8 colour AA - 2 = 4x8 monochrome AA - 3 = 4x8 16 colour AA - 4 = Software rendered 4x8 font with support for 16 fg and 16 bg colours
-u8 sv_BoldFont = FALSE;     // Use bold 8x8 font
-u8 EvenOdd = 0;             // Even/Odd character being printed
+static u8 sv_Font = FONT_SOFTWARE;  // Font size. 0 = 8x8 16 colour - 1 = 4x8 8 colour AA - 2 = 4x8 monochrome AA - 3 = 4x8 16 colour AA - 4 = Software rendered 4x8 font with support for 16 fg and 16 bg colours
+u8 sv_BoldFont = FALSE;             // Use bold 8x8 font
+u8 EvenOdd = 0;                     // Even/Odd character being printed
 static u8 FontInit = 255;
 
 // TTY
@@ -58,46 +59,12 @@ u16 sv_CBGCL = 0;       // Custom BG colour
 u16 sv_CFG0CL = 0x0AE;  // Custom text colour for 4x8 font
 u16 sv_CFG1CL = 0x046;  // Custom text antialiasing colour for 4x8 font
 u8 sv_bHighCL = TRUE;   // Use the upper 8 colours instead when using sv_Font=1
-u8 sv_CLPalette = 0;
-
-// Normal 4x8 and 8x8 font colours
-static const u16 pColors_Xterm[16] =
-{
-    0x000, 0x00c, 0x0c0, 0x0cc, 0xc00, 0xc0c, 0xcc0, 0xccc,   // Normal
-    0x444, 0x66e, 0x6e6, 0x6ee, 0xe64, 0xe6e, 0xee6, 0xeee,   // Highlighted
-};
-static const u16 pColors_CGA[16] =
-{
-                        // 44a
-    0x000, 0x00a, 0x0a0, 0x04a, 0xa00, 0xa0a, 0xaa0, 0xaaa,   // Normal
-    0x444, 0x44e, 0x4e4, 0x4ee, 0xe44, 0xe4e, 0xee4, 0xeee,   // Highlighted
-};
-static const u16 pColors_Windows[16] =
-{
-    0x000, 0x008, 0x080, 0x088, 0x800, 0x808, 0x880, 0xccc,   // Normal
-    0x888, 0x00e, 0x0e0, 0x0ee, 0xe00, 0xe0e, 0xee0, 0xeee,   // Highlighted
-};
-static const u16 *pColors[] = {pColors_Xterm, pColors_CGA, pColors_Windows};
-
-// Inverted black/white 8x8 font colours
-static const u16 pInvColors[16] =
-{
-    0xccc, 0x00a, 0x0a0, 0x0aa, 0xa00, 0xa0a, 0xaa0, 0x000,   // Normal
-    0xeee, 0x44c, 0x4c4, 0x4cc, 0xc42, 0xc4c, 0xcc4, 0x222,   // Highlighted
-};
 
 // Normal 4x8 font antialias colours
 static const u16 pColorsHalf[16] =
 {
     0x000, 0x006, 0x060, 0x066, 0x600, 0x606, 0x660, 0x666,   // Shadowed (For AA)
     0x222, 0x337, 0x373, 0x377, 0x732, 0x737, 0x773, 0x777,   // Shadowed (For AA)
-};
-
-// Inverted light mode antialias colours for 4x8 font
-static const u16 pInvColorsDouble[16] =
-{
-    0xccc, 0x00c, 0x0c0, 0x0cc, 0xc00, 0xc0c, 0xcc0, 0x444,   // Shadowed (For AA)
-    0xeee, 0x66e, 0x6e6, 0x6ee, 0xe64, 0xe6e, 0xee6, 0x666,   // Shadowed (For AA)
 };
 
 // Palette and font lookup table
@@ -161,7 +128,7 @@ void TTY_InitVRAM()
 
     TTY_SetSX(0);
     sy = C_YSTART;
-    TTY_SetVScrollAbs(0);
+    TTY_ResetVScroll();
     Buffer_Flush(&TxBuffer);
 
     SB_ResetStatusBar();
@@ -171,6 +138,8 @@ void TTY_InitVRAM()
 void TTY_Init(TTY_InitFlags flags)
 {
     FontInit = 255;
+    HScroll = sv_HSOffset;
+    
     if (flags & TF_ReloadFont)
     {
         TTY_SetFontSize(sv_Font);
@@ -217,8 +186,6 @@ void TTY_Init(TTY_InitFlags flags)
         TTY_SetSX(0);
         sy = C_YSTART;
         C_YMAX = C_SYSTEM_YMAX;
-        HScroll = sv_HSOffset;
-        VScroll = D_VSCROLL;
         ColorBG = CL_BG;
         ColorFG = CL_FG;
         bIntense = FALSE;
@@ -235,11 +202,7 @@ void TTY_Init(TTY_InitFlags flags)
         BufferSelect = 0;
         Saved_VScroll = 0;
 
-        TTY_SetVScrollAbs(VScroll);
-
-        #if ESC_LOGGING >= 4
-        kprintf("\e[92mTTY Flags reset\e[0m");
-        #endif
+        TTY_ResetVScroll();
     }
 
     if (flags & TF_ResetPalette)
@@ -247,7 +210,7 @@ void TTY_Init(TTY_InitFlags flags)
         TTY_ReloadPalette();
     }
 
-    #if (ESC_LOGGING | EMU_BUILD)// | TRM_LOGGING)
+    #if (LOG_ESC | EMU_BUILD)
     if (flags & TF_ResetNetCount)
     {
         RXBytes = 0;
@@ -258,80 +221,9 @@ void TTY_Init(TTY_InitFlags flags)
     TTY_MoveCursor(TTY_CURSOR_DUMMY);
 }
 
-void TTY_SetDarkColours()
-{
-    if (sv_Font == FONT_4x8_1)   // 4x8 AA
-    {
-        SetColor(46, sv_CFG0CL);    // FG colour
-        SetColor(47, sv_CFG1CL);    // AA colour
-    }
-    else if (sv_Font)
-    {
-        // Font glyph set 0 (Colours 0-3)
-        SetColor(0x0A, pInvColorsDouble[0]);
-        SetColor(0x0B, pInvColors[0]);
-
-        SetColor(0x1A, pInvColorsDouble[1]);
-        SetColor(0x1B, pInvColors[1]);
-
-        SetColor(0x2A, pInvColorsDouble[2]);
-        SetColor(0x2B, pInvColors[2]);
-
-        SetColor(0x3A, pInvColorsDouble[3]);
-        SetColor(0x3B, pInvColors[3]);
-
-        // Font glyph set 1 (Colours 4-7)
-        SetColor(0x08, pInvColorsDouble[4]);
-        SetColor(0x09, pInvColors[4]);
-
-        SetColor(0x18, pInvColorsDouble[5]);
-        SetColor(0x19, pInvColors[5]);
-
-        SetColor(0x28, pInvColorsDouble[6]);
-        SetColor(0x29, pInvColors[6]);
-
-        SetColor(0x38, pInvColorsDouble[7]);
-        SetColor(0x39, pInvColors[7]);
-
-        // Font glyph set 2 (Colours 12-15)
-        SetColor(0x0C, pInvColorsDouble[8]);
-        SetColor(0x0D, pInvColors[8]);
-
-        SetColor(0x1C, pInvColorsDouble[9]);
-        SetColor(0x1D, pInvColors[9]);
-
-        SetColor(0x2C, pInvColorsDouble[10]);
-        SetColor(0x2D, pInvColors[10]);
-
-        SetColor(0x3C, pInvColorsDouble[11]);
-        SetColor(0x3D, pInvColors[11]);
-
-        // Font glyph set 3 (Colours 8-11)
-        SetColor(0x0E, pInvColorsDouble[12]);
-        SetColor(0x0F, pInvColors[12]);
-
-        SetColor(0x1E, pInvColorsDouble[13]);
-        SetColor(0x1F, pInvColors[13]);
-
-        SetColor(0x2E, pInvColorsDouble[14]);
-        SetColor(0x2F, pInvColors[14]);
-
-        SetColor(0x3E, pInvColorsDouble[15]);
-        SetColor(0x3F, pInvColors[15]);
-    }
-    else
-    {
-        SetPalette(PAL2, pInvColors);
-    }
-}
-
 void TTY_ReloadPalette()
 {
-    if (sv_CBGCL == 0xAAA)  // Special case (Light mode)
-    {
-        TTY_SetDarkColours();
-    }
-    else if (sv_Font == FONT_SOFTWARE)   // Software rendered 4x8
+    if (sv_Font == FONT_SOFTWARE)   // Software rendered 4x8
     {
         SetPalette(PAL2, pColors[sv_CLPalette]);
     }
@@ -347,7 +239,8 @@ void TTY_ReloadPalette()
         SetColor(0x2A, pColorsHalf[2]);
         SetColor(0x2B, pColors[sv_CLPalette][2]);
 
-        SetColor(0x3A, pColorsHalf[3]);
+        if (sv_CLPalette == 1) SetColor(0x3A, 0x028);   // Hack to make CGA Brown anti aliasing colour a darker shade of brown instead of dark yellow
+        else SetColor(0x3A, pColorsHalf[3]);
         SetColor(0x3B, pColors[sv_CLPalette][3]);
 
         // Font glyph set 1 (Colours 4-7)
@@ -432,10 +325,24 @@ void TTY_ReloadPalette()
     SetColor(50, sv_CBGCL); // Window text FG Inverted
 }
 
-// Todo: Clean up plane A/B when switching
+// Set font (Only sets sv_Font and optionally reloads GUI theme)
+void TTY_SetvFont(u8 font)
+{
+    u8 old = sv_Font;
+    sv_Font = font;
+
+    if (old != sv_Font) UI_LoadTheme();
+}
+
+u8 TTY_GetFont()
+{
+    return sv_Font;
+}
+
+// Set and reload new font
 void TTY_SetFontSize(u8 size)
 {
-    sv_Font = size;
+    TTY_SetvFont(size);
     TTY_InitVRAM();
 
     if (sv_Font == FONT_SOFTWARE)   // Software rendered 4x8 font
@@ -824,6 +731,15 @@ void TTY_ClearPartialLine(u16 y, u16 from_x, u16 to_x)
     }
 }
 
+void TTY_GetAttributeStr(char *str_ret)
+{
+    u8 FG = bIntense ? ColorFG-8 + 90 : ColorFG + 30;
+    u8 BG = bIntense ? ColorBG-8 + 100 : ColorBG + 40;
+    u8 I = bIntense ? 1 : 0;
+
+    snprintf(str_ret, 32, "%u:%u:%u", FG, BG, I);
+}
+
 void TTY_SetAttribute(u8 v)
 {
     // Foreground color: 30–37 normal, 90–97 high intensity
@@ -948,12 +864,12 @@ inline void TTY_SetSY_A(s16 y)
         bPendingScroll = TRUE;
     }
 
-    sy += ((VScroll >> 3) + C_YSTART);
+    sy += (VScroll >> 3) + C_YSTART - (D_VSCROLL / 8);
 }
 
 inline s16 TTY_GetSY_A()
 {
-    return sy - ((VScroll >> 3) + C_YSTART);
+    return sy - (VScroll >> 3) + C_YSTART + (D_VSCROLL / 8);
 }
 
 inline void TTY_SetSY(s16 y)
@@ -1185,10 +1101,10 @@ void TTY_DrawScrollback(u8 num)
     const u16 Top     = DMarginTop + n;                        // Top row which source address will be based on
     const u16 VScrOff = (VScroll >> 3) * 256;                  // VDP VScroll offset
           u16 Rows    = (DMarginBottom - Top);                 // Number of rows to copy
-    const u16 Src     = (VScrOff + (Top*256) + 256)  % 0x2000; // Source address for start of DMA copy
-    const u16 Dst     = (VScrOff + (DMarginTop*256)) % 0x2000; // Destination address for DMA copy
+    const u16 Src     = (VScrOff + (Top*256) + 256)  & 0x1FFF; // Source address for start of DMA copy
+    const u16 Dst     = (VScrOff + (DMarginTop*256)) & 0x1FFF; // Destination address for DMA copy
 
-    #if ESC_LOGGING >= 3
+    #if LOG_ESC >= 3
     kprintf("\e[93mScrollback Normal - num: %u\e[0m", num);
     kprintf("VScrOff = $%X", VScrOff);
     kprintf("n       = %u ", n);
@@ -1204,24 +1120,12 @@ void TTY_DrawScrollback(u8 num)
         DMA_doVRamCopy(AVR_PLANE_A + Src, AVR_PLANE_A + Dst, Rows, 1);
         DMA_waitCompletion();
     }
-    #if ESC_LOGGING >= 3
-    else
-    {
-        kprintf("Scrollback skipped on PLANE_A; Dst = $%04X", (AVR_PLANE_A + Dst + Rows));
-    }
-    #endif
 
     if ((AVR_PLANE_B + Dst + Rows) <= (AVR_PLANE_B + 0x2000))
     {
         DMA_doVRamCopy(AVR_PLANE_B + Src, AVR_PLANE_B + Dst, Rows, 1);
         DMA_waitCompletion();
     }
-    #if ESC_LOGGING >= 3
-    else
-    {
-        kprintf("Scrollback skipped on PLANE_B; Dst = $%04X", (AVR_PLANE_A + Dst + Rows));
-    }
-    #endif
 
     TTY_ClearLine(DMarginBottom-n, n+1);
 }

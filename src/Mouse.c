@@ -15,6 +15,7 @@
 
 static u16 MouseButtons, MouseLastState;
 static s16 MouseX = 156, MouseY = 108;
+static u16 ScreenBottom = 222;  // NTSC = 222 - PAL = 238
 u8 sv_PointerStyle = 1;
 
 // TODO: 1. Save these variables - 2. Make them user configurable
@@ -28,7 +29,9 @@ void Mouse_Init()
 {
     MouseButtons = MouseLastState = 0;
     MouseX = 156;
-    MouseY = 108;
+    MouseY = bPALSystem ? 115 : 108;
+
+    ScreenBottom = bPALSystem ? 238 : 222;
 
     Mouse_SetupSprite();
 }
@@ -37,10 +40,10 @@ void Mouse_SetupSprite()
 {
     u16 ps = (sv_PointerStyle ? 0x6000 : 0x2000) | 0x8017;  // 0x6000 = PAL3, 0x2000 = PAL1, 0x8000 = High prio, 0x17 = pointer tile
 
-    SetSprite_Y(SPRITE_POINTER, 0);
+    SetSprite_Y(SPRITE_POINTER, bMouse ? MouseY+128 : 0);
     SetSprite_SIZELINK(SPRITE_POINTER, SPR_SIZE_1x1, 0); // Redundant; This is also setup during startup in Init.c
     SetSprite_TILE(SPRITE_POINTER, ps);
-    SetSprite_X(SPRITE_POINTER, 0);
+    SetSprite_X(SPRITE_POINTER, bMouse ? MouseX+128 : 0);
 }
 
 void Mouse_Poll()
@@ -49,6 +52,8 @@ void Mouse_Poll()
 
     if (MM_Mouse_Poll(&dx, &dy, &MouseButtons)) // TODO: Don't call MegaMouse poll function here. Call assigned mouse poll callback. 
     {
+        if (!dx && !dy && (MouseLastState == MouseButtons)) return;
+
         MouseX += (dx > 1) | (dx < -1) ? dx >> MOUSE_SPEED : dx;
         MouseY -= (dy > 1) | (dy < -1) ? dy >> MOUSE_SPEED : dy;
 
@@ -56,7 +61,7 @@ void Mouse_Poll()
         if (MouseX > 318) MouseX = 318;
 
         if (MouseY < 0) MouseY = 0;
-        if (MouseY > 222) MouseY = 222;
+        if (MouseY > ScreenBottom) MouseY = ScreenBottom;
 
         set_KeyPress(MOUSE_LEFT_BTN,   BTN_STATE(MouseButtons, MouseLastState, MOUSE_LEFT));
         set_KeyPress(MOUSE_RIGHT_BTN,  BTN_STATE(MouseButtons, MouseLastState, MOUSE_RIGHT));
@@ -65,12 +70,9 @@ void Mouse_Poll()
 
         //kprintf("MM: %u - state: %u - now: %04X - last: %04X", get_KeyPress(MOUSE_MIDDLE_BTN), BTN_STATE(MouseButtons, MouseLastState, MOUSE_MIDDLE), MouseButtons, MouseLastState);
 
-        if (MouseX || MouseY)
-        {
-            SetSprite_X(SPRITE_POINTER, MouseX+128);
-            SetSprite_Y(SPRITE_POINTER, MouseY+128);
-            InactiveCounter = -1;   // Reset screensaver counter
-        }
+        SetSprite_X(SPRITE_POINTER, MouseX+128);
+        SetSprite_Y(SPRITE_POINTER, MouseY+128);
+        InactiveCounter = -1;   // Reset screensaver counter
 
         MouseLastState = MouseButtons;
     }

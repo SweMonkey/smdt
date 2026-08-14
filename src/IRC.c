@@ -49,7 +49,7 @@ static u16 RXStringSeq = 0;
 static bool bFirstRun = TRUE;
 static u8 NickReRegisterCount = 0;
 
-static const u16 pColors[16] =
+static const u16 pColors_IRC[16] =
 {
     0x000, 0x800, 0x0A0, 0x00E, 0x008, 0xA0A, 0x08E, 0x0EE,
     0x0E0, 0xAA0, 0xEE0, 0xE00, 0xE0E, 0x888, 0xCCC, 0xEEE
@@ -57,7 +57,7 @@ static const u16 pColors[16] =
 
 char sv_Username[32] = "smd_user";                   // Saved preferred IRC nickname
 char v_UsernameReset[32] = "ERROR_NOTSET";           // Your IRC nickname modified to suit the server (nicklen etc)
-char sv_QuitStr[32] = "SMDT IRC client quit";        // IRC quit message
+char sv_QuitStr[32] = "SMDT_IRC_client_quit";        // IRC quit message
 u8 sv_MsgFilter = MSG_FLAG_NONE;
 u8 sv_WrapAtScreenEdge = 1;
 bool sv_bShowTime = FALSE;
@@ -82,7 +82,7 @@ u16 IRC_Init()
 
 void IRC_SetPalette()
 {
-    if (sv_Font) 
+    if (TTY_GetFont()) 
     {
         if (sv_CBGCL == 0xAAA)  // Special case (Light mode)
         {
@@ -101,7 +101,7 @@ void IRC_SetPalette()
     }
     else
     {
-        SetPalette(PAL2, pColors);
+        SetPalette(PAL2, pColors_IRC);
     }
 }
 
@@ -135,10 +135,7 @@ u16 IRC_Reset()
         PG_Buffer[ch] = malloc(sizeof(TMBuffer));
         if (PG_Buffer[ch] == NULL) 
         {
-            #ifdef IRC_LOGGING
-            kprintf("Failed to allocate memory for PG_Buffer[%u]", ch);
-            #endif
-            
+            IRC_ERROR("Failed to allocate memory for PG_Buffer[%u]", ch);            
             printf("\e[91mIRC Client: Failed to allocate memory for PG_Buf!\e[0m\n");
             return EXIT_FAILURE;
         }
@@ -152,10 +149,7 @@ u16 IRC_Reset()
     LineBuf = malloc(sizeof(struct s_linebuf));
     if (LineBuf == NULL) 
     {
-        #ifdef IRC_LOGGING
-        kprintf("Failed to allocate memory for LineBuf");
-        #endif
-
+        IRC_ERROR("Failed to allocate memory for LineBuf");
         printf("\e[91mIRC Client: Failed to allocate memory for LineBuf!\e[0m\n");
         return EXIT_FAILURE;
     }
@@ -165,10 +159,7 @@ u16 IRC_Reset()
     RXString = malloc(B_RXSTRING_LEN);
     if (RXString == NULL) 
     {
-        #ifdef IRC_LOGGING
-        kprintf("Failed to allocate memory for RXString");
-        #endif
-
+        IRC_ERROR("Failed to allocate memory for RXString");
         printf("\e[91mIRC Client: Failed to allocate memory for RXString!\e[0m\n");
         return EXIT_FAILURE;
     }
@@ -184,10 +175,7 @@ u16 IRC_Reset()
             
             if (PG_UserList[i] == NULL)
             {
-                #ifdef IRC_LOGGING
-                kprintf("Failed to allocate memory for PG_UserList[%u]", i);
-                #endif
-
+                IRC_ERROR("Failed to allocate memory for PG_UserList[%u]", i);
                 printf("\e[91mIRC Client: Failed to allocate memory for PG_UserList[%u]!\n", i);
                 printf("Free: %u - Needed: %u (Total: %u)\e[0m\n", MEM_getLargestFreeBlock(), IRC_MAX_USERNAME_LEN, IRC_MAX_USERNAME_LEN*IRC_MAX_USERLIST);
 
@@ -198,10 +186,7 @@ u16 IRC_Reset()
     }
     else
     {
-        #ifdef IRC_LOGGING
-        kprintf("Failed to allocate memory for PG_UserList");
-        #endif
-
+        IRC_ERROR("Failed to allocate memory for PG_UserList");
         printf("\e[91mFailed to allocate memory for PG_UserList!\e[0m\n");
         return EXIT_FAILURE;
     }
@@ -284,6 +269,9 @@ void IRC_SetupSprite()
 
     // Update mousepointer sprite link to first text box sprite (mousepointer being the last permanent sprite that is always active)
     SetSprite_SIZELINK(SPRITE_POINTER, SPR_SIZE_1x1, 3);
+
+    LastSprite = 12;
+    LastSpriteSize = SPR_WIDTH_3x1;
 }
 
 // Text input at bottom of screen
@@ -424,10 +412,10 @@ void IRC_DoCommand()
     char PrintBuf[B_PRINTSTR_LEN] = {0};    // Do not overflow this please
     char subprefix[B_SUBPREFIX_LEN] = {0};
     char subparam[B_SUBPREFIX_LEN] = {0};
-    char ChanBuf[40];   // Channel name
+    char ChanBuf[64];   // Channel name
 
     NameOffset = 0;
-    strncpy(ChanBuf, PG_Buffer[0]->Title, 40);
+    strncpy(ChanBuf, PG_Buffer[0]->Title, 64);
 
     if (LineBuf->param[1][0] == 1)
     {
@@ -454,7 +442,7 @@ void IRC_DoCommand()
             strncpy(subparam, LineBuf->param[1]+start, end-2);
 
             snprintf(PrintBuf, B_PRINTSTR_LEN, "* %s %s\n", subprefix, subparam);
-            strncpy(ChanBuf, LineBuf->param[0], 40);
+            strncpy(ChanBuf, LineBuf->param[0], 64);
         }
         else
         {
@@ -499,7 +487,7 @@ void IRC_DoCommand()
             TimeToStr_TimeNoSec(&SystemTime, buf);
 
             snprintf(PrintBuf, B_PRINTSTR_LEN, "[%s] \5%s: \4%s\n", buf, subprefix, LineBuf->param[1]);
-            NameOffset = strlen(subprefix) + 11;
+            NameOffset = strlen(subprefix) + 10;//11;
         }
         else
         {
@@ -509,11 +497,11 @@ void IRC_DoCommand()
 
         if (strcmp(LineBuf->param[0], v_UsernameReset) == 0)
         {
-            strncpy(ChanBuf, subprefix, 40);
+            strncpy(ChanBuf, subprefix, 64);
         }
         else 
         {
-            strncpy(ChanBuf, LineBuf->param[0], 40);
+            strncpy(ChanBuf, LineBuf->param[0], 64);
         }
     }
     else if (strcmp(LineBuf->command, "JOIN") == 0)
@@ -530,7 +518,7 @@ void IRC_DoCommand()
             snprintf(PrintBuf, B_PRINTSTR_LEN, "%s has joined this channel\n", LineBuf->prefix);
         }
 
-        strncpy(ChanBuf, LineBuf->param[0], 40);
+        strncpy(ChanBuf, LineBuf->param[0], 64);
     }
     else if (strcmp(LineBuf->command, "QUIT") == 0)  // Todo: figure out which channel this user is in
     {
@@ -589,7 +577,7 @@ void IRC_DoCommand()
                 break;
             }
 
-            strncpy(ChanBuf, LineBuf->param[0], 40);
+            strncpy(ChanBuf, LineBuf->param[0], 64);
         }
         else snprintf(PrintBuf, B_PRINTSTR_LEN, "[Mode] You have set personal modes: %s\n", LineBuf->param[1]);
     }
@@ -609,7 +597,7 @@ void IRC_DoCommand()
         if (sv_MsgFilter & MSG_FLAG_PART) return;
 
         snprintf(PrintBuf, B_PRINTSTR_LEN, "%s left this channel\n", LineBuf->prefix);  // LineBuf->param[1] = ?
-        strncpy(ChanBuf, LineBuf->param[0], 40);
+        strncpy(ChanBuf, LineBuf->param[0], 64);
     }
     else
     {
@@ -626,7 +614,7 @@ void IRC_DoCommand()
             case 3:
             {
                 snprintf(PrintBuf, B_PRINTSTR_LEN, "[Welcome] %s\n", LineBuf->param[1]);
-                strncpy(ChanBuf, LineBuf->prefix, 40);
+                strncpy(ChanBuf, LineBuf->prefix, 64);
                 break;
             }
             case 4:
@@ -679,18 +667,18 @@ void IRC_DoCommand()
             case 332:
             {
                 snprintf(PrintBuf, B_PRINTSTR_LEN, "*** The channel topic is \"%s\".\n", LineBuf->param[2]);  // Fixme: multi line topics? if that is even a thing
-                strncpy(ChanBuf, LineBuf->param[1], 40);
+                strncpy(ChanBuf, LineBuf->param[1], 64);
                 break;
             }
             case 333:
             {
-                char buf[40];
+                char buf[64];
                 SM_Time t;
                 SecondsToDateTime(&t, atoi32(LineBuf->param[3]));
                 TimeToStr_Full(&t, buf);
 
                 snprintf(PrintBuf, B_PRINTSTR_LEN, "*** The topic was set by %s on %s.\n", LineBuf->param[2], buf);
-                strncpy(ChanBuf, LineBuf->param[1], 40); 
+                strncpy(ChanBuf, LineBuf->param[1], 64); 
                 break;
             }
             case 353:   // Command 353 is a list of all users in param[3]
@@ -727,7 +715,7 @@ void IRC_DoCommand()
                     }
                 }
 
-                strncpy(ChanBuf, LineBuf->param[2], 40);
+                strncpy(ChanBuf, LineBuf->param[2], 64);
                 return;
             }
             case 366:
@@ -760,7 +748,7 @@ void IRC_DoCommand()
             case 404:   // ERR_CANNOTSENDTOCHAN RFC1459 <channel> :<reason>   -- Sent to a user who does not have the rights to send a message to a channel
             {
                 snprintf(PrintBuf, B_PRINTSTR_LEN, "[Error] %s\n", LineBuf->param[2]);
-                strncpy(ChanBuf, LineBuf->param[1], 40);
+                strncpy(ChanBuf, LineBuf->param[1], 64);
                 break;
             }
             case 412:   // ERR_NOTEXTTOSEND RFC1459 :<reason>   -- Returned when NOTICE/PRIVMSG is used with no message given
@@ -799,13 +787,11 @@ void IRC_DoCommand()
             }
         
             default:
-                #if IRC_LOGGING >= 1
-                kprintf("Error: Unhandled IRC CMD: %u ---------------------------------------------", cmd);
-                kprintf("Error: Prefix: \"%s\"", LineBuf->prefix);
-                kprintf("Error: Command: \"%s\"", LineBuf->command);
-                for (u8 i = 0; i < 16; i++) if (strlen(LineBuf->param[i]) > 0) kprintf("Error: Param %u: \"%s\"", i, LineBuf->param[i]);
-                kprintf("--------------------------------------------------------------------------");
-                #endif
+                IRC_ERROR("Unhandled IRC CMD: %u ---------------------------------------------", cmd);
+                IRC_ERROR("Prefix: \"%s\"", LineBuf->prefix);
+                IRC_ERROR("Command: \"%s\"", LineBuf->command);
+                for (u8 i = 0; i < 16; i++) if (strlen(LineBuf->param[i]) > 0) IRC_ERROR("Param %u: \"%s\"", i, LineBuf->param[i]);
+                IRC_ERROR("--------------------------------------------------------------------------");
                 return;
             break;
         }
@@ -829,11 +815,11 @@ void IRC_DoCommand()
         }
         else if (strcmp(PG_Buffer[ch]->Title, PG_EMPTYNAME) == 0) // Or see if there is an empty page
         {
-            char TitleBuf[40];
-            strncpy(PG_Buffer[ch]->Title, ChanBuf, 32);
+            char TitleBuf[128];
+            strncpy(PG_Buffer[ch]->Title, ChanBuf, 64);
             TMB_SetActiveBuffer(PG_Buffer[ch]);
 
-            snprintf(TitleBuf, 35-IRC_MAX_CHANNELS, "%s %-*s", STATUS_TEXT_SHORT, 35-IRC_MAX_CHANNELS, PG_Buffer[PG_CurrentIdx]->Title); // 27-
+            snprintf(TitleBuf, 128, "%s %s", STATUS_TEXT_SHORT, PG_Buffer[PG_CurrentIdx]->Title);
             SB_SetStatusText(TitleBuf);
 
             if (PG_CurrentIdx != ch) 
@@ -931,11 +917,9 @@ void IRC_ParseString()
         it++;
     }
 
-    #if IRC_LOGGING >= 2
-    kprintf("Prefix: \"%s\"", LineBuf->prefix);
-    kprintf("Command: \"%s\"", LineBuf->command);
-    for (u8 i = 0; i < 16; i++) if (strlen(LineBuf->param[i]) > 0) kprintf("Param[%u]: \"%s\"", i, LineBuf->param[i]);
-    #endif
+    IRC_INFO("Prefix: \"%s\"", LineBuf->prefix);
+    IRC_INFO("Command: \"%s\"", LineBuf->command);
+    for (u8 i = 0; i < 16; i++) if (strlen(LineBuf->param[i]) > 0) IRC_INFO("Param[%u]: \"%s\"", i, LineBuf->param[i]);
 
     IRC_DoCommand();
 }
@@ -992,7 +976,7 @@ void IRC_RegisterNick()
 void IRC_PrintString(char *string)
 {
     u16 len = strlen(string);
-    u16 screen_width = ((sv_Font == 0) ? 40 : 80) - (sv_HSOffset >> 3); // Effective screen width
+    u16 screen_width = ((TTY_GetFont() == 0) ? 40 : 80) - (sv_HSOffset >> 3); // Effective screen width
     s16 current_column = -1;
     u16 i = 0;
 
@@ -1040,21 +1024,20 @@ void IRC_PrintString(char *string)
                         wo += 2;
                         continue;
                     }
-
                 }
                 
                 word_end++;
             }
 
-            u16 word_length = word_end - i;
+            u16 word_length = (word_end + 1) - i;
 
             // Check if the word fits in the current line
-            if (current_column + word_length > screen_width) 
+            if (current_column + word_length > screen_width)
             {
                 // If the word itself is too long for the screen width, print as much as fits
                 if (word_length + NameOffset > screen_width)
                 {
-                    u16 chars_to_print = screen_width - current_column;
+                    u16 chars_to_print = (screen_width - current_column) - 1;
                     
                     // Print characters up to the screen boundary, then wrap
                     for (u16 j = 0; j < chars_to_print; j++) 
@@ -1073,9 +1056,10 @@ void IRC_PrintString(char *string)
                 {
                     // If the word can fit on the next line, wrap before printing it
                     IRC_PrintChar('\n');
+                    u8 off = (string[i] == ' ' ? NameOffset-1 : NameOffset);
 
-                    for (u8 sp = 0; sp < NameOffset; sp++) IRC_PrintChar(' ');  // Offset any extra lines to line messages up
-                    current_column = NameOffset;                                // Reset column for new line + offset for extra lines
+                    for (u8 sp = 0; sp < off; sp++) IRC_PrintChar(' ');  // Offset any extra lines to line messages up
+                    current_column = off;                                // Reset column for new line + offset for extra lines
                 }
             }
         }

@@ -3,6 +3,8 @@
 #include "Utils.h"      // TRM_
 #include "system/PseudoFile.h"  // Temp, printf
 
+// Code is based off of information found on https://plutiedev.com/saturn-keyboard
+
 #define TIMEOUT 128
 SM_Device DRV_KBSATURN;
 
@@ -23,6 +25,7 @@ bool KB_Saturn_Init()
     {
         kprintf(" Unknown Saturn peripheral found (r = $%X)", DEV_GetData(DRV_KBSATURN, 0xF));
         printf(" \e[93mUnknown Saturn peripheral found. r=$%X\e[0m\n", DEV_GetData(DRV_KBSATURN, 0xF));
+        Stdout_Flush();
 
         DEV_SetData(DRV_KBSATURN, 0x60);
         return 0;
@@ -33,6 +36,7 @@ bool KB_Saturn_Init()
         KB_SetPoll_Func(&KB_Saturn_Poll);
         KB_SetLED_Func(&KB_Saturn_SetLED);
         Stdout_Push(" \e[92mSaturn keyboard initialized\e[0m\n");
+        Stdout_Flush();
     }
 
     return 1;

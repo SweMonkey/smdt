@@ -30,7 +30,8 @@ typedef struct
 {
     lfs_file_t f;
     u16 fd;
-    Buffer *io_buf;
+    Buffer *in_buf;
+    Buffer *out_buf;
     char *fname;
 } SM_File;
 

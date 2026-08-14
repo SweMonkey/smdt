@@ -11,7 +11,7 @@
 
 typedef struct
 {
-    char Title[32];
+    char Title[64];
     s16 sx, sy;         // Cursor x and y position
     s16 HScroll;        // VDP horizontal scroll position
     s16 VScroll;        // VDP vertical scroll position

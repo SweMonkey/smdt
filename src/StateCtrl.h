@@ -9,8 +9,7 @@ typedef enum
     PS_Telnet   = 1, 
     PS_Debug    = 3, 
     PS_IRC      = 4, 
-    PS_Terminal = 5, 
-    PS_Gopher   = 6
+    PS_Terminal = 5
 } State;
 
 typedef u16 StateArg_CB(u8 argc, char *argv[]);
@@ -18,7 +17,7 @@ typedef u16 StateArg_CB(u8 argc, char *argv[]);
 typedef struct
 {
     StateArg_CB *Enter;
-    VoidCallback *ReEnter;  // Return to this context
+    VoidCallback *ReEnter;
     VoidCallback *Exit;
     VoidCallback *Reset;
 

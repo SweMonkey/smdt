@@ -6,6 +6,8 @@
 void SW_SetBuffer();
 void SW_ResetProt();
 u8 SW_GetChar(u8 x, u8 y);
+void SW_SetChar(u8 x, u8 y, u8 c);
+void SW_SetAttr(u8 x, u8 y, u8 a);
 void SW_ClearScreen();
 void SW_Free();
 void SW_Setup();

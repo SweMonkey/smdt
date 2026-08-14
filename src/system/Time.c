@@ -24,7 +24,7 @@ static const u8 days_in_month[12] =
 
 static inline u32 is_leap_year(u16 year) 
 {
-    return ((year % 4 == 0) && (year % 100 != 0)) || (year % 400 == 0);
+    return (((year & 3) == 0) && (year % 100 != 0)) || (year % 400 == 0);
 }
 
 void SecondsToDateTime(SM_Time *t, u32 seconds)

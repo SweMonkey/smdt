@@ -8,6 +8,7 @@
 *       Written by Paul W. Lee
 *       Modified by Charles Coty
 *       Modified by Stephane Dallongeville
+*       Modified by smds
 *
 *-------------------------------------------------------
 
@@ -36,7 +37,7 @@ _Vectors_68K:
         dc.l    _INT
         dc.l    _EXTINT
         dc.l    _INT
-        dc.l    hintCaller
+        dc.l    _INT    /* hINT */
         dc.l    _INT
         dc.l    _VINT
         dc.l    _INT
@@ -56,15 +57,14 @@ _Entry_Point:
         move    #0x2700,%sr
         tst.l   0xa10008
         bne.s   SkipJoyDetect
-
         tst.w   0xa1000c
 
 SkipJoyDetect:
         bne.s   SkipSetup
-
         lea     Table,%a5
         movem.w (%a5)+,%d5-%d7
         movem.l (%a5)+,%a0-%a4
+
 * Check Version Number
         move.b  -0x10ff(%a1),%d0
         andi.b  #0x0f,%d0
@@ -72,25 +72,22 @@ SkipJoyDetect:
 
 * Sega Security Code (SEGA)
         move.l  #0x53454741,0x2f00(%a1)
+
 WrongVersion:
 * Read from the control port to cancel any pending read/write command
         move.w  (%a4),%d0
 
-* Configure a USER_STACK_LENGTH bytes user stack at bottom, and system stack on top of it
-        move.l  #0xFFF600, %ssp
-        move    %sp, %usp
-        move.l  #0x1000000, %ssp
+* Setup system stack
+        move.l  __stack, %ssp
 
         move.w  %d7,(%a1)
         move.w  %d7,(%a2)
 
 * Jump to initialisation process now...
-
         jmp     _start_entry
 
 SkipSetup:
         jmp     _reset_entry
-
 
 Table:
         dc.w    0x8000,0x3fff,0x0100
@@ -145,64 +142,56 @@ exceptionDump:
 _Bus_Error:
         jsr busAddressErrorDump
         movem.l %d0-%d1/%a0-%a1,-(%sp)
-        move.l  busErrorCB, %a0
-        jsr    (%a0)
+        jsr int_buserror
         movem.l (%sp)+,%d0-%d1/%a0-%a1
         rte
 
 _Address_Error:
         jsr busAddressErrorDump
         movem.l %d0-%d1/%a0-%a1,-(%sp)
-        move.l  addressErrorCB, %a0
-        jsr    (%a0)
+        jsr int_addresserror
         movem.l (%sp)+,%d0-%d1/%a0-%a1
         rte
 
 _Illegal_Instruction:
         jsr exception4WDump
         movem.l %d0-%d1/%a0-%a1,-(%sp)
-        move.l  illegalInstCB, %a0
-        jsr    (%a0)
+        jsr int_illegal
         movem.l (%sp)+,%d0-%d1/%a0-%a1
         rte
 
 _Zero_Divide:
         jsr exceptionDump
         movem.l %d0-%d1/%a0-%a1,-(%sp)
-        move.l  zeroDivideCB, %a0
-        jsr    (%a0)
+        jsr int_zerodivide
         movem.l (%sp)+,%d0-%d1/%a0-%a1
         rte
 
 _Chk_Instruction:
         jsr exception4WDump
         movem.l %d0-%d1/%a0-%a1,-(%sp)
-        move.l  chkInstCB, %a0
-        jsr    (%a0)
+        jsr int_chkinst
         movem.l (%sp)+,%d0-%d1/%a0-%a1
         rte
 
 _Trapv_Instruction:
         jsr exception4WDump
         movem.l %d0-%d1/%a0-%a1,-(%sp)
-        move.l  trapvInstCB, %a0
-        jsr    (%a0)
+        jsr int_trapv
         movem.l (%sp)+,%d0-%d1/%a0-%a1
         rte
 
 _Privilege_Violation:
         jsr exceptionDump
         movem.l %d0-%d1/%a0-%a1,-(%sp)
-        move.l  privilegeViolationCB, %a0
-        jsr    (%a0)
+        jsr int_privviolation
         movem.l (%sp)+,%d0-%d1/%a0-%a1
         rte
 
 _Trace:
         jsr exceptionDump
         movem.l %d0-%d1/%a0-%a1,-(%sp)
-        move.l  traceCB, %a0
-        jsr    (%a0)
+        jsr int_trace
         movem.l (%sp)+,%d0-%d1/%a0-%a1
         rte
 
@@ -210,16 +199,14 @@ _Line_1010_Emulation:
 _Line_1111_Emulation:
         jsr exceptionDump
         movem.l %d0-%d1/%a0-%a1,-(%sp)
-        move.l  line1x1xCB, %a0
-        jsr    (%a0)
+        jsr int_line1x1x
         movem.l (%sp)+,%d0-%d1/%a0-%a1
         rte
 
 _Error_Exception:
         jsr exceptionDump
         movem.l %d0-%d1/%a0-%a1,-(%sp)
-        move.l  errorExceptionCB, %a0
-        jsr    (%a0)
+        jsr int_error
         movem.l (%sp)+,%d0-%d1/%a0-%a1
         rte
 
@@ -232,8 +219,7 @@ _INT:
 
 _EXTINT:
         movem.l %d0-%d1/%a0-%a1,-(%sp)
-        move.l  eintCB, %a0
-        jsr    (%a0)
+        jsr NET_RxIRQ
         movem.l (%sp)+,%d0-%d1/%a0-%a1
         rte
 
@@ -263,6 +249,7 @@ _trap_2:
 
 _trap_3:
         jmp smdt_halt
+
 
 *------------------------------------------------
 *

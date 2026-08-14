@@ -18,7 +18,8 @@ typedef enum {IL_None = 0, IL_NoBorder = 1} UI_ItemListFlags;
 
 extern bool bModalWindowActive;
 
-void UI_ApplyTheme();
+void UI_LoadTheme();
+void UI_ApplyThemeColour();
 
 void UI_Begin(SM_Window *w);
 void UI_End();
@@ -35,6 +36,7 @@ void UI_RepaintTile(u8 x, u8 y);
 
 void UI_SetWindowTitle(const char *title);
 void UI_CreateWindow(SM_Window *w, const char *title, UI_WindowFlags flags);
+void UI_RedrawWindowFrame();
 
 void UI_DrawText(u8 x, u8 y, u8 attribute, const char *text);
 void UI_ClearRect(u8 x, u8 y, u8 width, u8 height);
@@ -49,6 +51,7 @@ void UI_DrawPanel(u8 x, u8 y, u8 width, u8 height);
 void UI_DrawGroupBox(u8 x, u8 y, u8 width, u8 height, const char *caption);
 void UI_DrawWindow(u8 x, u8 y, u8 width, u8 height, bool bChild, const char *title);
 void UI_DrawVScrollbar(u8 x, u8 y, u8 height, u8 selected, u16 min, u16 max, u16 pos);
+void UI_DrawHScrollbar(u8 x, u8 y, u8 width, u8 selected, u16 min, u16 max, u16 pos);
 void UI_DrawItemList(u8 x, u8 y, u8 width, u8 height, char *list[], u16 item_count, u16 scroll);
 void UI_DrawTextInput(u8 x, u8 y, u8 width, const char *caption, char str[], bool bShowCaret);
 void UI_DrawSpinbox(u8 x, u8 y, u8 width, const char *caption, s32 *num, u16 selection);

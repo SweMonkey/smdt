@@ -8,10 +8,11 @@ typedef enum
     W_QMenu     = 0,
     W_HexView   = 1,
     W_FavView   = 2,
-    W_InfoView  = 3
+    W_InfoView  = 3,
+    W_VDPView   = 4
 } WinID;
 
-#define WINID_END W_InfoView    // Should always point to the last entry in WinID
+#define WINID_END W_VDPView    // Should always point to the last entry in WinID
 
 void WinMgr_Init();
 void WinMgr_Open(WinID winid, u8 argc, char *argv[]);

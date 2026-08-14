@@ -43,7 +43,7 @@ I have worked on this project on and off since around 2016 and SMDT started off 
 <br>And for anyone wondering, No, this project is not "vibe coded".<br>
 
 ## Thanks to
-b1tsh1ft3r - Testing, improvement ideas and RetroLink/xPort support<br>
+b1tsh1ft3r - Testing, improvement ideas and [RetroLink](https://github.com/b1tsh1ft3r/retro.link)/xPort support<br>
 RKT - For creating a 4x8 extended ASCII font tileset<br>
 Stef - For creating [SGDK](https://github.com/Stephane-D/SGDK)<br>
 Sik - For creating the website [Plutiedev](https://plutiedev.com/) with valuable information regarding the MD<br>

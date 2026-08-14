@@ -2,11 +2,12 @@
 #include "Input.h"
 #include "UI.h"
 #include "Utils.h"
-#include "system/PseudoFile.h"
 #include "WinMgr.h"
 #include "Network.h"
 #include "Mouse.h"          // MHitRect
+#include "StateCtrl.h"
 #include "system/Time.h"
+#include "system/PseudoFile.h"
 
 #include "Terminal.h"   // TEMP for cursor debug
 
@@ -22,8 +23,8 @@ static u32 Lastup = 0;
 static const MRect mrect_data[] =
 {
     {  8,  32, 112, 8, 0},  // Tab 1
-    {136,  32,  56, 8, 1},  // Tab 2
-    {208,  32,  32, 8, 2},  // Tab 3
+    {128,  32,  56, 8, 1},  // Tab 2
+    {192,  32,  32, 8, 2},  // Tab 3
     {320,   0,   0, 0, 0},  // Terminator
 };
 
@@ -85,21 +86,21 @@ static void DrawSysMonTab()
     // Down
     if (down >= 1024)
     {
-        rem = down % 1024;
+        rem = down & 0x3FF;
         down /= 1024;
         unit = 'K';
     }
 
     if (down >= 1024)
     {
-        rem = down % 1024;
+        rem = down & 0x3FF;
         down /= 1024;
         unit = 'M';
     }
 
     if (down >= 1024)
     {
-        rem = down % 1024;
+        rem = down & 0x3FF;
         down /= 1024;
         unit = 'G';
     }
@@ -117,21 +118,21 @@ static void DrawSysMonTab()
 
     if (up >= 1024)
     {
-        rem = up % 1024;
+        rem = up & 0x3FF;
         up /= 1024;
         unit = 'K';
     }
 
     if (up >= 1024)
     {
-        rem = up % 1024;
+        rem = up & 0x3FF;
         up /= 1024;
         unit = 'M';
     }
 
     if (up >= 1024)
     {
-        rem = up % 1024;
+        rem = up & 0x3FF;
         up /= 1024;
         unit = 'G';
     }
@@ -236,8 +237,8 @@ static void DrawInfoTab()
     u8 vreg = *((vu8*) 0xA10001);
     char buf[40];
     u8 i = 2;
-
-    snprintf(buf, 40, "MD Version: %s %s v%u", vreg & 0x40 ? "PAL" : "NTSC", vreg & 0x80 ? (vreg & 0x40 ? "Europe" : "US") : "Japan", vreg & 0xF);
+                                                                                                        // Europe         US           Japan
+    snprintf(buf, 40, "MD Version: %s %s v%u", vreg & 0x40 ? "PAL" : "NTSC", vreg & 0x80 ? (vreg & 0x40 ? "Mega Drive" : "Genesis") : "Mega Drive", vreg & 0xF);
     UI_DrawText(0,  i++, PAL1, buf);
 
     i++;
@@ -251,8 +252,8 @@ static void DrawInfoTab()
     i++;
 
     SecondsToDateTime(&SystemTime, GetTimeSync());
-    snprintf(buf, 40, "  Time: %u-%u-%u %02u:%02u:%02u", SystemTime.year, SystemTime.month, SystemTime.day, SystemTime.hour, SystemTime.minute, SystemTime.second);
-    UI_DrawText(0,  i++, PAL1, buf);
+    snprintf(buf, 40, "  Time: %u-%u-%u %02u:%02u:%02u", (isCurrentState(PS_IRC) ? SystemTime.year-70 : SystemTime.year), SystemTime.month, SystemTime.day, SystemTime.hour, SystemTime.minute, SystemTime.second);
+    UI_DrawText(0,  i++, PAL1, buf);                    // ^ IRC uses epoch 1970, everything else uses 1900 - this is just a small hack to show the correct year when using the IRC client 
 
     SecondsToDateTime(&uptime, SystemUptime);
     snprintf(buf, 40, "Uptime: %u Months, %u Days %02u:%02u:%02u", uptime.month-1, uptime.day-1, uptime.hour, uptime.minute, uptime.second);
@@ -367,11 +368,6 @@ void InfoView_Input()
 static void DrawWindow()
 {
     TRM_SetWinHeight(30);
-    TRM_ClearArea(0, 1, 40, 26, PAL1, TRM_CLEAR_BG);  // h=27
-
-    UI_Begin(InfoWindow);
-    UI_FillRect(0, 27, 40, 2, 0xDE);
-    UI_End();
 
     ScrollY = 0;
 
@@ -393,7 +389,7 @@ u16 InfoView_Open()
     Lastdown = RXBytes;
     Lastup = TXBytes;
 
-    UI_CreateWindow(InfoWindow, "System Info - WIP", WF_None);
+    UI_CreateWindow(InfoWindow, "System Info", WF_None);
     DrawWindow();
 
     return 0;

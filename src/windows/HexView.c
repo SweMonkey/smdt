@@ -185,7 +185,7 @@ void HexView_Input()
         {
             ScrollY += (bufsize-184)-ScrollY;
 
-            u8 rem = ScrollY % 8;
+            u8 rem = ScrollY & 7;
             if (rem != 0) ScrollY += 8-rem;
 
             UpdateView();
@@ -203,13 +203,8 @@ void HexView_Input()
 static void DrawHexView()
 {
     TRM_SetWinHeight(30);
-    TRM_ClearArea(0, 1, 40, 26, PAL1, TRM_CLEAR_BG);  // h=27
 
     UI_CreateWindow(HexWindow, WinTitle, WF_None);
-
-    UI_Begin(HexWindow);
-    UI_FillRect(0, 27, 40, 2, 0xDE);
-    UI_End();
 
     FileOffset = 0;
     ScrollY = 0;
@@ -232,7 +227,7 @@ u16 HexView_Open(const char *filename)
         bufsize = 80*32;
         bIOFILE = TRUE;
     }
-    else if (strcmp(fn_buf, "/sram/system/tty_in.io") == 0)
+    else if (strcmp(filename, "\1tty_in") == 0)
     {
         strcpy(WinTitle, "HexView - Rx Buffer");
         
@@ -240,7 +235,7 @@ u16 HexView_Open(const char *filename)
         bufsize = BUFFER_LEN;
         bIOFILE = TRUE;
     }
-    else if (strcmp(fn_buf, "/sram/system/tty_out.io") == 0)
+    else if (strcmp(filename, "\1tty_out") == 0)
     {
         strcpy(WinTitle, "HexView - Tx Buffer");
         
@@ -305,7 +300,7 @@ u16 HexView_Open(const char *filename)
     if (bufsize < 0xC0)
     {
         NumLines  = bufsize / 8;
-        NumLines += (bufsize % 8 ? 1 : 0);
+        NumLines += (bufsize & 7 ? 1 : 0);
         ScrollMax = 0;
     }
     else 

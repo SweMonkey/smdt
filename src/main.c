@@ -6,7 +6,7 @@ int main(bool hardReset)
 {
     SystemInit(hardReset);
 
-    while(TRUE)
+    while (TRUE)
     {
         StateTick();
         SYS_doVBlankProcess();
